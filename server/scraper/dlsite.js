@@ -18,7 +18,13 @@ const searchDLSite = async (keyword) => {
   return items.map(item => {
     const workno = item.workno || ''
     const rjcode = workno.replace('RJ', '')
-    let coverUrl = item.work_image || item.main_image || ''
+    let coverUrl = ''
+    const img = item.image_main || item.image_thum || item.image_mini
+    if (img && typeof img === 'object') {
+      coverUrl = img.url || ''
+    } else if (typeof img === 'string') {
+      coverUrl = img
+    }
     if (coverUrl && coverUrl.startsWith('//')) {
       coverUrl = `https:${coverUrl}`
     }
