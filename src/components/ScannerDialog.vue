@@ -157,6 +157,8 @@ const scrapeSingle = async (row: ScanRow) => {
       description: detail.description,
     })
     row.status = 'done'
+    scanResults.value = scanResults.value.filter(r => r.gameId !== row.gameId)
+    emit('done')
   } catch {
     row.status = 'error'
   } finally {
@@ -165,12 +167,10 @@ const scrapeSingle = async (row: ScanRow) => {
 }
 
 const batchScrape = async () => {
-  for (const row of scanResults.value) {
+  for (const row of [...scanResults.value]) {
     if (row.status !== 'pending') continue
     await scrapeSingle(row)
   }
-  emit('done')
-  await loadUnscraped()
 }
 
 watch(modelValue, (val) => {
