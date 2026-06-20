@@ -138,7 +138,7 @@ const props = defineProps<{
   modelValue: boolean
   gameName: string
   gameId: number
-  defaultKeyword?: string
+  defaultKeyword?: string | undefined
 }>()
 
 const emit = defineEmits<{
