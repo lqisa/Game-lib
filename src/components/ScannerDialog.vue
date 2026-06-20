@@ -72,7 +72,7 @@ interface ScanRow {
   gameId?: number
 }
 
-const modelValue = defineModel<boolean>()
+const modelValue = defineModel<boolean | null>({ default: false })
 const emit = defineEmits<{ done: [] }>()
 
 const libraries = ref<{ id: number; name: string; path: string }[]>([])

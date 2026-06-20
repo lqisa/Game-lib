@@ -51,7 +51,7 @@ import api from '../composables/useApi'
 import GameCard from '../components/GameCard.vue'
 import ScannerDialog from '../components/ScannerDialog.vue'
 
-const games = ref([])
+const games = ref<any[]>([])
 const loading = ref(false)
 const keyword = ref('')
 const page = ref(1)
