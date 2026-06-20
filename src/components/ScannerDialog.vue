@@ -67,8 +67,29 @@
           </template>
           <template v-slot:body-cell-matched="props">
             <q-td :props="props">
-              <div v-if="props.row.searchResult" class="ellipsis" style="max-width: 200px;">
-                {{ props.row.searchResult.name }}
+              <div v-if="props.row.searchResult">
+                <q-icon name="image" color="primary" size="xs" class="q-mr-xs cursor-pointer">
+                  <q-tooltip anchor="center right" self="center left" :offset="[10, 0]">
+                    <q-img
+                      v-if="props.row.searchResult.coverUrl"
+                      :src="props.row.searchResult.coverUrl"
+                      style="width: 200px;"
+                      fit="contain"
+                    >
+                      <template v-slot:error>
+                        <div class="bg-grey-3 flex flex-center" style="height: 200px;">
+                          <q-icon name="broken_image" size="32px" color="grey" />
+                        </div>
+                      </template>
+                    </q-img>
+                    <div v-else class="bg-grey-3 flex flex-center" style="width: 200px; height: 200px;">
+                      <q-icon name="broken_image" size="32px" color="grey" />
+                    </div>
+                  </q-tooltip>
+                </q-icon>
+                <span class="ellipsis" style="max-width: 180px; vertical-align: middle;">
+                  {{ props.row.searchResult.name }}
+                </span>
                 <div class="text-caption text-grey">RJ{{ props.row.searchResult.rjcode }}</div>
               </div>
               <span v-else class="text-grey">—</span>
@@ -91,6 +112,17 @@
                 :label="props.row.status === 'pending' || props.row.status === 'error' ? 'Scrape' : '重选'"
                 @click="openScrapeDialog(props.row)"
               />
+              <q-btn
+                v-if="props.row.status === 'adopted'"
+                size="sm"
+                color="negative"
+                flat
+                icon="cancel"
+                class="q-ml-xs"
+                @click="discardRow(props.row)"
+              >
+                <q-tooltip>Discard</q-tooltip>
+              </q-btn>
             </q-td>
           </template>
         </q-table>
@@ -101,7 +133,7 @@
       v-model="showScrapeDialog"
       :game-name="scrapingRow?.name || ''"
       :game-id="scrapingRow?.gameId || 0"
-      :default-keyword="scrapingRow?.searchResult?.rjcode ? `RJ${scrapingRow.searchResult.rjcode}` : undefined"
+      :default-keyword="scrapingRow?.searchKeyword"
       @adopted="onAdopted"
     />
   </q-dialog>
@@ -143,6 +175,7 @@ interface ScanRow {
   status: 'pending' | 'searching' | 'searched' | 'adopted' | 'error'
   searchResult: SearchResult | null
   adoptData: AdoptData | null
+  searchKeyword: string
   loading: boolean
 }
 
@@ -186,6 +219,7 @@ const loadUnscraped = async () => {
     status: 'pending' as const,
     searchResult: null,
     adoptData: null,
+    searchKeyword: g.name.match(/RJ\d+/)?.[0] || g.name,
     loading: false,
     gameId: g.id,
   }))
@@ -230,6 +264,13 @@ const onAdopted = (data: AdoptData) => {
   scrapingRow.value.status = 'adopted'
 }
 
+const discardRow = (row: ScanRow) => {
+  row.status = 'pending'
+  row.searchResult = null
+  row.adoptData = null
+  row.searchKeyword = row.name.match(/RJ\d+/)?.[0] || row.name
+}
+
 const batchScrape = async () => {
   for (const row of [...scanResults.value]) {
     if (row.status !== 'pending' && row.status !== 'error') continue
@@ -237,6 +278,7 @@ const batchScrape = async () => {
     row.loading = true
     try {
       const keyword = row.name.match(/RJ\d+/)?.[0] || row.name
+      row.searchKeyword = keyword
       const searchRes = await api.post('/scraper/dlsite/search', { keyword })
       const results = searchRes.data
       if (results.length > 0) {
