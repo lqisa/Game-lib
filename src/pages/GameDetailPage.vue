@@ -102,7 +102,22 @@ const loadGame = async () => {
   game.value = res.data
 }
 
-const onReScrape = async (data: any) => {
+interface AdoptData {
+  rjcode: string
+  name: string
+  makerName: string
+  coverUrl: string
+  detail: {
+    title: string
+    coverURL: string
+    makers: string[]
+    genres: string[]
+    tags: string[]
+    description: string
+  }
+}
+
+const onReScrape = async (data: AdoptData) => {
   if (!game.value) return
   await api.post('/scraper/adopt', {
     gameId: game.value.id,
