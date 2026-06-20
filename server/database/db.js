@@ -12,7 +12,12 @@ if (!fs.existsSync(DB_DIR)) {
 const db = knex({
   client: 'sqlite3',
   connection: { filename: DB_PATH },
-  useNullAsDefault: true
+  useNullAsDefault: true,
+  pool: {
+    afterCreate: (conn, done) => {
+      conn.run('PRAGMA foreign_keys = ON', done)
+    }
+  }
 })
 
 const getGameDetail = async (id) => {
