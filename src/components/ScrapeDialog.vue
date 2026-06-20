@@ -8,7 +8,7 @@
       </q-bar>
 
       <q-card-section>
-        <div class="row q-gutter-sm q-mb-md">
+        <div class="row q-gutter-sm q-mb-sm">
           <q-input
             v-model="keyword"
             label="Search keyword"
@@ -22,6 +22,20 @@
             </template>
           </q-input>
           <q-btn color="primary" label="Search" @click="doSearch" :loading="searching" />
+        </div>
+
+        <div v-if="segments.length > 1" class="q-mb-md">
+          <q-chip
+            v-for="seg in segments"
+            :key="seg"
+            clickable
+            dense
+            color="grey-3"
+            text-color="dark"
+            @click="keyword = seg"
+          >
+            {{ seg }}
+          </q-chip>
         </div>
 
         <div v-if="results.length > 0" class="q-mb-md">
@@ -139,11 +153,15 @@ const props = defineProps<{
   gameName: string
   gameId: number
   defaultKeyword?: string | undefined
+  initialResults?: SearchResult[] | null
+  initialSegments?: string[] | null
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [val: boolean]
   adopted: [data: AdoptData]
+  searched: [keyword: string, results: SearchResult[]]
+  segmentsLoaded: [name: string, segments: string[]]
 }>()
 
 const show = computed({
@@ -152,6 +170,7 @@ const show = computed({
 })
 
 const keyword = ref('')
+const segments = ref<string[]>([])
 const results = ref<SearchResult[]>([])
 const selectedIdx = ref(-1)
 const searching = ref(false)
@@ -175,7 +194,12 @@ const doSearch = async () => {
   searched.value = false
   try {
     const res = await api.post('/scraper/dlsite/search', { keyword: keyword.value.trim() })
-    results.value = res.data
+    const data = res.data
+    results.value = data.results ?? data
+    if (data.segments) {
+      segments.value = data.segments
+    }
+    emit('searched', keyword.value.trim(), results.value)
     searched.value = true
   } finally {
     searching.value = false
@@ -217,7 +241,21 @@ watch(() => props.modelValue, (val) => {
     selectedIdx.value = -1
     detail.value = null
     searched.value = false
-    void doSearch()
+    segments.value = []
+    if (props.initialSegments && props.initialSegments.length > 0) {
+      segments.value = props.initialSegments
+    } else {
+      void api.post('/scraper/dlsite/segments', { name: props.gameName }).then(res => {
+        segments.value = res.data.segments || []
+        emit('segmentsLoaded', props.gameName, segments.value)
+      }).catch(() => {})
+    }
+    if (props.initialResults && props.initialResults.length > 0) {
+      results.value = props.initialResults
+      searched.value = true
+    } else {
+      void doSearch()
+    }
   }
 })
 </script>

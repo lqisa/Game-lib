@@ -28,12 +28,15 @@
             color="positive"
             label="提交入库"
             @click="submitAdopted"
-            :disable="adoptedCount === 0"
+            :disable="adoptedCount === 0 && staleCount === 0"
             :loading="submitting"
           >
             <q-badge v-if="adoptedCount > 0" color="white" text-color="positive" floating>{{ adoptedCount }}</q-badge>
           </q-btn>
-          <q-badge v-if="scanResults.length > 0" color="grey-7" class="text-body2">
+          <q-badge v-if="staleCount > 0" color="negative" class="text-body2">
+            {{ staleCount }} 待删除
+          </q-badge>
+          <q-badge v-else-if="scanResults.length > 0" color="grey-7" class="text-body2">
             {{ scanResults.length }} unscraped
           </q-badge>
         </div>
@@ -48,25 +51,13 @@
           :rows-per-page-options="[0]"
           style="max-height: 70vh"
         >
-          <template v-slot:body-cell-cover="props">
-            <q-td :props="props">
-              <q-img
-                v-if="props.row.searchResult?.coverUrl"
-                :src="props.row.searchResult.coverUrl"
-                style="width: 48px; height: 64px;"
-                fit="cover"
-              >
-                <template v-slot:error>
-                  <div class="absolute-full flex flex-center bg-grey-3">
-                    <q-icon name="broken_image" size="16px" color="grey" />
-                  </div>
-                </template>
-              </q-img>
-              <q-icon v-else name="videogame_asset" size="32px" color="grey-5" />
+          <template v-slot:body-cell-name="props">
+            <q-td :props="props" :class="{ 'bg-grey-2': props.row.status === 'stale' }" style="white-space: normal; word-break: break-all;">
+              {{ props.row.name }}
             </q-td>
           </template>
           <template v-slot:body-cell-matched="props">
-            <q-td :props="props">
+            <q-td :props="props" :class="{ 'bg-grey-2': props.row.status === 'stale' }" style="white-space: normal; word-break: break-all;">
               <div v-if="props.row.searchResult">
                 <q-icon name="image" color="primary" size="xs" class="q-mr-xs cursor-pointer">
                   <q-tooltip anchor="center right" self="center left" :offset="[10, 0]">
@@ -96,33 +87,36 @@
             </q-td>
           </template>
           <template v-slot:body-cell-status="props">
-            <q-td :props="props">
+            <q-td :props="props" :class="{ 'bg-grey-2': props.row.status === 'stale' }">
               <q-badge v-if="props.row.status === 'adopted'" color="positive">Adopted</q-badge>
               <q-badge v-else-if="props.row.status === 'searching'" color="warning">Searching...</q-badge>
               <q-badge v-else-if="props.row.status === 'error'" color="negative">Failed</q-badge>
               <q-badge v-else-if="props.row.status === 'searched'" color="blue">Searched</q-badge>
+              <q-badge v-else-if="props.row.status === 'stale'" color="negative">待删除</q-badge>
               <q-badge v-else color="grey">Pending</q-badge>
             </q-td>
           </template>
           <template v-slot:body-cell-actions="props">
-            <q-td :props="props">
-              <q-btn
-                size="sm"
-                color="primary"
-                :label="props.row.status === 'pending' || props.row.status === 'error' ? 'Scrape' : '重选'"
-                @click="openScrapeDialog(props.row)"
-              />
-              <q-btn
-                v-if="props.row.status === 'adopted'"
-                size="sm"
-                color="negative"
-                flat
-                icon="cancel"
-                class="q-ml-xs"
-                @click="discardRow(props.row)"
-              >
-                <q-tooltip>Discard</q-tooltip>
-              </q-btn>
+            <q-td :props="props" :class="{ 'bg-grey-2': props.row.status === 'stale' }">
+              <template v-if="props.row.status === 'stale'">
+                <span class="text-grey-5 text-italic" style="font-size: 12px;">目录已不存在</span>
+              </template>
+              <template v-else-if="props.row.status === 'pending' || props.row.status === 'error'">
+                <q-btn size="sm" color="primary" label="Scrape" @click="openScrapeDialog(props.row)" />
+              </template>
+              <template v-else-if="props.row.status === 'searched'">
+                <q-btn size="sm" color="primary" flat label="重选" @click="openScrapeDialog(props.row)" />
+                <q-btn size="sm" color="positive" label="Adopt" :loading="props.row.loading" @click="quickAdopt(props.row)" class="q-ml-xs" />
+                <q-btn size="sm" color="negative" flat icon="cancel" class="q-ml-xs" @click="discardRow(props.row)">
+                  <q-tooltip>取消</q-tooltip>
+                </q-btn>
+              </template>
+              <template v-else-if="props.row.status === 'adopted'">
+                <q-btn size="sm" color="primary" flat label="重选" @click="openScrapeDialog(props.row)" />
+                <q-btn size="sm" color="negative" flat icon="cancel" class="q-ml-xs" @click="discardRow(props.row)">
+                  <q-tooltip>取消</q-tooltip>
+                </q-btn>
+              </template>
             </q-td>
           </template>
         </q-table>
@@ -134,7 +128,11 @@
       :game-name="scrapingRow?.name || ''"
       :game-id="scrapingRow?.gameId || 0"
       :default-keyword="scrapingRow?.searchKeyword"
+      :initial-results="scrapingRow ? (searchCache.get(scrapingRow.searchKeyword) || null) : null"
+      :initial-segments="scrapingRow ? (segmentsCache.get(scrapingRow.name) || null) : null"
       @adopted="onAdopted"
+      @searched="onSearched"
+      @segments-loaded="onSegmentsLoaded"
     />
   </q-dialog>
 </template>
@@ -172,7 +170,7 @@ interface ScanRow {
   gameId: number
   name: string
   subPath: string
-  status: 'pending' | 'searching' | 'searched' | 'adopted' | 'error'
+  status: 'pending' | 'searching' | 'searched' | 'adopted' | 'error' | 'stale'
   searchResult: SearchResult | null
   adoptData: AdoptData | null
   searchKeyword: string
@@ -191,20 +189,26 @@ const submitting = ref(false)
 const showScrapeDialog = ref(false)
 const scrapingRow = ref<ScanRow | null>(null)
 
+const searchCache = new Map<string, SearchResult[]>()
+const segmentsCache = new Map<string, string[]>()
+
 const hasPending = computed(() => scanResults.value.some(r => r.status === 'pending' || r.status === 'error'))
 const adoptedCount = computed(() => scanResults.value.filter(r => r.status === 'adopted').length)
+const staleCount = computed(() => scanResults.value.filter(r => r.status === 'stale').length)
 
 const columns = [
-  { name: 'cover', label: 'Cover', field: 'cover', align: 'center' as const, style: 'width: 60px' },
-  { name: 'name', label: 'Directory', field: 'name', align: 'left' as const, sortable: true },
-  { name: 'matched', label: 'Matched', field: 'matched', align: 'left' as const },
-  { name: 'status', label: 'Status', field: 'status', align: 'center' as const },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' as const },
+  { name: 'name', label: 'Directory', field: 'name', align: 'left' as const, sortable: true, style: 'width: 30%' },
+  { name: 'matched', label: 'Matched', field: 'matched', align: 'left' as const, style: 'width: 35%' },
+  { name: 'status', label: 'Status', field: 'status', align: 'center' as const, style: 'width: 80px' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' as const, style: 'width: 180px' },
 ]
 
 const fetchLibraries = async () => {
   const res = await api.get('/libraries')
   libraries.value = res.data
+  if (!selectedLibrary.value && libraries.value.length > 0) {
+    selectedLibrary.value = libraries.value[0]!.id
+  }
 }
 
 const loadUnscraped = async () => {
@@ -226,6 +230,8 @@ const loadUnscraped = async () => {
 }
 
 const onLibraryChange = () => {
+  searchCache.clear()
+  segmentsCache.clear()
   void loadUnscraped()
 }
 
@@ -235,13 +241,23 @@ const scanDir = async () => {
   try {
     const res = await api.post('/games/scan', { libraryId: selectedLibrary.value })
     const newDirs: string[] = res.data.newDirs
+    const removedGames: { id: number; name: string; sub_path: string }[] = res.data.removedGames || []
+
     if (newDirs.length > 0) {
       await api.post('/games/scan/add', {
         libraryId: selectedLibrary.value,
         dirs: newDirs,
       })
     }
+
     await loadUnscraped()
+
+    const removedIds = new Set(removedGames.map(g => g.id))
+    for (const row of scanResults.value) {
+      if (removedIds.has(row.gameId)) {
+        row.status = 'stale'
+      }
+    }
   } finally {
     scanning.value = false
   }
@@ -264,6 +280,35 @@ const onAdopted = (data: AdoptData) => {
   scrapingRow.value.status = 'adopted'
 }
 
+const onSearched = (keyword: string, results: SearchResult[]) => {
+  searchCache.set(keyword, results)
+}
+
+const onSegmentsLoaded = (name: string, segments: string[]) => {
+  segmentsCache.set(name, segments)
+}
+
+const quickAdopt = async (row: ScanRow) => {
+  if (!row.searchResult) return
+  row.loading = true
+  try {
+    const detailRes = await api.post('/scraper/dlsite/fetch', { rjcode: row.searchResult.rjcode })
+    const detail = detailRes.data
+    row.adoptData = {
+      rjcode: row.searchResult.rjcode,
+      name: row.searchResult.name,
+      makerName: row.searchResult.makerName,
+      coverUrl: row.searchResult.coverUrl,
+      detail,
+    }
+    row.status = 'adopted'
+  } catch {
+    row.status = 'error'
+  } finally {
+    row.loading = false
+  }
+}
+
 const discardRow = (row: ScanRow) => {
   row.status = 'pending'
   row.searchResult = null
@@ -279,10 +324,20 @@ const batchScrape = async () => {
     try {
       const keyword = row.name.match(/RJ\d+/)?.[0] || row.name
       row.searchKeyword = keyword
-      const searchRes = await api.post('/scraper/dlsite/search', { keyword })
-      const results = searchRes.data
+
+      let results: SearchResult[]
+      const cached = searchCache.get(keyword)
+      if (cached) {
+        results = cached
+      } else {
+        const searchRes = await api.post('/scraper/dlsite/search', { keyword })
+        const data = searchRes.data
+        results = data.results ?? data
+        searchCache.set(keyword, results)
+      }
+
       if (results.length > 0) {
-        row.searchResult = results[0]
+        row.searchResult = results[0] ?? null
         row.status = 'searched'
       } else {
         row.status = 'error'
@@ -298,6 +353,7 @@ const batchScrape = async () => {
 const submitAdopted = async () => {
   submitting.value = true
   const adoptedRows = scanResults.value.filter(r => r.status === 'adopted' && r.adoptData)
+  const staleRows = scanResults.value.filter(r => r.status === 'stale')
   try {
     for (const row of adoptedRows) {
       const d = row.adoptData!
@@ -314,7 +370,10 @@ const submitAdopted = async () => {
         description: d.detail.description,
       })
     }
-    scanResults.value = scanResults.value.filter(r => r.status !== 'adopted')
+    for (const row of staleRows) {
+      await api.delete(`/games/${row.gameId}`)
+    }
+    scanResults.value = scanResults.value.filter(r => r.status !== 'adopted' && r.status !== 'stale')
     emit('done')
   } finally {
     submitting.value = false
@@ -323,8 +382,9 @@ const submitAdopted = async () => {
 
 watch(modelValue, (val) => {
   if (val) {
-    void fetchLibraries()
-    void loadUnscraped()
+    searchCache.clear()
+    segmentsCache.clear()
+    void fetchLibraries().then(() => loadUnscraped())
   }
 })
 </script>

@@ -105,12 +105,15 @@ router.post('/scan', async (req, res, next) => {
 
     const existingGames = await db.knex('game')
       .where({ library_id: libraryId })
-      .select('sub_path')
+      .select('id', 'name', 'sub_path')
     const existingPaths = new Set(existingGames.map(g => g.sub_path))
 
     const newDirs = allDirs.filter(d => !existingPaths.has(d))
 
-    res.send({ allDirs, newDirs })
+    const dirSet = new Set(allDirs)
+    const removedGames = existingGames.filter(g => !dirSet.has(g.sub_path))
+
+    res.send({ allDirs, newDirs, removedGames })
   } catch (err) {
     next(err)
   }

@@ -4,13 +4,26 @@ const path = require('path')
 const fs = require('fs')
 const axios = require('axios')
 const db = require('../database/db')
-const { searchDLSite, fetchDLSiteDetail } = require('../scraper/dlsite')
+const { searchDLSite, fetchDLSiteDetail, splitKeyword } = require('../scraper/dlsite')
 
 const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers')
 
 if (!fs.existsSync(COVERS_DIR)) {
   fs.mkdirSync(COVERS_DIR, { recursive: true })
 }
+
+router.post('/dlsite/segments', async (req, res, next) => {
+  try {
+    const { name } = req.body
+    if (!name) {
+      return res.status(400).send({ error: 'name is required' })
+    }
+    const { keyword, segments } = splitKeyword(name)
+    res.send({ keyword, segments })
+  } catch (err) {
+    next(err)
+  }
+})
 
 router.post('/dlsite/search', async (req, res, next) => {
   try {
@@ -19,7 +32,8 @@ router.post('/dlsite/search', async (req, res, next) => {
       return res.status(400).send({ error: 'keyword is required' })
     }
     const results = await searchDLSite(keyword)
-    res.send(results)
+    const { segments } = splitKeyword(keyword)
+    res.send({ results, segments })
   } catch (err) {
     next(err)
   }

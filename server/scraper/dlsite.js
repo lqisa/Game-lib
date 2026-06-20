@@ -1,6 +1,15 @@
 const cheerio = require('cheerio')
 const { retryGet } = require('./axios')
 
+const splitKeyword = (name) => {
+  let cleaned = name.replace(/\s*v\d+[\d.]*\s*$/i, '').trim()
+  const rjMatch = cleaned.match(/RJ\d+/)
+  if (rjMatch) return { keyword: rjMatch[0], segments: [rjMatch[0]] }
+  const re = /[\u4e00-\u9fff\u3040-\u309f\u30a1-\u30fa\u30fc-\u30ff\uff10-\uff19\uff21-\uff3a\uff41-\uff5a\u0041-\u005a\u0061-\u007a\u0030-\u0039]+/g
+  const segments = cleaned.match(re) || []
+  return { keyword: cleaned, segments }
+}
+
 const searchDLSite = async (keyword) => {
   const rjMatch = keyword.match(/RJ(\d+)/)
   if (rjMatch) {
@@ -110,4 +119,4 @@ const fetchDLSiteDetail = async (rjcode) => {
   return work
 }
 
-module.exports = { searchDLSite, fetchDLSiteDetail }
+module.exports = { searchDLSite, fetchDLSiteDetail, splitKeyword }
