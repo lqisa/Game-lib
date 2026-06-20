@@ -5,11 +5,17 @@ const fs = require('fs')
 const axios = require('axios')
 const db = require('../database/db')
 const { searchDLSite, fetchDLSiteDetail, splitKeyword } = require('../scraper/dlsite')
+const { searchBangumi, fetchBangumiDetail } = require('../scraper/bangumi')
+const { searchVNDB, fetchVNDBDetail } = require('../scraper/vndb')
 
 const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers')
 
 if (!fs.existsSync(COVERS_DIR)) {
   fs.mkdirSync(COVERS_DIR, { recursive: true })
+}
+
+const getBangumiToken = async () => {
+  return (await db.getSetting('bangumi_token')) || ''
 }
 
 router.post('/dlsite/segments', async (req, res, next) => {
@@ -47,6 +53,107 @@ router.post('/dlsite/fetch', async (req, res, next) => {
     }
     const detail = await fetchDLSiteDetail(rjcode)
     res.send(detail)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/bangumi/search', async (req, res, next) => {
+  try {
+    const { keyword } = req.body
+    if (!keyword) {
+      return res.status(400).send({ error: 'keyword is required' })
+    }
+    const token = await getBangumiToken()
+    const results = await searchBangumi(keyword, token)
+    const { segments } = splitKeyword(keyword)
+    res.send({ results, segments })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/bangumi/fetch', async (req, res, next) => {
+  try {
+    const { id } = req.body
+    if (!id) {
+      return res.status(400).send({ error: 'id is required' })
+    }
+    const token = await getBangumiToken()
+    const detail = await fetchBangumiDetail(id, token)
+    if (!detail) {
+      return res.status(404).send({ error: 'detail not found' })
+    }
+    res.send(detail)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/vndb/search', async (req, res, next) => {
+  try {
+    const { keyword } = req.body
+    if (!keyword) {
+      return res.status(400).send({ error: 'keyword is required' })
+    }
+    const results = await searchVNDB(keyword)
+    const { segments } = splitKeyword(keyword)
+    res.send({ results, segments })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/vndb/fetch', async (req, res, next) => {
+  try {
+    const { id } = req.body
+    if (!id) {
+      return res.status(400).send({ error: 'id is required' })
+    }
+    const detail = await fetchVNDBDetail(id)
+    if (!detail) {
+      return res.status(404).send({ error: 'detail not found' })
+    }
+    res.send(detail)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/auto/search', async (req, res, next) => {
+  try {
+    const { keyword, name } = req.body
+    if (!keyword) {
+      return res.status(400).send({ error: 'keyword is required' })
+    }
+    const searchName = name || keyword
+    const hasRJ = /RJ\d+/.test(searchName)
+    const sources = hasRJ
+      ? ['dlsite', 'bangumi', 'vndb']
+      : ['bangumi', 'dlsite', 'vndb']
+
+    const { segments } = splitKeyword(keyword)
+    const token = await getBangumiToken()
+
+    for (const source of sources) {
+      try {
+        let results = []
+        if (source === 'dlsite') {
+          results = await searchDLSite(keyword)
+        } else if (source === 'bangumi') {
+          results = await searchBangumi(keyword, token)
+        } else if (source === 'vndb') {
+          results = await searchVNDB(keyword)
+        }
+        if (results.length > 0) {
+          return res.send({ source, results, segments })
+        }
+      } catch {
+        continue
+      }
+    }
+
+    res.send({ source: null, results: [], segments })
   } catch (err) {
     next(err)
   }

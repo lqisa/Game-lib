@@ -1,13 +1,25 @@
 <template>
   <q-dialog v-model="show" persistent>
-    <q-card style="min-width: 600px; max-width: 800px;">
+    <q-card style="min-width: 800px; max-width: 1000px; max-height: 80vh; display: flex; flex-direction: column;">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle1">Scrape: {{ gameName }}</div>
         <q-space />
         <q-btn dense flat icon="close" v-close-popup />
       </q-bar>
 
-      <q-card-section>
+      <q-card-section class="q-pb-none">
+        <q-tabs
+          v-model="activeSource"
+          dense
+          narrow-indicator
+          align="left"
+          class="q-mb-sm"
+        >
+          <q-tab name="dlsite" label="DLSite" />
+          <q-tab name="bangumi" label="Bangumi" />
+          <q-tab name="vndb" label="VNDB" />
+        </q-tabs>
+
         <div class="row q-gutter-sm q-mb-sm">
           <q-input
             v-model="keyword"
@@ -24,95 +36,114 @@
           <q-btn color="primary" label="Search" @click="doSearch" :loading="searching" />
         </div>
 
-        <div v-if="segments.length > 1" class="q-mb-md">
+        <div v-if="segments.length > 0" class="q-mb-sm">
           <q-chip
             v-for="seg in segments"
             :key="seg"
             clickable
             dense
-            color="grey-3"
+            :color="seg === gameName ? 'blue-grey-2' : 'grey-3'"
             text-color="dark"
             @click="keyword = seg"
           >
             {{ seg }}
           </q-chip>
         </div>
+      </q-card-section>
 
-        <div v-if="results.length > 0" class="q-mb-md">
-          <div class="text-caption text-grey q-mb-sm">Search Results (click to select)</div>
-          <div class="row q-col-gutter-sm" style="max-height: 300px; overflow-y: auto;">
-            <div
-              v-for="(r, idx) in results"
-              :key="r.rjcode"
-              class="col-6 col-sm-4 cursor-pointer"
-              @click="selectResult(idx)"
-            >
-              <q-card
-                :class="{ 'bg-blue-1': selectedIdx === idx }"
-                flat
-                bordered
+      <q-card-section class="col overflow-hidden q-pt-none">
+        <div class="row no-wrap" style="height: 100%;">
+          <div class="col-5" style="overflow-y: auto; max-height: 50vh;">
+            <div v-if="results.length > 0">
+              <div
+                v-for="(r, idx) in results"
+                :key="r.id"
+                class="cursor-pointer q-mb-xs"
+                @click="selectResult(idx)"
               >
-                <q-img
-                  v-if="r.coverUrl"
-                  :src="r.coverUrl"
-                  :ratio="3 / 4"
-                  style="max-height: 160px;"
+                <q-card
+                  :class="{ 'bg-blue-1': selectedIdx === idx }"
+                  flat
+                  bordered
                 >
-                  <template v-slot:error>
-                    <div class="absolute-full flex flex-center bg-grey-3">
-                      <q-icon name="broken_image" size="32px" color="grey" />
+                  <div class="row no-wrap">
+                    <div style="width: 60px; flex-shrink: 0;">
+                      <q-img
+                        v-if="r.coverUrl"
+                        :src="r.coverUrl"
+                        :ratio="3 / 4"
+                        class="rounded-borders-left"
+                      >
+                        <template v-slot:error>
+                          <div class="absolute-full flex flex-center bg-grey-3">
+                            <q-icon name="broken_image" size="18px" color="grey" />
+                          </div>
+                        </template>
+                      </q-img>
+                      <div v-else class="bg-grey-3 flex flex-center" style="aspect-ratio: 3/4;">
+                        <q-icon name="videogame_asset" size="18px" color="grey" />
+                      </div>
                     </div>
-                  </template>
-                </q-img>
-                <div v-else class="bg-grey-3 flex flex-center" style="aspect-ratio: 3/4; max-height: 160px;">
-                  <q-icon name="videogame_asset" size="32px" color="grey" />
-                </div>
-                <q-card-section class="q-pa-xs">
-                  <div class="text-caption ellipsis-2-lines">{{ r.name }}</div>
-                  <div class="text-caption text-grey ellipsis">{{ r.makerName }}</div>
-                  <div class="text-caption text-grey">RJ{{ r.rjcode }}</div>
-                </q-card-section>
-              </q-card>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="results.length === 0 && searched" class="text-center text-grey q-pa-md">
-          No results found. Try a different keyword.
-        </div>
-
-        <q-separator v-if="selectedResult" class="q-my-sm" />
-
-        <div v-if="selectedResult" class="q-mt-sm">
-          <div class="text-subtitle2 q-mb-sm">Selected: {{ selectedResult.name }}</div>
-          <div class="row q-col-gutter-md">
-            <div class="col-4">
-              <q-img
-                v-if="selectedResult.coverUrl"
-                :src="selectedResult.coverUrl"
-                :ratio="3 / 4"
-                class="rounded-borders"
-              />
-            </div>
-            <div class="col-8">
-              <div class="text-body2"><span class="text-grey">RJ:</span> RJ{{ selectedResult.rjcode }}</div>
-              <div class="text-body2"><span class="text-grey">Maker:</span> {{ selectedResult.makerName }}</div>
-              <div v-if="detailLoading" class="text-center q-pa-sm">
-                <q-spinner-dots size="24px" />
-              </div>
-              <div v-if="detail">
-                <div v-if="detail.genres?.length" class="q-mt-xs">
-                  <q-chip v-for="g in detail.genres" :key="g" dense size="sm" color="blue" text-color="white">{{ g }}</q-chip>
-                </div>
-                <div v-if="detail.tags?.length" class="q-mt-xs">
-                  <q-chip v-for="t in detail.tags" :key="t" dense size="sm" color="teal" text-color="white">{{ t }}</q-chip>
-                </div>
-                <div v-if="detail.description" class="text-caption q-mt-sm ellipsis-3-lines">{{ detail.description }}</div>
+                    <div class="col q-pa-xs" style="min-width: 0;">
+                      <div class="text-caption ellipsis-2-lines" style="line-height: 1.3;">{{ r.name }}</div>
+                      <div class="text-caption text-grey ellipsis">{{ r.makerName }}</div>
+                      <div class="text-caption text-grey" style="font-size: 10px;">{{ r.id }}</div>
+                    </div>
+                  </div>
+                </q-card>
               </div>
             </div>
+
+            <div v-if="results.length === 0 && searched" class="text-center text-grey q-pa-md">
+              No results found. Try a different keyword or switch source.
+            </div>
+
+            <div v-if="searching" class="text-center q-pa-md">
+              <q-spinner-dots size="24px" color="primary" />
+            </div>
           </div>
-          <div class="row justify-end q-mt-md">
-            <q-btn color="positive" label="Adopt" @click="adopt" :disable="!detail" />
+
+          <q-separator vertical class="q-mx-sm" />
+
+          <div class="col" style="overflow-y: auto; max-height: 50vh;">
+            <div v-if="selectedResult">
+              <div class="row q-col-gutter-md">
+                <div class="col-5">
+                  <q-img
+                    v-if="selectedResult.coverUrl"
+                    :src="selectedResult.coverUrl"
+                    :ratio="3 / 4"
+                    class="rounded-borders"
+                  />
+                </div>
+                <div class="col-7">
+                  <div class="text-subtitle2 ellipsis-2-lines">{{ selectedResult.name }}</div>
+                  <div class="text-caption text-grey q-mt-xs"><span class="text-grey-7">ID:</span> {{ selectedResult.id }}</div>
+                  <div class="text-caption text-grey"><span class="text-grey-7">Maker:</span> {{ selectedResult.makerName }}</div>
+                  <div v-if="detailLoading" class="text-center q-pa-sm">
+                    <q-spinner-dots size="24px" />
+                  </div>
+                  <div v-if="detail">
+                    <div v-if="detail.genres?.length" class="q-mt-xs">
+                      <q-chip v-for="g in detail.genres" :key="g" dense size="sm" color="blue" text-color="white">{{ g }}</q-chip>
+                    </div>
+                    <div v-if="detail.tags?.length" class="q-mt-xs">
+                      <q-chip v-for="t in detail.tags" :key="t" dense size="sm" color="teal" text-color="white">{{ t }}</q-chip>
+                    </div>
+                    <div v-if="detail.description" class="text-caption q-mt-sm" style="white-space: pre-wrap; max-height: 120px; overflow-y: auto;">{{ detail.description }}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="row justify-end q-mt-md">
+                <q-btn color="positive" label="Adopt" @click="adopt" :disable="!detail" />
+              </div>
+            </div>
+            <div v-else class="flex flex-center text-grey" style="height: 100%; min-height: 200px;">
+              <div class="text-center">
+                <q-icon name="touch_app" size="48px" color="grey-4" />
+                <div class="q-mt-sm">Select a result to preview</div>
+              </div>
+            </div>
           </div>
         </div>
       </q-card-section>
@@ -124,14 +155,17 @@
 import { ref, computed, watch } from 'vue'
 import api from '../composables/useApi'
 
+type SourceType = 'dlsite' | 'bangumi' | 'vndb'
+
 interface SearchResult {
-  rjcode: string
+  id: string
   name: string
   makerName: string
   coverUrl: string
 }
 
 interface DetailResult {
+  id: string
   title: string
   coverURL: string
   makers: string[]
@@ -141,7 +175,8 @@ interface DetailResult {
 }
 
 interface AdoptData {
-  rjcode: string
+  source: SourceType
+  sourceId: string
   name: string
   makerName: string
   coverUrl: string
@@ -153,6 +188,7 @@ const props = defineProps<{
   gameName: string
   gameId: number
   defaultKeyword?: string | undefined
+  defaultSource?: SourceType | undefined
   initialResults?: SearchResult[] | null
   initialSegments?: string[] | null
 }>()
@@ -160,7 +196,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [val: boolean]
   adopted: [data: AdoptData]
-  searched: [keyword: string, results: SearchResult[]]
+  searched: [source: SourceType, keyword: string, results: SearchResult[]]
   segmentsLoaded: [name: string, segments: string[]]
 }>()
 
@@ -169,6 +205,7 @@ const show = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
+const activeSource = ref<SourceType>('dlsite')
 const keyword = ref('')
 const segments = ref<string[]>([])
 const results = ref<SearchResult[]>([])
@@ -193,13 +230,13 @@ const doSearch = async () => {
   detail.value = null
   searched.value = false
   try {
-    const res = await api.post('/scraper/dlsite/search', { keyword: keyword.value.trim() })
+    const res = await api.post(`/scraper/${activeSource.value}/search`, { keyword: keyword.value.trim() })
     const data = res.data
     results.value = data.results ?? data
-    if (data.segments) {
-      segments.value = data.segments
+    if (data.segments && data.segments.length > 0) {
+      segments.value = [props.gameName, ...data.segments.filter((s: string) => s !== props.gameName)]
     }
-    emit('searched', keyword.value.trim(), results.value)
+    emit('searched', activeSource.value, keyword.value.trim(), results.value)
     searched.value = true
   } finally {
     searching.value = false
@@ -213,7 +250,10 @@ const selectResult = async (idx: number) => {
   if (!r) return
   detailLoading.value = true
   try {
-    const res = await api.post('/scraper/dlsite/fetch', { rjcode: r.rjcode })
+    const fetchBody = activeSource.value === 'dlsite'
+      ? { rjcode: r.id }
+      : { id: r.id }
+    const res = await api.post(`/scraper/${activeSource.value}/fetch`, fetchBody)
     detail.value = res.data
   } catch {
     detail.value = null
@@ -225,7 +265,8 @@ const selectResult = async (idx: number) => {
 const adopt = () => {
   if (!selectedResult.value || !detail.value) return
   emit('adopted', {
-    rjcode: selectedResult.value.rjcode,
+    source: activeSource.value,
+    sourceId: selectedResult.value.id,
     name: selectedResult.value.name,
     makerName: selectedResult.value.makerName,
     coverUrl: selectedResult.value.coverUrl,
@@ -236,6 +277,7 @@ const adopt = () => {
 
 watch(() => props.modelValue, (val) => {
   if (val) {
+    activeSource.value = props.defaultSource || 'dlsite'
     keyword.value = props.defaultKeyword || props.gameName.match(/RJ\d+/)?.[0] || props.gameName
     results.value = []
     selectedIdx.value = -1
@@ -243,12 +285,15 @@ watch(() => props.modelValue, (val) => {
     searched.value = false
     segments.value = []
     if (props.initialSegments && props.initialSegments.length > 0) {
-      segments.value = props.initialSegments
+      segments.value = [props.gameName, ...props.initialSegments.filter(s => s !== props.gameName)]
     } else {
       void api.post('/scraper/dlsite/segments', { name: props.gameName }).then(res => {
-        segments.value = res.data.segments || []
-        emit('segmentsLoaded', props.gameName, segments.value)
-      }).catch(() => {})
+        const raw = res.data.segments || []
+        segments.value = [props.gameName, ...raw.filter((s: string) => s !== props.gameName)]
+        emit('segmentsLoaded', props.gameName, raw)
+      }).catch(() => {
+        segments.value = [props.gameName]
+      })
     }
     if (props.initialResults && props.initialResults.length > 0) {
       results.value = props.initialResults
@@ -256,6 +301,12 @@ watch(() => props.modelValue, (val) => {
     } else {
       void doSearch()
     }
+  }
+})
+
+watch(activeSource, () => {
+  if (props.modelValue) {
+    void doSearch()
   }
 })
 </script>

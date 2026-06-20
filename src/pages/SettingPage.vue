@@ -27,7 +27,7 @@
 
       <q-card class="q-mb-md">
         <q-card-section>
-          <div class="text-subtitle1">DLSite Token</div>
+          <div class="text-subtitle1">Bangumi Token</div>
         </q-card-section>
         <q-card-section>
           <q-input v-model="token" label="Token" type="password" outlined />
@@ -79,7 +79,7 @@ const fetchLibraries = async () => {
 
 const fetchToken = async () => {
   try {
-    const res = await api.get('/settings/dlsite_token')
+    const res = await api.get('/settings/bangumi_token')
     token.value = res.data.value
   } catch {
     token.value = ''
@@ -101,7 +101,7 @@ const deleteLibrary = async (id: number) => {
 }
 
 const saveToken = async () => {
-  await api.put('/settings/dlsite_token', { value: token.value })
+  await api.put('/settings/bangumi_token', { value: token.value })
 }
 
 onMounted(() => {

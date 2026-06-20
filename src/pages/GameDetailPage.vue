@@ -102,8 +102,11 @@ const loadGame = async () => {
   game.value = res.data
 }
 
+type SourceType = 'dlsite' | 'bangumi' | 'vndb'
+
 interface AdoptData {
-  rjcode: string
+  source: SourceType
+  sourceId: string
   name: string
   makerName: string
   coverUrl: string
@@ -117,13 +120,20 @@ interface AdoptData {
   }
 }
 
+const getSourceUrl = (source: SourceType, sourceId: string): string => {
+  if (source === 'dlsite') return `https://www.dlsite.com/maniax/work/=/product_id/RJ${sourceId}.html`
+  if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`
+  if (source === 'vndb') return `https://vndb.org/${sourceId}`
+  return ''
+}
+
 const onReScrape = async (data: AdoptData) => {
   if (!game.value) return
   await api.post('/scraper/adopt', {
     gameId: game.value.id,
-    sourceType: 'dlsite',
-    sourceId: data.rjcode,
-    sourceUrl: `https://www.dlsite.com/maniax/work/=/product_id/RJ${data.rjcode}.html`,
+    sourceType: data.source,
+    sourceId: data.sourceId,
+    sourceUrl: getSourceUrl(data.source, data.sourceId),
     name: data.detail.title,
     coverUrl: data.detail.coverURL,
     makers: data.detail.makers,

@@ -78,10 +78,11 @@
                     </div>
                   </q-tooltip>
                 </q-icon>
+                <q-badge v-if="props.row.source" :color="sourceColor(props.row.source)" class="q-mr-xs" label-style="font-size:10px">{{ props.row.source }}</q-badge>
                 <span class="ellipsis" style="max-width: 180px; vertical-align: middle;">
                   {{ props.row.searchResult.name }}
                 </span>
-                <div class="text-caption text-grey">RJ{{ props.row.searchResult.rjcode }}</div>
+                <div class="text-caption text-grey">{{ props.row.searchResult.id }}</div>
               </div>
               <span v-else class="text-grey">—</span>
             </q-td>
@@ -128,7 +129,8 @@
       :game-name="scrapingRow?.name || ''"
       :game-id="scrapingRow?.gameId || 0"
       :default-keyword="scrapingRow?.searchKeyword"
-      :initial-results="scrapingRow ? (searchCache.get(scrapingRow.searchKeyword) || null) : null"
+      :default-source="scrapingRow?.source || undefined"
+      :initial-results="scrapingRow ? (searchCache.get(cacheKey(scrapingRow)) || null) : null"
       :initial-segments="scrapingRow ? (segmentsCache.get(scrapingRow.name) || null) : null"
       @adopted="onAdopted"
       @searched="onSearched"
@@ -142,14 +144,17 @@ import { ref, computed, watch } from 'vue'
 import api from '../composables/useApi'
 import ScrapeDialog from './ScrapeDialog.vue'
 
+type SourceType = 'dlsite' | 'bangumi' | 'vndb'
+
 interface SearchResult {
-  rjcode: string
+  id: string
   name: string
   makerName: string
   coverUrl: string
 }
 
 interface DetailResult {
+  id: string
   title: string
   coverURL: string
   makers: string[]
@@ -159,7 +164,8 @@ interface DetailResult {
 }
 
 interface AdoptData {
-  rjcode: string
+  source: SourceType
+  sourceId: string
   name: string
   makerName: string
   coverUrl: string
@@ -174,6 +180,7 @@ interface ScanRow {
   searchResult: SearchResult | null
   adoptData: AdoptData | null
   searchKeyword: string
+  source: SourceType | null
   loading: boolean
 }
 
@@ -191,6 +198,22 @@ const scrapingRow = ref<ScanRow | null>(null)
 
 const searchCache = new Map<string, SearchResult[]>()
 const segmentsCache = new Map<string, string[]>()
+
+const cacheKey = (row: ScanRow) => `${row.source || 'auto'}:${row.searchKeyword}`
+
+const sourceColor = (source: SourceType) => {
+  if (source === 'dlsite') return 'deep-purple'
+  if (source === 'bangumi') return 'orange'
+  if (source === 'vndb') return 'cyan'
+  return 'grey'
+}
+
+const getSourceUrl = (source: SourceType, sourceId: string): string => {
+  if (source === 'dlsite') return `https://www.dlsite.com/maniax/work/=/product_id/RJ${sourceId}.html`
+  if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`
+  if (source === 'vndb') return `https://vndb.org/${sourceId}`
+  return ''
+}
 
 const hasPending = computed(() => scanResults.value.some(r => r.status === 'pending' || r.status === 'error'))
 const adoptedCount = computed(() => scanResults.value.filter(r => r.status === 'adopted').length)
@@ -224,6 +247,7 @@ const loadUnscraped = async () => {
     searchResult: null,
     adoptData: null,
     searchKeyword: g.name.match(/RJ\d+/)?.[0] || g.name,
+    source: null as SourceType | null,
     loading: false,
     gameId: g.id,
   }))
@@ -271,17 +295,18 @@ const openScrapeDialog = (row: ScanRow) => {
 const onAdopted = (data: AdoptData) => {
   if (!scrapingRow.value) return
   scrapingRow.value.searchResult = {
-    rjcode: data.rjcode,
+    id: data.sourceId,
     name: data.name,
     makerName: data.makerName,
     coverUrl: data.coverUrl,
   }
   scrapingRow.value.adoptData = data
+  scrapingRow.value.source = data.source
   scrapingRow.value.status = 'adopted'
 }
 
-const onSearched = (keyword: string, results: SearchResult[]) => {
-  searchCache.set(keyword, results)
+const onSearched = (source: SourceType, keyword: string, results: SearchResult[]) => {
+  searchCache.set(`${source}:${keyword}`, results)
 }
 
 const onSegmentsLoaded = (name: string, segments: string[]) => {
@@ -292,10 +317,14 @@ const quickAdopt = async (row: ScanRow) => {
   if (!row.searchResult) return
   row.loading = true
   try {
-    const detailRes = await api.post('/scraper/dlsite/fetch', { rjcode: row.searchResult.rjcode })
+    const fetchBody = row.source === 'dlsite'
+      ? { rjcode: row.searchResult.id }
+      : { id: row.searchResult.id }
+    const detailRes = await api.post(`/scraper/${row.source || 'dlsite'}/fetch`, fetchBody)
     const detail = detailRes.data
     row.adoptData = {
-      rjcode: row.searchResult.rjcode,
+      source: row.source || 'dlsite',
+      sourceId: row.searchResult.id,
       name: row.searchResult.name,
       makerName: row.searchResult.makerName,
       coverUrl: row.searchResult.coverUrl,
@@ -313,6 +342,7 @@ const discardRow = (row: ScanRow) => {
   row.status = 'pending'
   row.searchResult = null
   row.adoptData = null
+  row.source = null
   row.searchKeyword = row.name.match(/RJ\d+/)?.[0] || row.name
 }
 
@@ -325,22 +355,30 @@ const batchScrape = async () => {
       const keyword = row.name.match(/RJ\d+/)?.[0] || row.name
       row.searchKeyword = keyword
 
-      let results: SearchResult[]
-      const cached = searchCache.get(keyword)
+      const autoKey = `auto:${keyword}`
+      const cached = searchCache.get(autoKey)
       if (cached) {
-        results = cached
+        if (cached.length > 0) {
+          row.searchResult = cached[0] ?? null
+          row.status = 'searched'
+        } else {
+          row.status = 'error'
+        }
       } else {
-        const searchRes = await api.post('/scraper/dlsite/search', { keyword })
+        const searchRes = await api.post('/scraper/auto/search', { keyword, name: row.name })
         const data = searchRes.data
-        results = data.results ?? data
-        searchCache.set(keyword, results)
-      }
-
-      if (results.length > 0) {
-        row.searchResult = results[0] ?? null
-        row.status = 'searched'
-      } else {
-        row.status = 'error'
+        const results: SearchResult[] = data.results ?? []
+        row.source = data.source || null
+        searchCache.set(autoKey, results)
+        if (data.source) {
+          searchCache.set(`${data.source}:${keyword}`, results)
+        }
+        if (results.length > 0) {
+          row.searchResult = results[0] ?? null
+          row.status = 'searched'
+        } else {
+          row.status = 'error'
+        }
       }
     } catch {
       row.status = 'error'
@@ -357,11 +395,12 @@ const submitAdopted = async () => {
   try {
     for (const row of adoptedRows) {
       const d = row.adoptData!
+      const source = d.source || 'dlsite'
       await api.post('/scraper/adopt', {
         gameId: row.gameId,
-        sourceType: 'dlsite',
-        sourceId: d.rjcode,
-        sourceUrl: `https://www.dlsite.com/maniax/work/=/product_id/RJ${d.rjcode}.html`,
+        sourceType: source,
+        sourceId: d.sourceId,
+        sourceUrl: getSourceUrl(source, d.sourceId),
         name: d.detail.title,
         coverUrl: d.detail.coverURL,
         makers: d.detail.makers,

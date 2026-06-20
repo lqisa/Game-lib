@@ -13,7 +13,7 @@ const splitKeyword = (name) => {
 const searchDLSite = async (keyword) => {
   const rjMatch = keyword.match(/RJ(\d+)/)
   if (rjMatch) {
-    return [{ rjcode: rjMatch[1], name: keyword, makerName: '', coverUrl: '' }]
+    return [{ id: rjMatch[1], rjcode: rjMatch[1], name: keyword, makerName: '', coverUrl: '' }]
   }
 
   const url = `https://www.dlsite.com/maniax/api/=/product.json?work_category%5B0%5D=%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0&keyword=${encodeURIComponent(keyword)}&order%5B%5D=trend&_locale=zh-cn`
@@ -38,6 +38,7 @@ const searchDLSite = async (keyword) => {
       coverUrl = `https:${coverUrl}`
     }
     return {
+      id: rjcode,
       rjcode,
       name: item.work_name || '',
       makerName: item.maker_name || '',
