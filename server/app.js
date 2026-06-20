@@ -18,6 +18,11 @@ const createApp = () => {
   }
   app.use('/covers', express.static(coversDir))
 
+  app.use((err, req, res, _next) => {
+    console.error('API Error:', err.message)
+    res.status(err.status || 500).send({ error: err.message || 'Internal Server Error' })
+  })
+
   return app
 }
 

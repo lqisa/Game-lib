@@ -1,7 +1,7 @@
 import { BrowserWindow, app } from "electron";
 import path from "node:path";
 import os from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   registerQuasarRuntime,
   resolveElectronAssetsPath
@@ -14,9 +14,12 @@ const EXPRESS_PORT = 19700;
 
 function startServer(): Promise<number> {
   return new Promise((resolve, reject) => {
-    import(path.resolve(__dirname, "..", "..", "server", "app.js"))
+    const appUrl = pathToFileURL(path.resolve(__dirname, "..", "..", "..", "server", "app.js")).href
+    const initUrl = pathToFileURL(path.resolve(__dirname, "..", "..", "..", "server", "database", "init.js")).href
+
+    import(appUrl)
       .then(({ createApp }) => {
-        import(path.resolve(__dirname, "..", "..", "server", "database", "init.js"))
+        import(initUrl)
           .then(({ initDatabase }) => {
             initDatabase()
               .then(() => {
