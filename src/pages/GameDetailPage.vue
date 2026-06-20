@@ -69,15 +69,23 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import api from '../composables/useApi'
 
+interface GameDetail {
+  id: number; name: string; cover_path: string | null; description: string | null
+  sub_path: string; makers: { id: number; name: string }[]
+  genres: { id: number; name: string }[]; tags: { id: number; name: string }[]
+  sources: { id: number; source_type: string; source_id: string; source_url: string | null }[]
+  library: { id: number; name: string; path: string } | null
+}
+
 const route = useRoute()
-const router = useRouter()
-const game = ref<any>(null)
+const game = ref<GameDetail | null>(null)
 
 onMounted(async () => {
-  const res = await api.get(`/games/${route.params.id}`)
+  const gameId = String(route.params.id)
+  const res = await api.get(`/games/${gameId}`)
   game.value = res.data
 })
 </script>

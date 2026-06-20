@@ -51,7 +51,12 @@ import api from '../composables/useApi'
 import GameCard from '../components/GameCard.vue'
 import ScannerDialog from '../components/ScannerDialog.vue'
 
-const games = ref<any[]>([])
+interface GameItem {
+  id: number; name: string; cover_path: string | null
+  library_name: string; library_id: number; sub_path: string
+}
+
+const games = ref<GameItem[]>([])
 const loading = ref(false)
 const keyword = ref('')
 const page = ref(1)
@@ -78,10 +83,10 @@ const loadGames = async () => {
 
 const searchGames = () => {
   page.value = 1
-  loadGames()
+  void loadGames()
 }
 
 onMounted(() => {
-  loadGames()
+  void loadGames()
 })
 </script>

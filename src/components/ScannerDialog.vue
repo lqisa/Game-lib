@@ -103,10 +103,11 @@ const scanDir = async () => {
     dirs: newDirs,
   })
   const gamesRes = await api.get('/games', { params: { pageSize: 9999 } })
+  interface GameItem { id: number; name: string; library_id: number; sub_path: string }
   const addedGames = gamesRes.data.games.filter(
-    (g: any) => g.library_id === selectedLibrary.value && newDirs.includes(g.sub_path),
+    (g: GameItem) => g.library_id === selectedLibrary.value && newDirs.includes(g.sub_path),
   )
-  scanResults.value = addedGames.map((g: any) => ({
+  scanResults.value = addedGames.map((g: GameItem) => ({
     name: g.name,
     status: 'pending' as const,
     loading: false,
@@ -157,7 +158,7 @@ const batchScrape = async () => {
 
 watch(modelValue, (val) => {
   if (val) {
-    fetchLibraries()
+    void fetchLibraries()
     scanResults.value = []
   }
 })

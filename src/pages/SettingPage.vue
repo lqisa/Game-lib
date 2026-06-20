@@ -105,7 +105,7 @@ const saveToken = async () => {
 }
 
 onMounted(() => {
-  fetchLibraries()
-  fetchToken()
+  void fetchLibraries()
+  void fetchToken()
 })
 </script>
