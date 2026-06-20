@@ -90,7 +90,7 @@ router.post('/adopt', async (req, res, next) => {
       }
     }
 
-    await db.updateGame(gameId, { name, description, cover_path: coverPath })
+    await db.updateGame(gameId, { description, cover_path: coverPath })
 
     await db.insertGameSource({
       game_id: gameId,
