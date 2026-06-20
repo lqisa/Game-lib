@@ -60,6 +60,15 @@ const getGames = async ({ page = 1, pageSize = 50, keyword = '' } = {}) => {
   return { games, total: total.count, page, pageSize }
 }
 
+const getUnscrapedGames = async (libraryId) => {
+  return db('game')
+    .leftJoin('game_source', 'game.id', 'game_source.game_id')
+    .where('game.library_id', libraryId)
+    .whereNull('game_source.id')
+    .select('game.id', 'game.name', 'game.sub_path')
+    .orderBy('game.name')
+}
+
 const insertGame = async (data) => db('game').insert(data)
 const updateGame = async (id, data) => db('game').where({ id }).update({ ...data, updated_at: db.fn.now() })
 const deleteGame = async (id) => db('game').where({ id }).del()
@@ -158,6 +167,7 @@ module.exports = {
   knex: db,
   getGameDetail,
   getGames,
+  getUnscrapedGames,
   insertGame,
   updateGame,
   deleteGame,

@@ -17,6 +17,19 @@ router.get('/', async (req, res, next) => {
   }
 })
 
+router.get('/unscraped', async (req, res, next) => {
+  try {
+    const { libraryId } = req.query
+    if (!libraryId) {
+      return res.status(400).send({ error: 'libraryId 为必填项' })
+    }
+    const games = await db.getUnscrapedGames(Number(libraryId))
+    res.send(games)
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.get('/:id', async (req, res, next) => {
   try {
     const game = await db.getGameDetail(Number(req.params.id))

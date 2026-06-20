@@ -20,15 +20,19 @@
             outlined
             dense
             style="min-width: 200px"
+            @update:model-value="onLibraryChange"
           />
-          <q-btn color="primary" label="Scan" @click="scanDir" :disable="!selectedLibrary" />
+          <q-btn color="primary" label="Scan" @click="scanDir" :disable="!selectedLibrary" :loading="scanning" />
           <q-btn color="secondary" label="Scrape All" @click="batchScrape" :disable="scanResults.length === 0" />
+          <q-badge v-if="scanResults.length > 0" color="grey-7" class="text-body2">
+            {{ scanResults.length }} unscraped
+          </q-badge>
         </div>
 
         <q-table
           :rows="scanResults"
           :columns="columns"
-          row-key="name"
+          row-key="gameId"
           flat
           bordered
           virtual-scroll
@@ -69,7 +73,7 @@ interface ScanRow {
   name: string
   status: 'pending' | 'loading' | 'done' | 'error'
   loading: boolean
-  gameId?: number
+  gameId: number
 }
 
 const modelValue = defineModel<boolean | null>({ default: false })
@@ -78,6 +82,7 @@ const emit = defineEmits<{ done: [] }>()
 const libraries = ref<{ id: number; name: string; path: string }[]>([])
 const selectedLibrary = ref<number | null>(null)
 const scanResults = ref<ScanRow[]>([])
+const scanning = ref(false)
 
 const columns = [
   { name: 'name', label: 'Game', field: 'name', align: 'left' as const, sortable: true },
@@ -90,29 +95,40 @@ const fetchLibraries = async () => {
   libraries.value = res.data
 }
 
-const scanDir = async () => {
-  if (!selectedLibrary.value) return
-  const res = await api.post('/games/scan', { libraryId: selectedLibrary.value })
-  const newDirs: string[] = res.data.newDirs
-  if (newDirs.length === 0) {
+const loadUnscraped = async () => {
+  if (!selectedLibrary.value) {
     scanResults.value = []
     return
   }
-  await api.post('/games/scan/add', {
-    libraryId: selectedLibrary.value,
-    dirs: newDirs,
-  })
-  const gamesRes = await api.get('/games', { params: { pageSize: 9999 } })
-  interface GameItem { id: number; name: string; library_id: number; sub_path: string }
-  const addedGames = gamesRes.data.games.filter(
-    (g: GameItem) => g.library_id === selectedLibrary.value && newDirs.includes(g.sub_path),
-  )
-  scanResults.value = addedGames.map((g: GameItem) => ({
+  const res = await api.get('/games/unscraped', { params: { libraryId: selectedLibrary.value } })
+  scanResults.value = res.data.map((g: { id: number; name: string }) => ({
     name: g.name,
     status: 'pending' as const,
     loading: false,
     gameId: g.id,
   }))
+}
+
+const onLibraryChange = () => {
+  void loadUnscraped()
+}
+
+const scanDir = async () => {
+  if (!selectedLibrary.value) return
+  scanning.value = true
+  try {
+    const res = await api.post('/games/scan', { libraryId: selectedLibrary.value })
+    const newDirs: string[] = res.data.newDirs
+    if (newDirs.length > 0) {
+      await api.post('/games/scan/add', {
+        libraryId: selectedLibrary.value,
+        dirs: newDirs,
+      })
+    }
+    await loadUnscraped()
+  } finally {
+    scanning.value = false
+  }
 }
 
 const scrapeSingle = async (row: ScanRow) => {
@@ -154,12 +170,13 @@ const batchScrape = async () => {
     await scrapeSingle(row)
   }
   emit('done')
+  await loadUnscraped()
 }
 
 watch(modelValue, (val) => {
   if (val) {
     void fetchLibraries()
-    scanResults.value = []
+    void loadUnscraped()
   }
 })
 </script>
