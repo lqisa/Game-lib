@@ -2,6 +2,9 @@
   <q-page>
     <div v-if="game" class="q-pa-md">
       <q-btn flat round icon="arrow_back" class="q-mb-md" @click="$router.push('/')" />
+      <q-btn flat round icon="refresh" class="q-mb-md" @click="showScrapeDialog = true">
+        <q-tooltip>Re-scrape</q-tooltip>
+      </q-btn>
 
       <div class="row q-col-gutter-md">
         <div class="col-12 col-sm-4">
@@ -64,6 +67,14 @@
     <div v-else class="text-center text-grey q-mt-xl">
       <q-spinner-dots size="40px" />
     </div>
+
+    <ScrapeDialog
+      v-model="showScrapeDialog"
+      :game-name="game?.name || ''"
+      :game-id="game?.id || 0"
+      :default-keyword="game?.sources?.[0]?.source_id ? `RJ${game.sources[0].source_id}` : undefined"
+      @adopted="onReScrape"
+    />
   </q-page>
 </template>
 
@@ -71,6 +82,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../composables/useApi'
+import ScrapeDialog from '../components/ScrapeDialog.vue'
 
 interface GameDetail {
   id: number; name: string; cover_path: string | null; description: string | null
@@ -82,10 +94,32 @@ interface GameDetail {
 
 const route = useRoute()
 const game = ref<GameDetail | null>(null)
+const showScrapeDialog = ref(false)
 
-onMounted(async () => {
+const loadGame = async () => {
   const gameId = String(route.params.id)
   const res = await api.get(`/games/${gameId}`)
   game.value = res.data
+}
+
+const onReScrape = async (data: any) => {
+  if (!game.value) return
+  await api.post('/scraper/adopt', {
+    gameId: game.value.id,
+    sourceType: 'dlsite',
+    sourceId: data.rjcode,
+    sourceUrl: `https://www.dlsite.com/maniax/work/=/product_id/RJ${data.rjcode}.html`,
+    name: data.detail.title,
+    coverUrl: data.detail.coverURL,
+    makers: data.detail.makers,
+    genres: data.detail.genres,
+    tags: data.detail.tags,
+    description: data.detail.description,
+  })
+  await loadGame()
+}
+
+onMounted(() => {
+  void loadGame()
 })
 </script>
