@@ -1,4 +1,4 @@
-import { BrowserWindow, app } from "electron";
+import { BrowserWindow, app, ipcMain, dialog, shell } from "electron";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -79,6 +79,19 @@ async function createWindow() {
 
 void app.whenReady().then(async () => {
   await registerQuasarRuntime();
+
+  ipcMain.handle('dialog:openDirectory', async (_event, title: string) => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: title || 'Select Directory'
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
+    await shell.openPath(targetPath)
+  })
 
   await startServer();
 
