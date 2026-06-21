@@ -47,11 +47,11 @@ router.post('/dlsite/search', async (req, res, next) => {
 
 router.post('/dlsite/fetch', async (req, res, next) => {
   try {
-    const { rjcode } = req.body
-    if (!rjcode) {
-      return res.status(400).send({ error: 'rjcode is required' })
+    const code = req.body.rjcode || req.body.id
+    if (!code) {
+      return res.status(400).send({ error: 'rjcode or id is required' })
     }
-    const detail = await fetchDLSiteDetail(rjcode)
+    const detail = await fetchDLSiteDetail(code)
     res.send(detail)
   } catch (err) {
     next(err)
