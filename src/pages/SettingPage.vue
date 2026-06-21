@@ -15,7 +15,12 @@
                 <q-item-label caption>{{ lib.path }}</q-item-label>
               </q-item-section>
               <q-item-section side>
-                <q-btn flat round color="negative" icon="delete" @click="deleteLibrary(lib.id)" />
+                <div class="row q-gutter-xs">
+                  <q-btn flat round color="primary" icon="edit" @click="openEditDialog(lib)">
+                    <q-tooltip>Edit</q-tooltip>
+                  </q-btn>
+                  <q-btn flat round color="negative" icon="delete" @click="deleteLibrary(lib.id)" />
+                </div>
               </q-item-section>
             </q-item>
           </q-list>
@@ -45,7 +50,11 @@
         </q-card-section>
         <q-card-section>
           <q-input v-model="newLibName" label="Library Name" outlined class="q-mb-md" />
-          <q-input v-model="newLibPath" label="Library Path" outlined />
+          <q-input v-model="newLibPath" label="Library Path" outlined>
+            <template v-slot:append>
+              <q-icon v-if="hasElectronAPI" name="folder_open" class="cursor-pointer" @click="browseDirectory('add')" />
+            </template>
+          </q-input>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
@@ -53,11 +62,31 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="showEditDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section>
+          <div class="text-h6">Edit Library</div>
+        </q-card-section>
+        <q-card-section>
+          <q-input v-model="editLibName" label="Library Name" outlined class="q-mb-md" />
+          <q-input v-model="editLibPath" label="Library Path" outlined>
+            <template v-slot:append>
+              <q-icon v-if="hasElectronAPI" name="folder_open" class="cursor-pointer" @click="browseDirectory('edit')" />
+            </template>
+          </q-input>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" label="Save" @click="saveEditLibrary" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../composables/useApi'
 
 interface Library {
@@ -71,6 +100,13 @@ const token = ref('')
 const showAddDialog = ref(false)
 const newLibName = ref('')
 const newLibPath = ref('')
+
+const showEditDialog = ref(false)
+const editLibId = ref(0)
+const editLibName = ref('')
+const editLibPath = ref('')
+
+const hasElectronAPI = computed(() => !!window.electronAPI)
 
 const fetchLibraries = async () => {
   const res = await api.get('/libraries')
@@ -93,6 +129,29 @@ const addLibrary = async () => {
   newLibPath.value = ''
   showAddDialog.value = false
   await fetchLibraries()
+}
+
+const openEditDialog = (lib: Library) => {
+  editLibId.value = lib.id
+  editLibName.value = lib.name
+  editLibPath.value = lib.path
+  showEditDialog.value = true
+}
+
+const saveEditLibrary = async () => {
+  if (!editLibName.value || !editLibPath.value) return
+  await api.put(`/libraries/${editLibId.value}`, { name: editLibName.value, path: editLibPath.value })
+  showEditDialog.value = false
+  await fetchLibraries()
+}
+
+const browseDirectory = async (target: 'add' | 'edit') => {
+  if (!window.electronAPI) return
+  const dir = await window.electronAPI.openDirectory('Select Library Path')
+  if (dir) {
+    if (target === 'add') newLibPath.value = dir
+    else editLibPath.value = dir
+  }
 }
 
 const deleteLibrary = async (id: number) => {
