@@ -32,6 +32,22 @@ router.post('/dlsite/segments', async (req, res, next) => {
   }
 })
 
+router.post('/dlsite/segments/batch', async (req, res, next) => {
+  try {
+    const { names } = req.body
+    if (!Array.isArray(names)) {
+      return res.status(400).send({ error: 'names is required' })
+    }
+    const results = names.map(name => {
+      const { keyword, segments } = splitKeyword(name)
+      return { name, keyword, segments }
+    })
+    res.send({ results })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.post('/dlsite/search', async (req, res, next) => {
   try {
     const { keyword } = req.body
@@ -187,58 +203,88 @@ router.post('/dlsite/batch', async (req, res, next) => {
   }
 })
 
+const adoptOne = async (data) => {
+  const {
+    gameId, sourceType, sourceId, sourceUrl,
+    name, coverUrl, makers, genres, tags, description
+  } = data
+
+  let coverPath = null
+  if (coverUrl) {
+    try {
+      const ext = coverUrl.match(/\.(jpg|jpeg|png|webp)/)?.[1] || 'jpg'
+      const filename = `${sourceType}_${sourceId}.${ext}`
+      const filePath = path.join(COVERS_DIR, filename)
+      const response = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 15000 })
+      fs.writeFileSync(filePath, response.data)
+      coverPath = filename
+    } catch (err) {
+      console.error('cover download failed:', err.message)
+    }
+  }
+
+  await db.updateGame(gameId, { description, cover_path: coverPath })
+
+  await db.insertGameSource({
+    game_id: gameId,
+    source_type: sourceType,
+    source_id: sourceId,
+    source_url: sourceUrl || null,
+    raw_data: null
+  })
+
+  if (Array.isArray(makers) && makers.length > 0) {
+    const makerIds = await db.insertMakers(makers)
+    await db.syncGameMakers(gameId, makerIds)
+  }
+
+  if (Array.isArray(genres) && genres.length > 0) {
+    const genreIds = await db.insertGenres(genres)
+    await db.syncGameGenres(gameId, genreIds)
+  }
+
+  if (Array.isArray(tags) && tags.length > 0) {
+    const tagIds = await db.insertTags(tags)
+    await db.syncGameTags(gameId, tagIds)
+  }
+
+  return await db.getGameDetail(gameId)
+}
+
 router.post('/adopt', async (req, res, next) => {
   try {
-    const {
-      gameId, sourceType, sourceId, sourceUrl,
-      name, coverUrl, makers, genres, tags, description
-    } = req.body
-
+    const { gameId, sourceType, sourceId } = req.body
     if (!gameId || !sourceType || !sourceId) {
       return res.status(400).send({ error: 'gameId, sourceType, sourceId required' })
     }
+    const game = await adoptOne(req.body)
+    res.send(game)
+  } catch (err) {
+    next(err)
+  }
+})
 
-    let coverPath = null
-    if (coverUrl) {
+router.post('/adopt/batch', async (req, res, next) => {
+  try {
+    const { games } = req.body
+    if (!Array.isArray(games)) {
+      return res.status(400).send({ error: 'games is required' })
+    }
+    const results = []
+    for (const game of games) {
+      const { gameId, sourceType, sourceId } = game
+      if (!gameId || !sourceType || !sourceId) {
+        results.push({ gameId: gameId || null, success: false, error: 'gameId, sourceType, sourceId required' })
+        continue
+      }
       try {
-        const ext = coverUrl.match(/\.(jpg|jpeg|png|webp)/)?.[1] || 'jpg'
-        const filename = `${sourceType}_${sourceId}.${ext}`
-        const filePath = path.join(COVERS_DIR, filename)
-        const response = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 15000 })
-        fs.writeFileSync(filePath, response.data)
-        coverPath = filename
+        const updated = await adoptOne(game)
+        results.push({ gameId, success: true, game: updated })
       } catch (err) {
-        console.error('cover download failed:', err.message)
+        results.push({ gameId, success: false, error: err.message })
       }
     }
-
-    await db.updateGame(gameId, { description, cover_path: coverPath })
-
-    await db.insertGameSource({
-      game_id: gameId,
-      source_type: sourceType,
-      source_id: sourceId,
-      source_url: sourceUrl || null,
-      raw_data: null
-    })
-
-    if (Array.isArray(makers) && makers.length > 0) {
-      const makerIds = await db.insertMakers(makers)
-      await db.syncGameMakers(gameId, makerIds)
-    }
-
-    if (Array.isArray(genres) && genres.length > 0) {
-      const genreIds = await db.insertGenres(genres)
-      await db.syncGameGenres(gameId, genreIds)
-    }
-
-    if (Array.isArray(tags) && tags.length > 0) {
-      const tagIds = await db.insertTags(tags)
-      await db.syncGameTags(gameId, tagIds)
-    }
-
-    const game = await db.getGameDetail(gameId)
-    res.send(game)
+    res.send({ results })
   } catch (err) {
     next(err)
   }
