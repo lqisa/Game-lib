@@ -246,11 +246,22 @@ const loadUnscraped = async () => {
     status: 'pending' as const,
     searchResult: null,
     adoptData: null,
-    searchKeyword: g.name.match(/RJ\d+/)?.[0] || g.name,
+    searchKeyword: g.name,
     source: null as SourceType | null,
     loading: false,
     gameId: g.id,
   }))
+
+  for (const row of scanResults.value) {
+    try {
+      const segRes = await api.post('/dlsite/segments', { name: row.name })
+      const { keyword, segments } = segRes.data
+      row.searchKeyword = keyword
+      segmentsCache.set(row.name, [keyword, ...segments.filter((s: string) => s !== keyword)])
+    } catch {
+      // keep raw name as keyword
+    }
+  }
 }
 
 const onLibraryChange = () => {
