@@ -41,6 +41,26 @@
           <q-btn color="primary" label="Save Token" @click="saveToken" />
         </q-card-section>
       </q-card>
+
+      <q-card class="q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle1">Scrape Concurrency</div>
+        </q-card-section>
+        <q-card-section>
+          <q-input
+            v-model.number="concurrency"
+            label="Max concurrent scrapes"
+            type="number"
+            outlined
+            :min="1"
+            :max="10"
+            style="max-width: 200px"
+          />
+        </q-card-section>
+        <q-card-section>
+          <q-btn color="primary" label="Save" @click="saveConcurrency" />
+        </q-card-section>
+      </q-card>
     </div>
 
     <q-dialog v-model="showAddDialog">
@@ -106,6 +126,8 @@ const editLibId = ref(0)
 const editLibName = ref('')
 const editLibPath = ref('')
 
+const concurrency = ref(4)
+
 const hasElectronAPI = computed(() => !!window.electronAPI)
 
 const fetchLibraries = async () => {
@@ -163,8 +185,24 @@ const saveToken = async () => {
   await api.put('/settings/bangumi_token', { value: token.value })
 }
 
+const fetchConcurrency = async () => {
+  try {
+    const res = await api.get('/settings/scrape_concurrency')
+    concurrency.value = parseInt(res.data.value, 10) || 4
+  } catch {
+    concurrency.value = 4
+  }
+}
+
+const saveConcurrency = async () => {
+  const val = Math.max(1, Math.min(10, concurrency.value || 4))
+  concurrency.value = val
+  await api.put('/settings/scrape_concurrency', { value: String(val) })
+}
+
 onMounted(() => {
   void fetchLibraries()
   void fetchToken()
+  void fetchConcurrency()
 })
 </script>
