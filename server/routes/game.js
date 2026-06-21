@@ -6,7 +6,7 @@ const router = express.Router()
 
 router.get('/', async (req, res, next) => {
   try {
-    const { page, pageSize, keyword, libraryIds, makerIds, genreIds, tagIds, scraped } = req.query
+    const { page, pageSize, keyword, libraryIds, makerIds, genreIds, tagIds, scraped, sortBy, sortOrder } = req.query
     const result = await db.getGames({
       page: Number(page) || 1,
       pageSize: Number(pageSize) || 50,
@@ -16,6 +16,8 @@ router.get('/', async (req, res, next) => {
       genreIds: genreIds ? String(genreIds).split(',').map(Number) : undefined,
       tagIds: tagIds ? String(tagIds).split(',').map(Number) : undefined,
       scraped: scraped === 'true' ? true : scraped === 'false' ? false : undefined,
+      sortBy: sortBy || 'updated_at',
+      sortOrder: sortOrder || 'desc',
     })
     res.send(result)
   } catch (err) {

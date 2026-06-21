@@ -22,6 +22,21 @@
       >
         <q-badge v-if="activeFilterCount > 0" color="orange" floating>{{ activeFilterCount }}</q-badge>
       </q-btn>
+      <q-select
+        v-model="sortBy"
+        :options="sortOptions"
+        dense
+        outlined
+        emit-value
+        map-options
+        style="min-width: 140px"
+      />
+      <q-btn
+        flat
+        round
+        :icon="sortOrder === 'desc' ? 'arrow_downward' : 'arrow_upward'"
+        @click="toggleSortOrder"
+      />
       <q-btn color="primary" label="Scan & Scrape" @click="showScanner = true" />
       <q-btn
         v-if="!selectMode"
@@ -102,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../composables/useApi'
 import GameCard from '../components/GameCard.vue'
@@ -134,6 +149,21 @@ const showScanner = ref(false)
 
 const showFilter = ref(false)
 const currentFilter = ref<FilterState>({ libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'yes' })
+
+const sortBy = ref('updated_at')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+const sortOptions = [
+  { label: 'Name', value: 'name' },
+  { label: 'Date Added', value: 'created_at' },
+  { label: 'Date Updated', value: 'updated_at' },
+]
+
+const toggleSortOrder = () => {
+  sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+  page.value = 1
+  games.value = []
+  void loadGames()
+}
 
 const activeFilterCount = computed(() => {
   const f = currentFilter.value
@@ -285,6 +315,10 @@ const hasMore = computed(() => games.value.length < total.value)
 
 const loadGames = async (append = false) => {
   if (loading.value) return
+  if (!append) {
+    page.value = 1
+    window.scrollTo(0, 0)
+  }
   loading.value = true
   try {
     const f = currentFilter.value
@@ -299,6 +333,8 @@ const loadGames = async (append = false) => {
     if (f.tagIds.length > 0) params.tagIds = f.tagIds.join(',')
     if (f.scraped === 'yes') params.scraped = 'true'
     else if (f.scraped === 'no') params.scraped = 'false'
+    params.sortBy = sortBy.value
+    params.sortOrder = sortOrder.value
 
     const res = await api.get('/games', { params })
     if (append) {
@@ -331,6 +367,12 @@ const searchGames = () => {
   games.value = []
   void loadGames()
 }
+
+watch(sortBy, () => {
+  page.value = 1
+  games.value = []
+  void loadGames()
+})
 
 onMounted(() => {
   void loadGames()

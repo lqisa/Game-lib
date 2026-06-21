@@ -49,11 +49,15 @@ const getGameDetail = async (id) => {
   return { ...game, makers, genres, tags, sources, library }
 }
 
-const getGames = async ({ page = 1, pageSize = 50, keyword = '', libraryIds, makerIds, genreIds, tagIds, scraped } = {}) => {
+const getGames = async ({ page = 1, pageSize = 50, keyword = '', libraryIds, makerIds, genreIds, tagIds, scraped, sortBy = 'updated_at', sortOrder = 'desc' } = {}) => {
   let query = db('game')
     .leftJoin('library', 'game.library_id', 'library.id')
     .select('game.*', 'library.name as library_name', 'library.path as library_path')
-    .orderBy('game.updated_at', 'desc')
+
+  const allowedSort = ['name', 'created_at', 'updated_at']
+  const sort = allowedSort.includes(sortBy) ? sortBy : 'updated_at'
+  const order = sortOrder === 'asc' ? 'asc' : 'desc'
+  query = query.orderBy(`game.${sort}`, order)
 
   if (keyword) {
     query = query.where('game.name', 'like', `%${keyword}%`)

@@ -13,7 +13,7 @@ const searchBangumi = async (keyword, token) => {
     id: String(item.id),
     name: item.name_cn || item.name || '',
     makerName: '',
-    coverUrl: item.images?.common || item.images?.large || ''
+    coverUrl: item.images?.large || item.images?.common || ''
   }))
 }
 
@@ -43,7 +43,7 @@ const fetchBangumiDetail = async (subjectId, token) => {
   const work = {
     id: String(detail.id || subjectId),
     title: detail.name_cn || detail.name || '',
-    coverURL: detail.images?.common || detail.images?.large || '',
+    coverURL: detail.images?.large || detail.images?.common || '',
     makers: [],
     genres: [],
     tags: [],

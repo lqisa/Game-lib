@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import routes from './routes/index.js'
 import { getDataDir } from './config.js'
 
-const createApp = () => {
+const createApp = (frontendDir) => {
   const app = express()
 
   app.use(express.json())
@@ -17,6 +17,13 @@ const createApp = () => {
     fs.mkdirSync(coversDir, { recursive: true })
   }
   app.use('/covers', express.static(coversDir))
+
+  if (frontendDir) {
+    app.use(express.static(frontendDir))
+    app.get('{*path}', (_req, res) => {
+      res.sendFile(path.join(frontendDir, 'index.html'))
+    })
+  }
 
   app.use((err, req, res, _next) => {
     console.error('API Error:', err.message)

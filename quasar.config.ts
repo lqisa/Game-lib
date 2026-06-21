@@ -2,6 +2,8 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export default defineConfig((/* ctx */) => {
   return {
@@ -186,14 +188,21 @@ export default defineConfig((/* ctx */) => {
       bundler: 'packager', // 'packager' or 'builder'
 
       packager: {
-        // https://github.com/electron-userland/electron-packager/blob/master/docs/api.md#options
-        // OS X / Mac App Store
-        // appBundleId: '',
-        // appCategoryType: '',
-        // osxSign: '',
-        // protocol: 'myapp://path',
-        // Windows only
-        // win32metadata: { ... }
+        extraResource: [
+          path.resolve(__dirname, 'server'),
+        ],
+        afterCopy: [
+          ({ buildPath }: { buildPath: string }) => {
+            const localesDir = path.join(buildPath, 'locales');
+            if (fs.existsSync(localesDir)) {
+              for (const file of fs.readdirSync(localesDir)) {
+                if (file !== 'en-US.pak' && file !== 'zh-CN.pak') {
+                  fs.unlinkSync(path.join(localesDir, file));
+                }
+              }
+            }
+          },
+        ],
       },
 
       builder: {

@@ -154,6 +154,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import api from '../composables/useApi'
+import { getCleanedName } from '../composables/useSplitKeyword'
 
 type SourceType = 'dlsite' | 'bangumi' | 'vndb'
 
@@ -204,13 +205,6 @@ const show = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
-const cleanName = (name: string): string =>
-  name
-    .replace(/【.*?】/g, '')
-    .replace(/（.*?）/g, '')
-    .replace(/\s*[Vv](?:er)?\d+(\.\d+)*/gi, '')
-    .trim()
-
 const activeSource = ref<SourceType>('dlsite')
 const keyword = ref('')
 const results = ref<SearchResult[]>([])
@@ -222,8 +216,8 @@ const detailLoading = ref(false)
 
 const segments = computed(() => {
   if (!props.initialSegments || props.initialSegments.length === 0) return []
-  const cleanedGameName = cleanName(props.gameName)
-  const cleanedSegs = props.initialSegments.map(cleanName).filter(Boolean)
+  const cleanedGameName = getCleanedName(props.gameName)
+  const cleanedSegs = props.initialSegments.map(getCleanedName).filter(Boolean)
   return [cleanedGameName, ...cleanedSegs.filter(s => s !== cleanedGameName)]
 })
 
@@ -312,7 +306,7 @@ watch(() => props.modelValue, (val) => {
   if (val) {
     activeSource.value = props.defaultSource || 'dlsite'
     const rawKeyword = props.defaultKeyword || props.gameName.match(/RJ\d+/)?.[0] || props.gameName
-    keyword.value = cleanName(rawKeyword)
+    keyword.value = getCleanedName(rawKeyword)
     results.value = []
     selectedIdx.value = -1
     detail.value = null

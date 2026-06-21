@@ -1,18 +1,5 @@
-import cheerio from 'cheerio'
+import { load } from 'cheerio'
 import { retryGet } from './axios.js'
-
-const splitKeyword = (name) => {
-  const cleaned = name
-    .replace(/【.*?】/g, '')
-    .replace(/（.*?）/g, '')
-    .replace(/\s*[Vv](?:er)?\d+(\.\d+)*/gi, '')
-    .trim()
-  const rjMatch = cleaned.match(/RJ\d+/)
-  if (rjMatch) return { keyword: rjMatch[0], segments: [rjMatch[0]] }
-  const re = /[\u4e00-\u9fff\u3040-\u309f\u30a1-\u30fa\u30fc-\u30ff\uff10-\uff19\uff21-\uff3a\uff41-\uff5a\u0041-\u005a\u0061-\u007a\u0030-\u0039]+/g
-  const segments = cleaned.match(re) || []
-  return { keyword: cleaned, segments }
-}
 
 const searchDLSite = async (keyword) => {
   const url = `https://www.dlsite.com/maniax/api/=/product.json?work_category%5B0%5D=%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0&keyword=${encodeURIComponent(keyword)}&order%5B%5D=trend&_locale=zh-cn`
@@ -51,7 +38,7 @@ const fetchDLSiteDetail = async (rjcode) => {
   const response = await retryGet(url, {
     headers: { cookie: 'locale=zh-cn' }
   })
-  const $ = cheerio.load(response.data)
+  const $ = load(response.data)
 
   const work = { id: rjcode, tags: [], genres: [], makers: [] }
 
@@ -119,4 +106,4 @@ const fetchDLSiteDetail = async (rjcode) => {
   return work
 }
 
-export { searchDLSite, fetchDLSiteDetail, splitKeyword }
+export { searchDLSite, fetchDLSiteDetail }
