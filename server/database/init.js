@@ -1,8 +1,8 @@
-const fs = require('fs')
-const path = require('path')
-const { knex } = require('./db')
-const { createSchema } = require('./schema')
-const { getDataDir } = require('../config')
+import fs from 'node:fs'
+import path from 'node:path'
+import { knex } from './db.js'
+import { createSchema } from './schema.js'
+import { getDataDir } from '../config.js'
 
 const DB_PATH = path.join(getDataDir(), 'db.sqlite3')
 
@@ -84,27 +84,29 @@ const initDatabase = async () => {
   const dbExists = fs.existsSync(DB_PATH)
 
   if (!dbExists) {
-    console.log(' * 数据库不存在，正在创建...')
+    console.log(' * Database not found, creating...')
     await createSchema()
-    console.log(' * 数据库创建完成.')
+    console.log(' * Database created.')
     await knex('setting').insert({ key: 'scrape_concurrency', value: '4' }).onConflict('key').ignore()
     return
   }
 
-  console.log(' * 数据库已存在，检查缺失的表...')
+  console.log(' * Database exists, checking missing tables...')
+  await knex('setting').insert({ key: 'scrape_concurrency', value: '4' }).onConflict('key').ignore()
+
   const existingTables = await knex.raw("SELECT name FROM sqlite_master WHERE type='table'").then(r => r.map(row => row.name))
   const missingTables = ALL_TABLES.filter(t => !existingTables.includes(t))
 
   if (missingTables.length === 0) {
-    console.log(' * 所有表已存在.')
+    console.log(' * All tables exist.')
     return
   }
 
   for (const tableName of missingTables) {
-    console.log(` * 创建缺失的表: ${tableName}`)
+    console.log(` * Creating missing table: ${tableName}`)
     await TABLE_DDL[tableName](knex)
   }
-  console.log(' * 缺失的表创建完成.')
+  console.log(' * Missing tables created.')
 }
 
-module.exports = { initDatabase }
+export { initDatabase }

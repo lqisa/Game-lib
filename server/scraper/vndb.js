@@ -1,4 +1,4 @@
-const axios = require('axios')
+import axios from 'axios'
 
 const VNDB_API = 'https://api.vndb.org/kana/vn'
 
@@ -45,4 +45,4 @@ const fetchVNDBDetail = async (vnId) => {
   }
 }
 
-module.exports = { searchVNDB, fetchVNDBDetail }
+export { searchVNDB, fetchVNDBDetail }

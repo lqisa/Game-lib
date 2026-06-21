@@ -1,5 +1,4 @@
-const fs = require('fs')
-const path = require('path')
+import fs from 'node:fs'
 
 const scanDirectory = (dirPath) => {
   if (!fs.existsSync(dirPath)) {
@@ -14,4 +13,4 @@ const scanDirectory = (dirPath) => {
   return subDirs
 }
 
-module.exports = { scanDirectory }
+export { scanDirectory }

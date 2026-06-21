@@ -1,6 +1,7 @@
 import { BrowserWindow, app, ipcMain, dialog, shell } from "electron";
 import path from "node:path";
 import os from "node:os";
+import fs from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   registerQuasarRuntime,
@@ -97,6 +98,21 @@ void app.whenReady().then(async () => {
   })
 
   await startServer();
+
+  if (import.meta.env.QUASAR_DEV) {
+    const serverDir = path.resolve(__dirname, '..', '..', '..', 'server');
+    let restartTimer: ReturnType<typeof setTimeout> | null = null;
+    fs.watch(serverDir, { recursive: true }, (_event, filename) => {
+      if (!filename) return;
+      if (!filename.endsWith('.js') && !filename.endsWith('.ts')) return;
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        console.log(' * Server file changed, restarting...');
+        app.relaunch();
+        app.exit(0);
+      }, 500);
+    });
+  }
 
   void createWindow();
 

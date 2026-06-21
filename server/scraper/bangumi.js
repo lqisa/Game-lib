@@ -1,4 +1,4 @@
-const { retryGet } = require('./axios')
+import { retryGet } from './axios.js'
 
 const searchBangumi = async (keyword, token) => {
   const url = `https://api.bgm.tv/search/subject/${encodeURIComponent(keyword)}?type=4`
@@ -78,4 +78,4 @@ const fetchBangumiDetail = async (subjectId, token) => {
   return work
 }
 
-module.exports = { searchBangumi, fetchBangumiDetail }
+export { searchBangumi, fetchBangumiDetail }

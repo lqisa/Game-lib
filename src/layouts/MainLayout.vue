@@ -2,12 +2,21 @@
   <q-layout view="lHh Lpr lFf">
     <q-header elevated>
       <q-toolbar>
-        <q-btn flat dense round icon="menu" @click="leftDrawerOpen = !leftDrawerOpen" />
+        <q-btn flat dense round icon="menu" @click="drawer = !drawer" />
         <q-toolbar-title>Game Lib</q-toolbar-title>
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
+    <q-drawer
+      v-model="drawer"
+      show-if-above
+      bordered
+      :width="180"
+      :mini-width="56"
+      :mini="miniState"
+      @mouseover="miniState = false"
+      @mouseout="miniState = true"
+    >
       <q-list>
         <q-item clickable v-ripple to="/" exact>
           <q-item-section avatar>
@@ -33,5 +42,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const leftDrawerOpen = ref(false)
+const drawer = ref(true)
+const miniState = ref(true)
 </script>

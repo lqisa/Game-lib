@@ -1,14 +1,20 @@
-const express = require('express')
+import express from 'express'
+import libraryRoutes from './library.js'
+import gameRoutes from './game.js'
+import scraperRoutes from './scraper.js'
+import settingRoutes from './setting.js'
+import coverRoutes from './cover.js'
+
 const router = express.Router()
 
-router.use('/libraries', require('./library'))
-router.use('/games', require('./game'))
-router.use('/scraper', require('./scraper'))
-router.use('/settings', require('./setting'))
-router.use('/cover', require('./cover'))
+router.use('/libraries', libraryRoutes)
+router.use('/games', gameRoutes)
+router.use('/scraper', scraperRoutes)
+router.use('/settings', settingRoutes)
+router.use('/cover', coverRoutes)
 
 router.get('/health', (req, res) => {
   res.send({ status: 'ok' })
 })
 
-module.exports = router
+export default router

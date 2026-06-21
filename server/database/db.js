@@ -1,7 +1,7 @@
-const path = require('path')
-const fs = require('fs')
-const knex = require('knex')
-const { getDataDir } = require('../config')
+import path from 'node:path'
+import fs from 'node:fs'
+import knex from 'knex'
+import { getDataDir } from '../config.js'
 
 const DB_DIR = getDataDir()
 const DB_PATH = path.join(DB_DIR, 'db.sqlite3')
@@ -49,7 +49,7 @@ const getGameDetail = async (id) => {
   return { ...game, makers, genres, tags, sources, library }
 }
 
-const getGames = async ({ page = 1, pageSize = 50, keyword = '' } = {}) => {
+const getGames = async ({ page = 1, pageSize = 50, keyword = '', libraryIds, makerIds, genreIds, tagIds, scraped } = {}) => {
   let query = db('game')
     .leftJoin('library', 'game.library_id', 'library.id')
     .select('game.*', 'library.name as library_name', 'library.path as library_path')
@@ -59,9 +59,41 @@ const getGames = async ({ page = 1, pageSize = 50, keyword = '' } = {}) => {
     query = query.where('game.name', 'like', `%${keyword}%`)
   }
 
-  const total = await query.clone().count('* as count').first()
+  if (libraryIds && libraryIds.length > 0) {
+    query = query.whereIn('game.library_id', libraryIds)
+  }
+
+  if (makerIds && makerIds.length > 0) {
+    query = query
+      .join('game_maker', 'game.id', 'game_maker.game_id')
+      .whereIn('game_maker.maker_id', makerIds)
+  }
+
+  if (genreIds && genreIds.length > 0) {
+    query = query
+      .join('game_genre', 'game.id', 'game_genre.game_id')
+      .whereIn('game_genre.genre_id', genreIds)
+  }
+
+  if (tagIds && tagIds.length > 0) {
+    query = query
+      .join('game_tag', 'game.id', 'game_tag.game_id')
+      .whereIn('game_tag.tag_id', tagIds)
+  }
+
+  if (scraped === true) {
+    query = query.whereExists(function () {
+      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id')
+    })
+  } else if (scraped === false) {
+    query = query.whereNotExists(function () {
+      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id')
+    })
+  }
+
+  const total = await query.clone().countDistinct('game.id as count').first()
   const offset = (page - 1) * pageSize
-  const games = await query.offset(offset).limit(pageSize)
+  const games = await query.groupBy('game.id').offset(offset).limit(pageSize)
 
   return { games, total: total.count, page, pageSize }
 }
@@ -169,8 +201,20 @@ const syncGameTags = async (gameId, tagIds) => {
   }
 }
 
-module.exports = {
-  knex: db,
+const getMakers = async () => {
+  return db('maker').select('id', 'name').orderBy('name')
+}
+
+const getGenres = async () => {
+  return db('genre').select('id', 'name').orderBy('name')
+}
+
+const getTags = async () => {
+  return db('tag').select('id', 'name').orderBy('name')
+}
+
+export { db as knex }
+export {
   getGameDetail,
   getGames,
   getUnscrapedGames,
@@ -191,5 +235,8 @@ module.exports = {
   insertTags,
   syncGameMakers,
   syncGameGenres,
-  syncGameTags
+  syncGameTags,
+  getMakers,
+  getGenres,
+  getTags
 }

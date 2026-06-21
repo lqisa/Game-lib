@@ -1,4 +1,4 @@
-const { knex } = require('./db')
+import { knex } from './db.js'
 
 const createSchema = () => knex.schema
   .createTable('library', (table) => {
@@ -68,4 +68,4 @@ const createSchema = () => knex.schema
     table.text('value').notNullable()
   })
 
-module.exports = { createSchema }
+export { createSchema }

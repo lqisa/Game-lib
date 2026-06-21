@@ -26,7 +26,7 @@
           <q-btn color="secondary" label="Scrape All" @click="batchScrape" :disable="!hasPending" />
           <q-btn
             color="positive"
-            label="提交入库"
+            label="Submit"
             @click="submitAdopted"
             :disable="adoptedCount === 0 && staleCount === 0"
             :loading="submitting"
@@ -34,7 +34,7 @@
             <q-badge v-if="adoptedCount > 0" color="white" text-color="positive" floating>{{ adoptedCount }}</q-badge>
           </q-btn>
           <q-badge v-if="staleCount > 0" color="negative" class="text-body2">
-            {{ staleCount }} 待删除
+            {{ staleCount }} to delete
           </q-badge>
           <q-badge v-else-if="scanResults.length > 0" color="grey-7" class="text-body2">
             {{ scanResults.length }} unscraped
@@ -43,13 +43,11 @@
 
         <q-virtual-scroll
           :items="scanResults"
-          virtual-scroll-horizontal
           style="max-height: 70vh"
-          class="q-virtual-scroll--with-horizontal"
         >
           <template v-slot="{ item: row }">
-            <div class="row items-center q-py-sm q-px-md" :class="{ 'bg-grey-2': row.status === 'stale' }">
-              <div class="col-auto q-mr-sm" style="width: 40px; height: 40px; flex-shrink: 0">
+            <div class="scan-row q-py-sm q-px-md" :class="{ 'bg-grey-2': row.status === 'stale' }">
+              <div class="scan-row__cover">
                 <q-img
                   v-if="row.searchResult?.coverUrl"
                   :src="row.searchResult.coverUrl"
@@ -57,7 +55,15 @@
                   height="40px"
                   fit="cover"
                   style="border-radius: 4px"
+                  class="cursor-pointer"
                 >
+                  <q-menu anchor="top left" self="top left" :offset="[8, 0]" transition-show="fade" transition-hide="fade">
+                    <q-img
+                      :src="row.searchResult.coverUrl"
+                      style="width: 240px; border-radius: 4px"
+                      fit="contain"
+                    />
+                  </q-menu>
                   <template v-slot:error>
                     <div class="bg-grey-3 flex flex-center full-height" style="border-radius: 4px">
                       <q-icon name="image" size="16px" color="grey" />
@@ -69,7 +75,7 @@
                 </div>
               </div>
 
-              <div class="col" style="min-width: 0">
+              <div class="scan-row__info">
                 <div class="row items-center no-wrap">
                   <span class="text-body2 ellipsis">{{ row.name }}</span>
                   <q-icon
@@ -79,7 +85,7 @@
                     class="q-ml-xs cursor-pointer"
                     @click="openFolder(row)"
                   >
-                    <q-tooltip>打开目录</q-tooltip>
+                    <q-tooltip>Open Folder</q-tooltip>
                   </q-icon>
                 </div>
                 <div v-if="row.searchResult" class="row items-center no-wrap q-mt-xs">
@@ -94,34 +100,57 @@
                 </div>
               </div>
 
-              <div class="col-auto q-ml-sm" style="flex-shrink: 0">
+              <div class="scan-row__status">
                 <q-badge v-if="row.status === 'adopted'" color="positive">Adopted</q-badge>
                 <q-badge v-else-if="row.status === 'searching'" color="warning">Searching...</q-badge>
                 <q-badge v-else-if="row.status === 'error'" color="negative">Failed</q-badge>
                 <q-badge v-else-if="row.status === 'searched'" color="blue">Searched</q-badge>
-                <q-badge v-else-if="row.status === 'stale'" color="negative">待删除</q-badge>
+                <q-badge v-else-if="row.status === 'stale'" color="negative">Stale</q-badge>
                 <q-badge v-else color="grey">Pending</q-badge>
               </div>
 
-              <div class="col-auto q-ml-sm" style="flex-shrink: 0; min-width: 120px; text-align: right">
+              <div class="scan-row__actions">
                 <template v-if="row.status === 'stale'">
-                  <span class="text-grey-5 text-italic text-caption">目录已不存在</span>
+                  <span class="text-grey-5 text-italic text-caption">Directory not found</span>
                 </template>
-                <template v-else-if="row.status === 'pending' || row.status === 'error'">
-                  <q-btn size="sm" color="primary" label="Scrape" @click="openScrapeDialog(row)" />
-                </template>
-                <template v-else-if="row.status === 'searched'">
-                  <q-btn size="sm" color="primary" flat label="重选" @click="openScrapeDialog(row)" />
-                  <q-btn size="sm" color="positive" label="Adopt" :loading="row.loading" @click="quickAdopt(row)" class="q-ml-xs" />
-                  <q-btn size="sm" color="negative" flat icon="cancel" class="q-ml-xs" @click="discardRow(row)">
-                    <q-tooltip>取消</q-tooltip>
-                  </q-btn>
-                </template>
-                <template v-else-if="row.status === 'adopted'">
-                  <q-btn size="sm" color="primary" flat label="重选" @click="openScrapeDialog(row)" />
-                  <q-btn size="sm" color="negative" flat icon="cancel" class="q-ml-xs" @click="discardRow(row)">
-                    <q-tooltip>取消</q-tooltip>
-                  </q-btn>
+                <template v-else>
+                  <q-btn
+                    size="sm"
+                    color="primary"
+                    label="Reselect"
+                    flat
+                    :disable="row.status === 'searching'"
+                    @click="openScrapeDialog(row)"
+                    style="min-width: 56px"
+                  />
+                  <q-btn
+                    v-if="row.status === 'pending' || row.status === 'error'"
+                    size="sm"
+                    color="primary"
+                    label="Scrape"
+                    @click="openScrapeDialog(row)"
+                    class="q-ml-xs"
+                    style="min-width: 64px"
+                  />
+                  <q-btn
+                    v-else-if="row.status === 'searched'"
+                    size="sm"
+                    color="positive"
+                    label="Adopt"
+                    :loading="row.loading"
+                    @click="quickAdopt(row)"
+                    class="q-ml-xs"
+                    style="min-width: 64px"
+                  />
+                  <q-btn
+                    v-else-if="row.status === 'adopted'"
+                    size="sm"
+                    color="negative"
+                    label="Cancel"
+                    @click="discardRow(row)"
+                    class="q-ml-xs"
+                    style="min-width: 64px"
+                  />
                 </template>
               </div>
             </div>
@@ -141,7 +170,6 @@
       :initial-segments="scrapingRow ? (segmentsCache.get(scrapingRow.name) || null) : null"
       @adopted="onAdopted"
       @searched="onSearched"
-      @segments-loaded="onSegmentsLoaded"
     />
   </q-dialog>
 </template>
@@ -149,6 +177,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import api from '../composables/useApi'
+import { splitKeyword, segmentsCache } from '../composables/useSplitKeyword'
 import ScrapeDialog from './ScrapeDialog.vue'
 
 type SourceType = 'dlsite' | 'bangumi' | 'vndb'
@@ -204,7 +233,7 @@ const showScrapeDialog = ref(false)
 const scrapingRow = ref<ScanRow | null>(null)
 
 const searchCache = new Map<string, SearchResult[]>()
-const segmentsCache = new Map<string, string[]>()
+const detailCache = new Map<string, DetailResult>()
 
 const cacheKey = (row: ScanRow) => `${row.source || 'auto'}:${row.searchKeyword}`
 
@@ -263,27 +292,17 @@ const loadUnscraped = async () => {
     gameId: g.id,
   }))
 
-  const names = scanResults.value.map(r => r.name)
-  if (names.length === 0) return
-
-  try {
-    const segRes = await api.post('/scraper/dlsite/segments/batch', { names })
-    const segResults: { name: string; keyword: string; segments: string[] }[] = segRes.data.results
-    for (const sr of segResults) {
-      const row = scanResults.value.find(r => r.name === sr.name)
-      if (row) {
-        row.searchKeyword = sr.keyword
-        segmentsCache.set(sr.name, [sr.keyword, ...sr.segments.filter((s: string) => s !== sr.keyword)])
-      }
-    }
-  } catch {
-    // keep raw names as keywords
+  for (const row of scanResults.value) {
+    const { keyword, segments } = splitKeyword(row.name)
+    row.searchKeyword = keyword
+    segmentsCache.set(row.name, [keyword, ...segments.filter(s => s !== keyword)])
   }
 }
 
 const onLibraryChange = () => {
   searchCache.clear()
   segmentsCache.clear()
+  detailCache.clear()
   void loadUnscraped()
 }
 
@@ -322,6 +341,7 @@ const openScrapeDialog = (row: ScanRow) => {
 
 const onAdopted = (data: AdoptData) => {
   if (!scrapingRow.value) return
+  detailCache.set(`${data.source}:${data.sourceId}`, data.detail)
   scrapingRow.value.searchResult = {
     id: data.sourceId,
     name: data.name,
@@ -337,19 +357,44 @@ const onSearched = (source: SourceType, keyword: string, results: SearchResult[]
   searchCache.set(`${source}:${keyword}`, results)
 }
 
-const onSegmentsLoaded = (name: string, segments: string[]) => {
-  segmentsCache.set(name, segments)
-}
-
 const quickAdopt = async (row: ScanRow) => {
   if (!row.searchResult) return
+  const dKey = `${row.source || 'dlsite'}:${row.searchResult.id}`
+  const cached = detailCache.get(dKey)
+  if (cached) {
+    row.adoptData = {
+      source: row.source || 'dlsite',
+      sourceId: row.searchResult.id,
+      name: row.searchResult.name,
+      makerName: row.searchResult.makerName,
+      coverUrl: row.searchResult.coverUrl,
+      detail: cached,
+    }
+    row.status = 'adopted'
+    return
+  }
   row.loading = true
   try {
     const fetchBody = row.source === 'dlsite'
       ? { rjcode: row.searchResult.id }
       : { id: row.searchResult.id }
     const detailRes = await api.post(`/scraper/${row.source || 'dlsite'}/fetch`, fetchBody)
-    const detail = detailRes.data
+    const detail: DetailResult = detailRes.data || {
+      id: row.searchResult.id,
+      title: row.searchResult.name,
+      coverURL: '',
+      makers: [],
+      genres: [],
+      tags: [],
+      description: '',
+    }
+    if (!detail.coverURL && row.searchResult.coverUrl) {
+      detail.coverURL = row.searchResult.coverUrl
+    }
+    if (!detail.title && row.searchResult.name) {
+      detail.title = row.searchResult.name
+    }
+    detailCache.set(dKey, detail)
     row.adoptData = {
       source: row.source || 'dlsite',
       sourceId: row.searchResult.id,
@@ -360,18 +405,41 @@ const quickAdopt = async (row: ScanRow) => {
     }
     row.status = 'adopted'
   } catch {
-    row.status = 'error'
+    const sr = row.searchResult
+    const fallback: DetailResult = {
+      id: sr.id,
+      title: sr.name,
+      coverURL: sr.coverUrl,
+      makers: [],
+      genres: [],
+      tags: [],
+      description: '',
+    }
+    detailCache.set(dKey, fallback)
+    row.adoptData = {
+      source: row.source || 'dlsite',
+      sourceId: sr.id,
+      name: sr.name,
+      makerName: sr.makerName,
+      coverUrl: sr.coverUrl,
+      detail: fallback,
+    }
+    row.status = 'adopted'
   } finally {
     row.loading = false
   }
 }
 
 const discardRow = (row: ScanRow) => {
-  row.status = 'pending'
-  row.searchResult = null
   row.adoptData = null
-  row.source = null
-  row.searchKeyword = row.name.match(/RJ\d+/)?.[0] || row.name
+  if (row.status === 'adopted') {
+    row.status = row.searchResult ? 'searched' : 'pending'
+  } else {
+    row.status = 'pending'
+    row.searchResult = null
+    row.source = null
+    row.searchKeyword = row.name.match(/RJ\d+/)?.[0] || row.name
+  }
 }
 
 const batchScrape = async () => {
@@ -457,14 +525,36 @@ const openFolder = (row: ScanRow) => {
   const lib = libraries.value.find(l => l.id === selectedLibrary.value)
   if (!lib) return
   const fullPath = `${lib.path}\\${row.subPath}`
-  void (window as any).electronAPI.openPath(fullPath)
+  void window.electronAPI?.openPath(fullPath)
 }
 
 watch(modelValue, (val) => {
   if (val) {
+    void fetchSettings().then(() => fetchLibraries()).then(() => loadUnscraped())
+  } else {
     searchCache.clear()
     segmentsCache.clear()
-    void fetchSettings().then(() => fetchLibraries()).then(() => loadUnscraped())
+    detailCache.clear()
   }
 })
 </script>
+
+<style scoped>
+.scan-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 60px 140px;
+  gap: 0 8px;
+  align-items: center;
+}
+.scan-row__cover {
+  flex-shrink: 0;
+}
+.scan-row__info {
+  min-width: 0;
+}
+.scan-row__status,
+.scan-row__actions {
+  display: flex;
+  align-items: center;
+}
+</style>

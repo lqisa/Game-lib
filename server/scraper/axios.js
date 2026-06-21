@@ -1,4 +1,4 @@
-const axios = require('axios')
+import axios from 'axios'
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -17,4 +17,4 @@ const retryGet = async (url, options = {}, retries = 3) => {
   }
 }
 
-module.exports = { retryGet }
+export { retryGet }

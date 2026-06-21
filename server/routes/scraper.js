@@ -1,13 +1,14 @@
-const express = require('express')
+import express from 'express'
+import path from 'node:path'
+import fs from 'node:fs'
+import axios from 'axios'
+import * as db from '../database/db.js'
+import { searchDLSite, fetchDLSiteDetail } from '../scraper/dlsite.js'
+import { searchBangumi, fetchBangumiDetail } from '../scraper/bangumi.js'
+import { searchVNDB, fetchVNDBDetail } from '../scraper/vndb.js'
+import { getDataDir } from '../config.js'
+
 const router = express.Router()
-const path = require('path')
-const fs = require('fs')
-const axios = require('axios')
-const db = require('../database/db')
-const { searchDLSite, fetchDLSiteDetail, splitKeyword } = require('../scraper/dlsite')
-const { searchBangumi, fetchBangumiDetail } = require('../scraper/bangumi')
-const { searchVNDB, fetchVNDBDetail } = require('../scraper/vndb')
-const { getDataDir } = require('../config')
 
 const COVERS_DIR = path.join(getDataDir(), 'covers')
 
@@ -19,35 +20,6 @@ const getBangumiToken = async () => {
   return (await db.getSetting('bangumi_token')) || ''
 }
 
-router.post('/dlsite/segments', async (req, res, next) => {
-  try {
-    const { name } = req.body
-    if (!name) {
-      return res.status(400).send({ error: 'name is required' })
-    }
-    const { keyword, segments } = splitKeyword(name)
-    res.send({ keyword, segments })
-  } catch (err) {
-    next(err)
-  }
-})
-
-router.post('/dlsite/segments/batch', async (req, res, next) => {
-  try {
-    const { names } = req.body
-    if (!Array.isArray(names)) {
-      return res.status(400).send({ error: 'names is required' })
-    }
-    const results = names.map(name => {
-      const { keyword, segments } = splitKeyword(name)
-      return { name, keyword, segments }
-    })
-    res.send({ results })
-  } catch (err) {
-    next(err)
-  }
-})
-
 router.post('/dlsite/search', async (req, res, next) => {
   try {
     const { keyword } = req.body
@@ -55,8 +27,7 @@ router.post('/dlsite/search', async (req, res, next) => {
       return res.status(400).send({ error: 'keyword is required' })
     }
     const results = await searchDLSite(keyword)
-    const { segments } = splitKeyword(keyword)
-    res.send({ results, segments })
+    res.send({ results })
   } catch (err) {
     next(err)
   }
@@ -83,8 +54,7 @@ router.post('/bangumi/search', async (req, res, next) => {
     }
     const token = await getBangumiToken()
     const results = await searchBangumi(keyword, token)
-    const { segments } = splitKeyword(keyword)
-    res.send({ results, segments })
+    res.send({ results })
   } catch (err) {
     next(err)
   }
@@ -114,8 +84,7 @@ router.post('/vndb/search', async (req, res, next) => {
       return res.status(400).send({ error: 'keyword is required' })
     }
     const results = await searchVNDB(keyword)
-    const { segments } = splitKeyword(keyword)
-    res.send({ results, segments })
+    res.send({ results })
   } catch (err) {
     next(err)
   }
@@ -149,7 +118,6 @@ router.post('/auto/search', async (req, res, next) => {
       ? ['dlsite', 'bangumi', 'vndb']
       : ['bangumi', 'dlsite', 'vndb']
 
-    const { segments } = splitKeyword(keyword)
     const token = await getBangumiToken()
 
     for (const source of sources) {
@@ -163,14 +131,14 @@ router.post('/auto/search', async (req, res, next) => {
           results = await searchVNDB(keyword)
         }
         if (results.length > 0) {
-          return res.send({ source, results, segments })
+          return res.send({ source, results })
         }
       } catch {
         continue
       }
     }
 
-    res.send({ source: null, results: [], segments })
+    res.send({ source: null, results: [] })
   } catch (err) {
     next(err)
   }
@@ -290,4 +258,4 @@ router.post('/adopt/batch', async (req, res, next) => {
   }
 })
 
-module.exports = router
+export default router

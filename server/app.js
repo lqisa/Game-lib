@@ -1,15 +1,14 @@
-const express = require('express')
-const bodyParser = require('body-parser')
-const path = require('path')
-const fs = require('fs')
-const routes = require('./routes')
-const { getDataDir } = require('./config')
+import express from 'express'
+import path from 'node:path'
+import fs from 'node:fs'
+import routes from './routes/index.js'
+import { getDataDir } from './config.js'
 
 const createApp = () => {
   const app = express()
 
-  app.use(bodyParser.json())
-  app.use(bodyParser.urlencoded({ extended: true }))
+  app.use(express.json())
+  app.use(express.urlencoded({ extended: true }))
 
   app.use('/api', routes)
 
@@ -27,4 +26,4 @@ const createApp = () => {
   return app
 }
 
-module.exports = { createApp }
+export { createApp }

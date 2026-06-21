@@ -1,34 +1,32 @@
 <template>
-  <q-card class="game-card cursor-pointer" @click="$router.push(`/game/${game.id}`)">
-    <q-img
-      :src="coverSrc"
-      :ratio="16 / 9"
-      class="game-cover"
-    >
-      <template v-slot:error>
-        <div class="absolute-full flex flex-center bg-grey-4 text-grey-6">
-          <q-icon name="videogame_asset" size="48px" />
-        </div>
-      </template>
-    </q-img>
-    <q-card-section class="q-pa-sm">
-      <div class="text-subtitle2 ellipsis">{{ game.name }}</div>
-      <div class="text-caption text-grey ellipsis row items-center no-wrap">
-        <span class="col ellipsis">{{ game.library_name }}</span>
-        <q-btn
-          v-if="hasElectronAPI"
-          flat
-          round
-          dense
-          size="xs"
-          icon="folder_open"
-          color="grey-7"
-          @click.stop="openDir"
-        >
-          <q-tooltip>Open Directory</q-tooltip>
-        </q-btn>
+  <q-card
+    class="game-card cursor-pointer"
+    :class="{ 'game-card--selected': selected }"
+    @click="handleClick"
+  >
+    <div class="game-cover">
+      <q-img
+        v-if="game.cover_path"
+        :src="coverSrc"
+        class="game-cover__img"
+        fit="contain"
+      >
+        <template v-slot:error>
+          <div class="absolute-full flex flex-center bg-grey-4 text-grey-6">
+            <q-icon name="videogame_asset" size="48px" />
+          </div>
+        </template>
+      </q-img>
+      <div v-else class="game-cover__placeholder flex flex-center bg-grey-4 text-grey-6">
+        <q-icon name="videogame_asset" size="48px" />
       </div>
-    </q-card-section>
+      <div v-if="selectable && selected" class="absolute-top-left q-pa-xs">
+        <q-icon name="check_circle" color="primary" size="24px" />
+      </div>
+      <div class="game-cover__title">
+        <div class="text-subtitle2 ellipsis game-cover__name">{{ game.name }}</div>
+      </div>
+    </div>
   </q-card>
 </template>
 
@@ -44,7 +42,19 @@ interface Game {
   sub_path: string
 }
 
-const props = defineProps<{ game: Game }>()
+const props = withDefaults(defineProps<{
+  game: Game
+  selectable?: boolean
+  selected?: boolean
+}>(), {
+  selectable: false,
+  selected: false,
+})
+
+const emit = defineEmits<{
+  click: []
+  select: [e: MouseEvent]
+}>()
 
 const coverSrc = computed(() => {
   if (props.game.cover_path) {
@@ -53,23 +63,57 @@ const coverSrc = computed(() => {
   return ''
 })
 
-const hasElectronAPI = computed(() => !!window.electronAPI)
-
-const openDir = async () => {
-  if (!window.electronAPI) return
-  const fullPath = props.game.library_path + '\\' + props.game.sub_path
-  await window.electronAPI.openPath(fullPath)
+const handleClick = (e: MouseEvent) => {
+  if (props.selectable) {
+    emit('select', e)
+  } else {
+    emit('click')
+  }
 }
 </script>
 
 <style scoped>
 .game-card {
-  transition: transform 0.15s;
+  position: relative;
+  user-select: none;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
 .game-card:hover {
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+.game-card--selected {
+  box-shadow: 0 0 0 2px #1976d2;
+}
+
 .game-cover {
-  min-height: 120px;
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: #e0e0e0;
+  overflow: hidden;
+}
+
+.game-cover__img {
+  width: 100%;
+  height: 100%;
+}
+
+.game-cover__placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.game-cover__name {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.game-cover__title {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
 }
 </style>

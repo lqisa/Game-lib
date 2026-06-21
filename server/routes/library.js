@@ -1,6 +1,7 @@
-const express = require('express')
+import express from 'express'
+import * as db from '../database/db.js'
+
 const router = express.Router()
-const db = require('../database/db')
 
 router.get('/', async (req, res, next) => {
   try {
@@ -15,7 +16,7 @@ router.post('/', async (req, res, next) => {
   try {
     const { name, path } = req.body
     if (!name || !path) {
-      return res.status(400).send({ error: 'name 和 path 为必填项' })
+      return res.status(400).send({ error: 'name and path are required' })
     }
     const [id] = await db.insertLibrary({ name, path })
     const library = await db.knex('library').where({ id }).first()
@@ -47,4 +48,4 @@ router.delete('/:id', async (req, res, next) => {
   }
 })
 
-module.exports = router
+export default router

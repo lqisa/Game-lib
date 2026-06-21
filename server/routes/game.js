@@ -1,17 +1,50 @@
-const express = require('express')
+import express from 'express'
+import * as db from '../database/db.js'
+import { scanDirectory } from '../scanner.js'
+
 const router = express.Router()
-const db = require('../database/db')
-const { scanDirectory } = require('../scanner')
 
 router.get('/', async (req, res, next) => {
   try {
-    const { page, pageSize, keyword } = req.query
+    const { page, pageSize, keyword, libraryIds, makerIds, genreIds, tagIds, scraped } = req.query
     const result = await db.getGames({
       page: Number(page) || 1,
       pageSize: Number(pageSize) || 50,
-      keyword: keyword || ''
+      keyword: keyword || '',
+      libraryIds: libraryIds ? String(libraryIds).split(',').map(Number) : undefined,
+      makerIds: makerIds ? String(makerIds).split(',').map(Number) : undefined,
+      genreIds: genreIds ? String(genreIds).split(',').map(Number) : undefined,
+      tagIds: tagIds ? String(tagIds).split(',').map(Number) : undefined,
+      scraped: scraped === 'true' ? true : scraped === 'false' ? false : undefined,
     })
     res.send(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/makers', async (req, res, next) => {
+  try {
+    const makers = await db.getMakers()
+    res.send(makers)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/genres', async (req, res, next) => {
+  try {
+    const genres = await db.getGenres()
+    res.send(genres)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/tags', async (req, res, next) => {
+  try {
+    const tags = await db.getTags()
+    res.send(tags)
   } catch (err) {
     next(err)
   }
@@ -21,7 +54,7 @@ router.get('/unscraped', async (req, res, next) => {
   try {
     const { libraryId } = req.query
     if (!libraryId) {
-      return res.status(400).send({ error: 'libraryId 为必填项' })
+      return res.status(400).send({ error: 'libraryId is required' })
     }
     const games = await db.getUnscrapedGames(Number(libraryId))
     res.send(games)
@@ -34,7 +67,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const game = await db.getGameDetail(Number(req.params.id))
     if (!game) {
-      return res.status(404).send({ error: '游戏不存在' })
+      return res.status(404).send({ error: 'Game not found' })
     }
     res.send(game)
   } catch (err) {
@@ -46,7 +79,7 @@ router.post('/', async (req, res, next) => {
   try {
     const { name, library_id, sub_path, cover_path, description } = req.body
     if (!name || !library_id || !sub_path) {
-      return res.status(400).send({ error: 'name, library_id, sub_path 为必填项' })
+      return res.status(400).send({ error: 'name, library_id, sub_path are required' })
     }
     const [id] = await db.insertGame({ name, library_id, sub_path, cover_path, description })
     const game = await db.getGameDetail(id)
@@ -81,7 +114,7 @@ router.post('/batch-delete', async (req, res, next) => {
   try {
     const { ids } = req.body
     if (!Array.isArray(ids)) {
-      return res.status(400).send({ error: 'ids 为必填数组' })
+      return res.status(400).send({ error: 'ids must be an array' })
     }
     await db.batchDeleteGames(ids)
     res.status(204).end()
@@ -94,11 +127,11 @@ router.post('/scan', async (req, res, next) => {
   try {
     const { libraryId } = req.body
     if (!libraryId) {
-      return res.status(400).send({ error: 'libraryId 为必填项' })
+      return res.status(400).send({ error: 'libraryId is required' })
     }
     const library = await db.knex('library').where({ id: libraryId }).first()
     if (!library) {
-      return res.status(404).send({ error: '游戏库不存在' })
+      return res.status(404).send({ error: 'Library not found' })
     }
 
     const allDirs = scanDirectory(library.path)
@@ -123,7 +156,7 @@ router.post('/scan/add', async (req, res, next) => {
   try {
     const { libraryId, dirs } = req.body
     if (!libraryId || !Array.isArray(dirs)) {
-      return res.status(400).send({ error: 'libraryId 和 dirs 为必填项' })
+      return res.status(400).send({ error: 'libraryId and dirs are required' })
     }
 
     const rows = dirs.map(d => ({
@@ -142,4 +175,4 @@ router.post('/scan/add', async (req, res, next) => {
   }
 })
 
-module.exports = router
+export default router

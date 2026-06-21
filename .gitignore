@@ -28,3 +28,4 @@ yarn-error.log*
 # Game-lib data
 data/
 src-electron/Unpackaged/
+.superpowers/

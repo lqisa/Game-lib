@@ -1,5 +1,8 @@
-const path = require('path')
-const fs = require('fs')
+import path from 'node:path'
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const getDataDir = () => {
   if (process.env.GAME_LIB_DATA_DIR) {
@@ -14,4 +17,4 @@ const ensureDir = (dir) => {
   }
 }
 
-module.exports = { getDataDir, ensureDir }
+export { getDataDir, ensureDir }

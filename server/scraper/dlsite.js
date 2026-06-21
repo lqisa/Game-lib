@@ -1,11 +1,11 @@
-const cheerio = require('cheerio')
-const { retryGet } = require('./axios')
+import cheerio from 'cheerio'
+import { retryGet } from './axios.js'
 
 const splitKeyword = (name) => {
-  let cleaned = name
+  const cleaned = name
     .replace(/【.*?】/g, '')
     .replace(/（.*?）/g, '')
-    .replace(/\s*v\d+[\d.]*\s*$/i, '')
+    .replace(/\s*[Vv](?:er)?\d+(\.\d+)*/gi, '')
     .trim()
   const rjMatch = cleaned.match(/RJ\d+/)
   if (rjMatch) return { keyword: rjMatch[0], segments: [rjMatch[0]] }
@@ -15,11 +15,6 @@ const splitKeyword = (name) => {
 }
 
 const searchDLSite = async (keyword) => {
-  const rjMatch = keyword.match(/RJ(\d+)/)
-  if (rjMatch) {
-    return [{ id: rjMatch[1], rjcode: rjMatch[1], name: keyword, makerName: '', coverUrl: '' }]
-  }
-
   const url = `https://www.dlsite.com/maniax/api/=/product.json?work_category%5B0%5D=%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0&keyword=${encodeURIComponent(keyword)}&order%5B%5D=trend&_locale=zh-cn`
   const response = await retryGet(url, {
     headers: { cookie: 'locale=zh-cn' }
@@ -124,4 +119,4 @@ const fetchDLSiteDetail = async (rjcode) => {
   return work
 }
 
-module.exports = { searchDLSite, fetchDLSiteDetail, splitKeyword }
+export { searchDLSite, fetchDLSiteDetail, splitKeyword }

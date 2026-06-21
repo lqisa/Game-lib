@@ -134,9 +134,6 @@
                   </div>
                 </div>
               </div>
-              <div class="row justify-end q-mt-md">
-                <q-btn color="positive" label="Adopt" @click="adopt" :disable="!detail" />
-              </div>
             </div>
             <div v-else class="flex flex-center text-grey" style="height: 100%; min-height: 200px;">
               <div class="text-center">
@@ -147,6 +144,9 @@
           </div>
         </div>
       </q-card-section>
+      <q-card-actions align="right" class="bg-grey-1 q-px-md q-py-sm">
+        <q-btn color="positive" label="Adopt" @click="adopt" :disable="!selectedResult" />
+      </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
@@ -197,7 +197,6 @@ const emit = defineEmits<{
   'update:modelValue': [val: boolean]
   adopted: [data: AdoptData]
   searched: [source: SourceType, keyword: string, results: SearchResult[]]
-  segmentsLoaded: [name: string, segments: string[]]
 }>()
 
 const show = computed({
@@ -205,15 +204,28 @@ const show = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
+const cleanName = (name: string): string =>
+  name
+    .replace(/【.*?】/g, '')
+    .replace(/（.*?）/g, '')
+    .replace(/\s*[Vv](?:er)?\d+(\.\d+)*/gi, '')
+    .trim()
+
 const activeSource = ref<SourceType>('dlsite')
 const keyword = ref('')
-const segments = ref<string[]>([])
 const results = ref<SearchResult[]>([])
 const selectedIdx = ref(-1)
 const searching = ref(false)
 const searched = ref(false)
 const detail = ref<DetailResult | null>(null)
 const detailLoading = ref(false)
+
+const segments = computed(() => {
+  if (!props.initialSegments || props.initialSegments.length === 0) return []
+  const cleanedGameName = cleanName(props.gameName)
+  const cleanedSegs = props.initialSegments.map(cleanName).filter(Boolean)
+  return [cleanedGameName, ...cleanedSegs.filter(s => s !== cleanedGameName)]
+})
 
 const selectedResult = computed(() => {
   if (selectedIdx.value >= 0 && selectedIdx.value < results.value.length) {
@@ -233,9 +245,6 @@ const doSearch = async () => {
     const res = await api.post(`/scraper/${activeSource.value}/search`, { keyword: keyword.value.trim() })
     const data = res.data
     results.value = data.results ?? data
-    if (data.segments && data.segments.length > 0) {
-      segments.value = [props.gameName, ...data.segments.filter((s: string) => s !== props.gameName)]
-    }
     emit('searched', activeSource.value, keyword.value.trim(), results.value)
     searched.value = true
   } finally {
@@ -254,7 +263,22 @@ const selectResult = async (idx: number) => {
       ? { rjcode: r.id }
       : { id: r.id }
     const res = await api.post(`/scraper/${activeSource.value}/fetch`, fetchBody)
-    detail.value = res.data
+    const fetched: DetailResult = res.data || {
+      id: r.id,
+      title: r.name,
+      coverURL: '',
+      makers: [],
+      genres: [],
+      tags: [],
+      description: '',
+    }
+    if (!fetched.coverURL && r.coverUrl) {
+      fetched.coverURL = r.coverUrl
+    }
+    if (!fetched.title && r.name) {
+      fetched.title = r.name
+    }
+    detail.value = fetched
   } catch {
     detail.value = null
   } finally {
@@ -263,14 +287,23 @@ const selectResult = async (idx: number) => {
 }
 
 const adopt = () => {
-  if (!selectedResult.value || !detail.value) return
+  if (!selectedResult.value) return
+  const fallback: DetailResult = detail.value || {
+    id: selectedResult.value.id,
+    title: selectedResult.value.name,
+    coverURL: selectedResult.value.coverUrl,
+    makers: [],
+    genres: [],
+    tags: [],
+    description: '',
+  }
   emit('adopted', {
     source: activeSource.value,
     sourceId: selectedResult.value.id,
     name: selectedResult.value.name,
     makerName: selectedResult.value.makerName,
     coverUrl: selectedResult.value.coverUrl,
-    detail: detail.value
+    detail: fallback
   })
   show.value = false
 }
@@ -278,23 +311,12 @@ const adopt = () => {
 watch(() => props.modelValue, (val) => {
   if (val) {
     activeSource.value = props.defaultSource || 'dlsite'
-    keyword.value = props.defaultKeyword || props.gameName.match(/RJ\d+/)?.[0] || props.gameName
+    const rawKeyword = props.defaultKeyword || props.gameName.match(/RJ\d+/)?.[0] || props.gameName
+    keyword.value = cleanName(rawKeyword)
     results.value = []
     selectedIdx.value = -1
     detail.value = null
     searched.value = false
-    segments.value = []
-    if (props.initialSegments && props.initialSegments.length > 0) {
-      segments.value = [props.gameName, ...props.initialSegments.filter(s => s !== props.gameName)]
-    } else {
-      void api.post('/scraper/dlsite/segments', { name: props.gameName }).then(res => {
-        const raw = res.data.segments || []
-        segments.value = [props.gameName, ...raw.filter((s: string) => s !== props.gameName)]
-        emit('segmentsLoaded', props.gameName, raw)
-      }).catch(() => {
-        segments.value = [props.gameName]
-      })
-    }
     if (props.initialResults && props.initialResults.length > 0) {
       results.value = props.initialResults
       searched.value = true
