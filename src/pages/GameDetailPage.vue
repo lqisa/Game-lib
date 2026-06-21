@@ -52,6 +52,9 @@
 
           <div class="text-caption text-grey">
             Path: {{ game.library?.path }}\{{ game.sub_path }}
+            <q-btn v-if="hasElectronAPI" flat round dense size="sm" icon="folder_open" color="grey-7" @click="openDir">
+              <q-tooltip>Open Directory</q-tooltip>
+            </q-btn>
           </div>
 
           <div v-if="game.sources?.length" class="text-caption text-grey q-mt-xs">
@@ -79,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../composables/useApi'
 import ScrapeDialog from '../components/ScrapeDialog.vue'
@@ -95,6 +98,14 @@ interface GameDetail {
 const route = useRoute()
 const game = ref<GameDetail | null>(null)
 const showScrapeDialog = ref(false)
+
+const hasElectronAPI = computed(() => !!window.electronAPI)
+
+const openDir = async () => {
+  if (!game.value?.library?.path || !window.electronAPI) return
+  const fullPath = game.value.library.path + '\\' + game.value.sub_path
+  await window.electronAPI.openPath(fullPath)
+}
 
 const loadGame = async () => {
   const gameId = String(route.params.id)
