@@ -7,8 +7,9 @@ const db = require('../database/db')
 const { searchDLSite, fetchDLSiteDetail, splitKeyword } = require('../scraper/dlsite')
 const { searchBangumi, fetchBangumiDetail } = require('../scraper/bangumi')
 const { searchVNDB, fetchVNDBDetail } = require('../scraper/vndb')
+const { getDataDir } = require('../config')
 
-const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers')
+const COVERS_DIR = path.join(getDataDir(), 'covers')
 
 if (!fs.existsSync(COVERS_DIR)) {
   fs.mkdirSync(COVERS_DIR, { recursive: true })

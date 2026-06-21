@@ -2,8 +2,9 @@ const express = require('express')
 const router = express.Router()
 const path = require('path')
 const fs = require('fs')
+const { getDataDir } = require('../config')
 
-const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers')
+const COVERS_DIR = path.join(getDataDir(), 'covers')
 
 router.get('/:filename', (req, res) => {
   const filePath = path.join(COVERS_DIR, req.params.filename)

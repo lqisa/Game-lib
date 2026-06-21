@@ -1,8 +1,9 @@
 const path = require('path')
 const fs = require('fs')
 const knex = require('knex')
+const { getDataDir } = require('../config')
 
-const DB_DIR = path.join(__dirname, '..', '..', 'data')
+const DB_DIR = getDataDir()
 const DB_PATH = path.join(DB_DIR, 'db.sqlite3')
 
 if (!fs.existsSync(DB_DIR)) {

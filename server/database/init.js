@@ -2,8 +2,9 @@ const fs = require('fs')
 const path = require('path')
 const { knex } = require('./db')
 const { createSchema } = require('./schema')
+const { getDataDir } = require('../config')
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'db.sqlite3')
+const DB_PATH = path.join(getDataDir(), 'db.sqlite3')
 
 const ALL_TABLES = [
   'library', 'maker', 'genre', 'tag', 'game',

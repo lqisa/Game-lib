@@ -1,5 +1,6 @@
 import { BrowserWindow, app, ipcMain, dialog, shell } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -11,6 +12,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const platform = process.platform || os.platform();
 
 const EXPRESS_PORT = 19700;
+
+function migrateData(oldDataDir: string, newDataDir: string) {
+  if (!fs.existsSync(oldDataDir)) return
+  if (fs.existsSync(path.join(newDataDir, 'db.sqlite3'))) return
+
+  console.log(' * migrating data to userData directory...')
+  if (!fs.existsSync(newDataDir)) {
+    fs.mkdirSync(newDataDir, { recursive: true })
+  }
+
+  const entries = fs.readdirSync(oldDataDir, { withFileTypes: true })
+  for (const entry of entries) {
+    const src = path.join(oldDataDir, entry.name)
+    const dest = path.join(newDataDir, entry.name)
+    if (entry.isDirectory()) {
+      fs.cpSync(src, dest, { recursive: true })
+    } else {
+      fs.copyFileSync(src, dest)
+    }
+  }
+  console.log(' * data migration complete')
+}
 
 function startServer(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -79,6 +102,11 @@ async function createWindow() {
 
 void app.whenReady().then(async () => {
   await registerQuasarRuntime();
+
+  const userDataDir = path.join(app.getPath('userData'), 'data')
+  const legacyDataDir = path.resolve(__dirname, '..', '..', '..', 'data')
+  process.env.GAME_LIB_DATA_DIR = userDataDir
+  migrateData(legacyDataDir, userDataDir)
 
   ipcMain.handle('dialog:openDirectory', async (_event, title: string) => {
     const result = await dialog.showOpenDialog({

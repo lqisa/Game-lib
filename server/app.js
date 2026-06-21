@@ -3,6 +3,7 @@ const bodyParser = require('body-parser')
 const path = require('path')
 const fs = require('fs')
 const routes = require('./routes')
+const { getDataDir } = require('./config')
 
 const createApp = () => {
   const app = express()
@@ -12,7 +13,7 @@ const createApp = () => {
 
   app.use('/api', routes)
 
-  const coversDir = path.join(__dirname, '..', 'data', 'covers')
+  const coversDir = path.join(getDataDir(), 'covers')
   if (!fs.existsSync(coversDir)) {
     fs.mkdirSync(coversDir, { recursive: true })
   }
