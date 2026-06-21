@@ -103,7 +103,7 @@ async function createWindow() {
 void app.whenReady().then(async () => {
   await registerQuasarRuntime();
 
-  const userDataDir = path.join(app.getPath('userData'), 'data')
+  const userDataDir = app.getPath('userData')
   const legacyDataDir = path.resolve(__dirname, '..', '..', '..', 'data')
   process.env.GAME_LIB_DATA_DIR = userDataDir
   migrateData(legacyDataDir, userDataDir)
