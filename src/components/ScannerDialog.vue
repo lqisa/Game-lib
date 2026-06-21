@@ -254,7 +254,7 @@ const loadUnscraped = async () => {
 
   for (const row of scanResults.value) {
     try {
-      const segRes = await api.post('/dlsite/segments', { name: row.name })
+      const segRes = await api.post('/scraper/dlsite/segments', { name: row.name })
       const { keyword, segments } = segRes.data
       row.searchKeyword = keyword
       segmentsCache.set(row.name, [keyword, ...segments.filter((s: string) => s !== keyword)])
