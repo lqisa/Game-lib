@@ -13,7 +13,21 @@
     </q-img>
     <q-card-section class="q-pa-sm">
       <div class="text-subtitle2 ellipsis">{{ game.name }}</div>
-      <div class="text-caption text-grey ellipsis">{{ game.library_name }}</div>
+      <div class="text-caption text-grey ellipsis row items-center no-wrap">
+        <span class="col ellipsis">{{ game.library_name }}</span>
+        <q-btn
+          v-if="hasElectronAPI"
+          flat
+          round
+          dense
+          size="xs"
+          icon="folder_open"
+          color="grey-7"
+          @click.stop="openDir"
+        >
+          <q-tooltip>Open Directory</q-tooltip>
+        </q-btn>
+      </div>
     </q-card-section>
   </q-card>
 </template>
@@ -26,6 +40,8 @@ interface Game {
   name: string
   cover_path: string | null
   library_name: string
+  library_path: string
+  sub_path: string
 }
 
 const props = defineProps<{ game: Game }>()
@@ -36,6 +52,14 @@ const coverSrc = computed(() => {
   }
   return ''
 })
+
+const hasElectronAPI = computed(() => !!window.electronAPI)
+
+const openDir = async () => {
+  if (!window.electronAPI) return
+  const fullPath = props.game.library_path + '\\' + props.game.sub_path
+  await window.electronAPI.openPath(fullPath)
+}
 </script>
 
 <style scoped>

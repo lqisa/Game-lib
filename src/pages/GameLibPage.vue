@@ -54,6 +54,7 @@ import ScannerDialog from '../components/ScannerDialog.vue'
 interface GameItem {
   id: number; name: string; cover_path: string | null
   library_name: string; library_id: number; sub_path: string
+  library_path: string
 }
 
 const games = ref<GameItem[]>([])
