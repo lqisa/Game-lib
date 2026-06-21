@@ -17,6 +17,20 @@
           <div v-else class="bg-grey-4 rounded-borders" style="aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center;">
             <q-icon name="videogame_asset" size="64px" color="grey-6" />
           </div>
+
+          <div class="text-caption text-grey q-mt-sm">
+            Path: {{ game.library?.path }}\{{ game.sub_path }}
+            <q-btn v-if="hasElectronAPI" flat round dense size="sm" icon="folder_open" color="grey-7" @click="openDir">
+              <q-tooltip>Open Directory</q-tooltip>
+            </q-btn>
+          </div>
+
+          <div v-if="game.sources?.length" class="text-caption text-grey q-mt-xs">
+            <span v-for="s in game.sources" :key="s.id" class="q-mr-md">
+              {{ s.source_type }}: {{ s.source_id }}
+              <a v-if="s.source_url" :href="s.source_url" target="_blank" class="text-blue">Link</a>
+            </span>
+          </div>
         </div>
 
         <div class="col-12 col-sm-8">
@@ -46,22 +60,6 @@
           <div v-if="game.description" class="q-mb-sm">
             <span class="text-grey">Description: </span>
             <div class="text-body2 q-mt-xs" style="white-space: pre-wrap">{{ game.description }}</div>
-          </div>
-
-          <q-separator class="q-my-md" />
-
-          <div class="text-caption text-grey">
-            Path: {{ game.library?.path }}\{{ game.sub_path }}
-            <q-btn v-if="hasElectronAPI" flat round dense size="sm" icon="folder_open" color="grey-7" @click="openDir">
-              <q-tooltip>Open Directory</q-tooltip>
-            </q-btn>
-          </div>
-
-          <div v-if="game.sources?.length" class="text-caption text-grey q-mt-xs">
-            <span v-for="s in game.sources" :key="s.id" class="q-mr-md">
-              {{ s.source_type }}: {{ s.source_id }}
-              <a v-if="s.source_url" :href="s.source_url" target="_blank" class="text-blue">Link</a>
-            </span>
           </div>
         </div>
       </div>
