@@ -168,7 +168,10 @@ router.post('/scan/add', async (req, res, next) => {
     }))
 
     if (rows.length > 0) {
-      await db.knex('game').insert(rows)
+      const BATCH_SIZE = 100
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        await db.knex('game').insert(rows.slice(i, i + BATCH_SIZE))
+      }
     }
 
     res.status(201).send({ added: rows.length })

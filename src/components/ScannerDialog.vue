@@ -7,7 +7,8 @@
         <q-btn dense flat icon="close" v-close-popup />
       </q-bar>
 
-      <q-card-section class="q-pa-md">
+      <q-card-section class="q-pa-md" style="position: relative">
+        <q-inner-loading :showing="scanning" label="Scanning..." label-class="text-grey-8" />
         <div class="row q-mb-md items-center q-gutter-sm">
           <q-select
             v-model="selectedLibrary"
