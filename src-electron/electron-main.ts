@@ -84,10 +84,6 @@ async function createWindow() {
 
   if (import.meta.env.QUASAR_DEBUG) {
     mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.webContents.on("devtools-opened", () => {
-      mainWindow?.webContents.closeDevTools();
-    });
   }
 }
 

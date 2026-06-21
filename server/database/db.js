@@ -96,9 +96,13 @@ const getGames = async ({ page = 1, pageSize = 50, keyword = '', libraryIds, mak
   }
 
   const total = await query.clone().countDistinct('game.id as count').first()
-  const offset = (page - 1) * pageSize
-  const games = await query.groupBy('game.id').offset(offset).limit(pageSize)
-
+  let games
+  if (pageSize > 0) {
+    const offset = (page - 1) * pageSize
+    games = await query.groupBy('game.id').offset(offset).limit(pageSize)
+  } else {
+    games = await query.groupBy('game.id')
+  }
   return { games, total: total.count, page, pageSize }
 }
 

@@ -142,8 +142,6 @@ const router = useRouter()
 const games = ref<GameItem[]>([])
 const loading = ref(false)
 const keyword = ref('')
-const page = ref(1)
-const pageSize = 24
 const total = ref(0)
 const showScanner = ref(false)
 
@@ -160,7 +158,6 @@ const sortOptions = [
 
 const toggleSortOrder = () => {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
-  page.value = 1
   games.value = []
   void loadGames()
 }
@@ -178,7 +175,6 @@ const activeFilterCount = computed(() => {
 
 const onApplyFilter = (filter: FilterState) => {
   currentFilter.value = filter
-  page.value = 1
   games.value = []
   void loadGames()
 }
@@ -311,21 +307,13 @@ const onKeydown = (e: KeyboardEvent) => {
   }
 }
 
-const hasMore = computed(() => games.value.length < total.value)
-
-const loadGames = async (append = false) => {
+const loadGames = async () => {
   if (loading.value) return
-  if (!append) {
-    page.value = 1
-    window.scrollTo(0, 0)
-  }
+  window.scrollTo(0, 0)
   loading.value = true
   try {
     const f = currentFilter.value
-    const params: Record<string, string | number> = {
-      page: page.value,
-      pageSize,
-    }
+    const params: Record<string, string | number> = { pageSize: 0 }
     if (keyword.value) params.keyword = keyword.value
     if (f.libraryIds.length > 0) params.libraryIds = f.libraryIds.join(',')
     if (f.makerIds.length > 0) params.makerIds = f.makerIds.join(',')
@@ -337,39 +325,19 @@ const loadGames = async (append = false) => {
     params.sortOrder = sortOrder.value
 
     const res = await api.get('/games', { params })
-    if (append) {
-      games.value = [...games.value, ...res.data.games]
-    } else {
-      games.value = res.data.games
-    }
+    games.value = res.data.games
     total.value = res.data.total
   } finally {
     loading.value = false
   }
 }
 
-const loadMore = () => {
-  if (!hasMore.value || loading.value) return
-  page.value++
-  void loadGames(true)
-}
-
-const onScroll = () => {
-  const el = document.documentElement
-  const threshold = 200
-  if (el.scrollHeight - el.scrollTop - el.clientHeight < threshold) {
-    loadMore()
-  }
-}
-
 const searchGames = () => {
-  page.value = 1
   games.value = []
   void loadGames()
 }
 
 watch(sortBy, () => {
-  page.value = 1
   games.value = []
   void loadGames()
 })
@@ -377,12 +345,10 @@ watch(sortBy, () => {
 onMounted(() => {
   void loadGames()
   window.addEventListener('keydown', onKeydown)
-  window.addEventListener('scroll', onScroll)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
-  window.removeEventListener('scroll', onScroll)
 })
 </script>
 

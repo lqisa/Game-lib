@@ -8,8 +8,8 @@ router.get('/', async (req, res, next) => {
   try {
     const { page, pageSize, keyword, libraryIds, makerIds, genreIds, tagIds, scraped, sortBy, sortOrder } = req.query
     const result = await db.getGames({
-      page: Number(page) || 1,
-      pageSize: Number(pageSize) || 50,
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 50,
       keyword: keyword || '',
       libraryIds: libraryIds ? String(libraryIds).split(',').map(Number) : undefined,
       makerIds: makerIds ? String(makerIds).split(',').map(Number) : undefined,

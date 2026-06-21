@@ -60,10 +60,11 @@
 
         <q-virtual-scroll
           :items="sortedResults"
+          :virtual-scroll-item-size="48"
           style="height: calc(100vh - 130px)"
         >
           <template v-slot="{ item: row }">
-            <div class="scan-row q-py-sm q-px-md" :class="{ 'bg-grey-2': row.status === 'stale' }">
+            <div class="scan-row q-px-md" :class="{ 'bg-grey-2': row.status === 'stale' }">
               <div class="scan-row__cover">
                 <q-img
                   v-if="row.searchResult?.coverUrl"
@@ -72,15 +73,14 @@
                   height="40px"
                   fit="cover"
                   style="border-radius: 4px"
-                  class="cursor-pointer"
                 >
-                  <q-menu anchor="top left" self="top left" :offset="[8, 0]" transition-show="fade" transition-hide="fade">
+                  <q-tooltip anchor="top left" self="top left" :offset="[8, 0]" transition-show="fade" transition-hide="fade" max-width="240px">
                     <q-img
                       :src="row.searchResult.coverUrl"
                       style="width: 240px; border-radius: 4px"
                       fit="contain"
                     />
-                  </q-menu>
+                  </q-tooltip>
                   <template v-slot:error>
                     <div class="bg-grey-3 flex flex-center full-height" style="border-radius: 4px">
                       <q-icon name="image" size="16px" color="grey" />
@@ -171,7 +171,6 @@
                 </template>
               </div>
             </div>
-            <q-separator />
           </template>
         </q-virtual-scroll>
       </q-card-section>
@@ -506,7 +505,12 @@ const batchScrape = async () => {
         if (cached) {
           if (cached.length > 0) {
             row.searchResult = cached[0] ?? null
-            row.status = 'searched'
+            if (row.searchResult && row.searchResult.name === row.name) {
+              row.status = 'searched'
+              await quickAdopt(row)
+            } else {
+              row.status = 'searched'
+            }
           } else {
             row.status = 'error'
           }
@@ -521,7 +525,12 @@ const batchScrape = async () => {
           }
           if (results.length > 0) {
             row.searchResult = results[0] ?? null
-            row.status = 'searched'
+            if (row.searchResult && row.searchResult.name === row.name) {
+              row.status = 'searched'
+              await quickAdopt(row)
+            } else {
+              row.status = 'searched'
+            }
           } else {
             row.status = 'error'
           }
@@ -559,8 +568,8 @@ const submitAdopted = async () => {
       })
       await api.post('/scraper/adopt/batch', { games })
     }
-    for (const row of staleRows) {
-      await api.delete(`/games/${row.gameId}`)
+    if (staleRows.length > 0) {
+      await api.post('/games/batch-delete', { ids: staleRows.map(r => r.gameId) })
     }
     scanResults.value = scanResults.value.filter(r => r.status !== 'adopted' && r.status !== 'stale')
     emit('done')
@@ -593,12 +602,18 @@ watch(modelValue, (val) => {
   grid-template-columns: 40px 1fr 60px 140px;
   gap: 0 8px;
   align-items: center;
+  height: 48px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.scan-row:hover {
+  background: rgba(0, 0, 0, 0.04);
 }
 .scan-row__cover {
   flex-shrink: 0;
 }
 .scan-row__info {
   min-width: 0;
+  overflow: hidden;
 }
 .scan-row__status,
 .scan-row__actions {
