@@ -1,13 +1,13 @@
 <template>
   <q-dialog v-model="modelValue" persistent maximized>
-    <q-card>
+    <q-card class="column">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle1">Scan & Scrape</div>
         <q-space />
         <q-btn dense flat icon="close" v-close-popup />
       </q-bar>
 
-      <q-card-section class="q-pa-md" style="position: relative">
+      <q-card-section class="q-pa-md col" style="position: relative; overflow: hidden">
         <q-inner-loading :showing="scanning" label="Scanning..." label-class="text-grey-8" />
         <div class="row q-mb-md items-center q-gutter-sm">
           <q-select
@@ -40,11 +40,27 @@
           <q-badge v-else-if="scanResults.length > 0" color="grey-7" class="text-body2">
             {{ scanResults.length }} unscraped
           </q-badge>
+          <q-space />
+          <q-select
+            v-model="sortBy"
+            :options="sortOptions"
+            dense
+            outlined
+            emit-value
+            map-options
+            style="min-width: 120px"
+          />
+          <q-btn
+            flat
+            round
+            :icon="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
+            @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'"
+          />
         </div>
 
         <q-virtual-scroll
-          :items="scanResults"
-          style="max-height: 70vh"
+          :items="sortedResults"
+          style="height: calc(100vh - 130px)"
         >
           <template v-slot="{ item: row }">
             <div class="scan-row q-py-sm q-px-md" :class="{ 'bg-grey-2': row.status === 'stale' }">
@@ -251,6 +267,37 @@ const getSourceUrl = (source: SourceType, sourceId: string): string => {
   if (source === 'vndb') return `https://vndb.org/${sourceId}`
   return ''
 }
+
+const sortBy = ref<'status' | 'action'>('status')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+const sortOptions = [
+  { label: 'Status', value: 'status' },
+  { label: 'Action', value: 'action' },
+]
+
+const statusOrder: Record<ScanRow['status'], number> = {
+  stale: 0,
+  error: 1,
+  pending: 2,
+  searching: 3,
+  searched: 4,
+  adopted: 5,
+}
+
+const actionOrder: Record<ScanRow['status'], number> = {
+  pending: 0,
+  error: 1,
+  searched: 2,
+  searching: 3,
+  adopted: 4,
+  stale: 5,
+}
+
+const sortedResults = computed(() => {
+  const order = sortBy.value === 'status' ? statusOrder : actionOrder
+  const sorted = [...scanResults.value].sort((a, b) => order[a.status] - order[b.status])
+  return sortOrder.value === 'desc' ? sorted.reverse() : sorted
+})
 
 const hasPending = computed(() => scanResults.value.some(r => r.status === 'pending' || r.status === 'error'))
 const adoptedCount = computed(() => scanResults.value.filter(r => r.status === 'adopted').length)
