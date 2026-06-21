@@ -87,6 +87,7 @@ const initDatabase = async () => {
     console.log(' * 数据库不存在，正在创建...')
     await createSchema()
     console.log(' * 数据库创建完成.')
+    await knex('setting').insert({ key: 'scrape_concurrency', value: '4' }).onConflict('key').ignore()
     return
   }
 
