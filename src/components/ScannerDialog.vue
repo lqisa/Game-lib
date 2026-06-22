@@ -24,7 +24,22 @@
             @update:model-value="onLibraryChange"
           />
           <q-btn color="primary" label="Scan" @click="scanDir" :disable="!selectedLibrary" :loading="scanning" />
-          <q-btn color="secondary" label="Scrape All" @click="batchScrape" :disable="!hasPending" />
+          <q-btn
+            v-if="!scraping"
+            color="secondary"
+            label="Scrape All"
+            @click="startBatchScrape"
+            :disable="!hasPending"
+          />
+          <q-btn
+            v-else
+            :color="scrapePaused ? 'positive' : 'orange'"
+            :label="`${scrapeDone} / ${scrapeTotal}`"
+            @click="togglePause"
+          >
+            <q-tooltip>{{ scrapePaused ? 'Click to resume' : 'Click to pause' }}</q-tooltip>
+          </q-btn>
+          <q-btn color="warning" label="Force Refresh" @click="forceRefresh" :disable="scanResults.length === 0" />
           <q-btn
             color="positive"
             label="Submit"
@@ -66,27 +81,22 @@
           <template v-slot="{ item: row }">
             <div class="scan-row q-px-md" :class="{ 'bg-grey-2': row.status === 'stale' }">
               <div class="scan-row__cover">
-                <q-img
-                  v-if="row.searchResult?.coverUrl"
-                  :src="row.searchResult.coverUrl"
-                  width="40px"
-                  height="40px"
-                  fit="cover"
-                  style="border-radius: 4px"
-                >
-                  <q-tooltip anchor="top left" self="top left" :offset="[8, 0]" transition-show="fade" transition-hide="fade" max-width="240px">
-                    <q-img
+                <div v-if="row.searchResult?.coverUrl" class="scan-row__cover-wrap">
+                  <img
+                    :src="row.searchResult.coverUrl"
+                    class="scan-row__cover-img"
+                    loading="lazy"
+                    @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+                  />
+                  <q-icon name="image" size="16px" color="grey" class="scan-row__cover-placeholder" />
+                  <q-tooltip anchor="top left" self="top left" :offset="[8, 0]" transition-show="fade" transition-hide="fade" class="tooltip-cover-preview">
+                    <img
                       :src="row.searchResult.coverUrl"
-                      style="width: 240px; border-radius: 4px"
-                      fit="contain"
+                      style="width: 240px; max-height: 320px; object-fit: contain; border-radius: 4px; display: block"
+                      loading="lazy"
                     />
                   </q-tooltip>
-                  <template v-slot:error>
-                    <div class="bg-grey-3 flex flex-center full-height" style="border-radius: 4px">
-                      <q-icon name="image" size="16px" color="grey" />
-                    </div>
-                  </template>
-                </q-img>
+                </div>
                 <div v-else class="bg-grey-3 flex flex-center" style="width: 40px; height: 40px; border-radius: 4px">
                   <q-icon name="folder" size="16px" color="grey" />
                 </div>
@@ -182,7 +192,7 @@
       :game-id="scrapingRow?.gameId || 0"
       :default-keyword="scrapingRow?.searchKeyword"
       :default-source="scrapingRow?.source || undefined"
-      :initial-results="scrapingRow ? (searchCache.get(cacheKey(scrapingRow)) || null) : null"
+      :initial-results="scrapingRow ? (searchCache.get(cacheKey(scrapingRow))?.results || null) : null"
       :initial-segments="scrapingRow ? (segmentsCache.get(scrapingRow.name) || null) : null"
       @adopted="onAdopted"
       @searched="onSearched"
@@ -244,11 +254,15 @@ const selectedLibrary = ref<number | null>(null)
 const scanResults = ref<ScanRow[]>([])
 const scanning = ref(false)
 const submitting = ref(false)
+const scraping = ref(false)
+const scrapePaused = ref(false)
+const scrapeDone = ref(0)
+const scrapeTotal = ref(0)
 
 const showScrapeDialog = ref(false)
 const scrapingRow = ref<ScanRow | null>(null)
 
-const searchCache = new Map<string, SearchResult[]>()
+const searchCache = new Map<string, { source: string; results: SearchResult[] }>()
 const detailCache = new Map<string, DetailResult>()
 
 const cacheKey = (row: ScanRow) => `${row.source || 'auto'}:${row.searchKeyword}`
@@ -267,9 +281,10 @@ const getSourceUrl = (source: SourceType, sourceId: string): string => {
   return ''
 }
 
-const sortBy = ref<'status' | 'action'>('status')
+const sortBy = ref<'none' | 'status' | 'action'>('none')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const sortOptions = [
+  { label: 'None', value: 'none' },
   { label: 'Status', value: 'status' },
   { label: 'Action', value: 'action' },
 ]
@@ -293,6 +308,7 @@ const actionOrder: Record<ScanRow['status'], number> = {
 }
 
 const sortedResults = computed(() => {
+  if (sortBy.value === 'none') return scanResults.value
   const order = sortBy.value === 'status' ? statusOrder : actionOrder
   const sorted = [...scanResults.value].sort((a, b) => order[a.status] - order[b.status])
   return sortOrder.value === 'desc' ? sorted.reverse() : sorted
@@ -343,6 +359,22 @@ const loadUnscraped = async () => {
     const { keyword, segments } = splitKeyword(row.name)
     row.searchKeyword = keyword
     segmentsCache.set(row.name, [keyword, ...segments.filter(s => s !== keyword)])
+  }
+
+  await preloadCache()
+}
+
+const preloadCache = async () => {
+  if (scanResults.value.length === 0) return
+  const keywords = scanResults.value.map(r => r.searchKeyword || r.name)
+  try {
+    const res = await api.post('/cache/search/preload', { keywords })
+    const entries = res.data.entries || []
+    for (const entry of entries) {
+      searchCache.set(entry.key, { source: entry.source, results: entry.results })
+    }
+  } catch {
+    // preload failure is non-critical
   }
 }
 
@@ -401,7 +433,13 @@ const onAdopted = (data: AdoptData) => {
 }
 
 const onSearched = (source: SourceType, keyword: string, results: SearchResult[]) => {
-  searchCache.set(`${source}:${keyword}`, results)
+  const key = `${source}:${keyword}`
+  searchCache.set(key, { source, results })
+  api.post('/cache/search', { key, source, keyword, results }).then(res => {
+    if (res.data.results) {
+      searchCache.set(key, { source, results: res.data.results })
+    }
+  }).catch(() => {})
 }
 
 const quickAdopt = async (row: ScanRow) => {
@@ -489,11 +527,29 @@ const discardRow = (row: ScanRow) => {
   }
 }
 
+const startBatchScrape = () => {
+  scrapePaused.value = false
+  void batchScrape()
+}
+
+const togglePause = () => {
+  scrapePaused.value = !scrapePaused.value
+}
+
 const batchScrape = async () => {
   const rows = [...scanResults.value].filter(r => r.status === 'pending' || r.status === 'error')
+  if (rows.length === 0) return
+
+  scrapeDone.value = 0
+  scrapeTotal.value = rows.length
+  scraping.value = true
   const limit = scrapeConcurrency
 
   for (let i = 0; i < rows.length; i += limit) {
+    if (!scraping.value) break
+    while (scrapePaused.value) {
+      await new Promise(r => setTimeout(r, 200))
+    }
     const chunk = rows.slice(i, i + limit)
     await Promise.all(chunk.map(async (row) => {
       row.status = 'searching'
@@ -501,8 +557,21 @@ const batchScrape = async () => {
       try {
         const keyword = row.searchKeyword || row.name
         const autoKey = `auto:${keyword}`
-        const cached = searchCache.get(autoKey)
-        if (cached) {
+        let cachedEntry = searchCache.get(autoKey)
+        if (!cachedEntry) {
+          try {
+            const dbRes = await api.get('/cache/search', { params: { key: autoKey } })
+            if (dbRes.data.hit) {
+              cachedEntry = { source: dbRes.data.data.source, results: dbRes.data.data.results }
+              searchCache.set(autoKey, cachedEntry)
+            }
+          } catch {
+            // DB lookup failure is non-critical
+          }
+        }
+        if (cachedEntry) {
+          row.source = (cachedEntry.source as SourceType) || null
+          const cached = cachedEntry.results
           if (cached.length > 0) {
             row.searchResult = cached[0] ?? null
             if (row.searchResult && row.searchResult.name === row.name) {
@@ -517,11 +586,34 @@ const batchScrape = async () => {
         } else {
           const searchRes = await api.post('/scraper/auto/search', { keyword, name: row.name })
           const data = searchRes.data
-          const results: SearchResult[] = data.results ?? []
+          let results: SearchResult[] = data.results ?? []
+          const hitSource = data.source || 'auto'
           row.source = data.source || null
-          searchCache.set(autoKey, results)
-          if (data.source) {
-            searchCache.set(`${data.source}:${keyword}`, results)
+          try {
+            const cacheRes = await api.post('/cache/search', {
+              key: autoKey,
+              source: hitSource,
+              keyword,
+              results
+            })
+            if (cacheRes.data.results) {
+              results = cacheRes.data.results
+            }
+            searchCache.set(autoKey, { source: hitSource, results })
+            if (data.source) {
+              const cacheRes2 = await api.post('/cache/search', {
+                key: `${data.source}:${keyword}`,
+                source: data.source,
+                keyword,
+                results
+              })
+              if (cacheRes2.data.results) {
+                searchCache.set(`${data.source}:${keyword}`, { source: data.source, results: cacheRes2.data.results })
+              }
+            }
+          } catch {
+            // cache write failure is non-critical
+            searchCache.set(autoKey, { source: hitSource, results })
           }
           if (results.length > 0) {
             row.searchResult = results[0] ?? null
@@ -539,8 +631,31 @@ const batchScrape = async () => {
         row.status = 'error'
       } finally {
         row.loading = false
+        scrapeDone.value++
       }
     }))
+  }
+
+  scraping.value = false
+}
+
+const forceRefresh = async () => {
+  const keys = scanResults.value.map(r => `auto:${r.searchKeyword || r.name}`)
+  searchCache.clear()
+  detailCache.clear()
+  try {
+    if (keys.length > 0) {
+      await api.delete('/cache/search', { params: { keys: keys.join(',') } })
+    }
+  } catch {
+    // cache delete failure is non-critical
+  }
+  for (const row of scanResults.value) {
+    if (row.status === 'searched' || row.status === 'error') {
+      row.status = 'pending'
+      row.searchResult = null
+      row.source = null
+    }
   }
 }
 
@@ -611,6 +726,29 @@ watch(modelValue, (val) => {
 .scan-row__cover {
   flex-shrink: 0;
 }
+.scan-row__cover-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scan-row__cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  z-index: 1;
+}
+.scan-row__cover-placeholder {
+  pointer-events: none;
+  z-index: 0;
+}
 .scan-row__info {
   min-width: 0;
   overflow: hidden;
@@ -619,5 +757,14 @@ watch(modelValue, (val) => {
 .scan-row__actions {
   display: flex;
   align-items: center;
+}
+</style>
+
+<style>
+.tooltip-cover-preview {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 </style>

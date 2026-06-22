@@ -221,6 +221,47 @@ const getTags = async () => {
   return db('tag').select('id', 'name').orderBy('name')
 }
 
+const getSearchCache = async (key) => {
+  const row = await db('search_cache').where({ key }).first()
+  if (!row) return null
+  return { ...row, results: JSON.parse(row.results) }
+}
+
+const setSearchCache = async ({ key, source, keyword, results }) => {
+  const data = {
+    key,
+    source,
+    keyword,
+    results: JSON.stringify(results),
+    updated_at: db.fn.now()
+  }
+  await db('search_cache').insert(data).onConflict('key').merge()
+}
+
+const batchSetSearchCache = async (items) => {
+  for (const item of items) {
+    const data = {
+      key: item.key,
+      source: item.source,
+      keyword: item.keyword,
+      results: JSON.stringify(item.results),
+      updated_at: db.fn.now()
+    }
+    await db('search_cache').insert(data).onConflict('key').merge()
+  }
+}
+
+const deleteSearchCache = async (keys) => {
+  if (keys.length === 0) return
+  await db('search_cache').whereIn('key', keys).del()
+}
+
+const getSearchCacheByKeywords = async (keywords) => {
+  if (keywords.length === 0) return []
+  const rows = await db('search_cache').whereIn('keyword', keywords)
+  return rows.map(r => ({ ...r, results: JSON.parse(r.results) }))
+}
+
 export { db as knex }
 export {
   getGameDetail,
@@ -246,5 +287,10 @@ export {
   syncGameTags,
   getMakers,
   getGenres,
-  getTags
+  getTags,
+  getSearchCache,
+  setSearchCache,
+  batchSetSearchCache,
+  deleteSearchCache,
+  getSearchCacheByKeywords
 }

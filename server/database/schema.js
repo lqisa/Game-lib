@@ -67,5 +67,13 @@ const createSchema = () => knex.schema
     table.string('key').primary()
     table.text('value').notNullable()
   })
+  .createTable('search_cache', (table) => {
+    table.string('key').primary()
+    table.string('source').notNullable()
+    table.string('keyword').notNullable()
+    table.text('results').notNullable()
+    table.dateTime('created_at').defaultTo(knex.fn.now())
+    table.dateTime('updated_at').defaultTo(knex.fn.now())
+  })
 
 export { createSchema }

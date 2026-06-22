@@ -2,6 +2,7 @@ const getCleanedName = (name: string) =>
   name
   .replace(/【.*?】/g, '')
   .replace(/（.*?）/g, '')
+  .replace(/\s*\((?<!RJ)\s*[\d.]+\s*\)/g, '')
   .replace(/\s*[Vv](?:er)?\d+(\.\d+)*/gi, '')
   .replace(/\s+\d+(\.\d+)+/g, '')
   .trim()

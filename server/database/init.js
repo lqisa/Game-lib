@@ -8,7 +8,7 @@ const DB_PATH = path.join(getDataDir(), 'db.sqlite3')
 
 const ALL_TABLES = [
   'library', 'maker', 'genre', 'tag', 'game',
-  'game_maker', 'game_genre', 'game_tag', 'game_source', 'setting'
+  'game_maker', 'game_genre', 'game_tag', 'game_source', 'setting', 'search_cache'
 ]
 
 const TABLE_DDL = {
@@ -77,6 +77,14 @@ const TABLE_DDL = {
   setting: (knex) => knex.schema.createTable('setting', (table) => {
     table.string('key').primary()
     table.text('value').notNullable()
+  }),
+  search_cache: (knex) => knex.schema.createTable('search_cache', (table) => {
+    table.string('key').primary()
+    table.string('source').notNullable()
+    table.string('keyword').notNullable()
+    table.text('results').notNullable()
+    table.dateTime('created_at').defaultTo(knex.fn.now())
+    table.dateTime('updated_at').defaultTo(knex.fn.now())
   })
 }
 
@@ -92,21 +100,21 @@ const initDatabase = async () => {
   }
 
   console.log(' * Database exists, checking missing tables...')
-  await knex('setting').insert({ key: 'scrape_concurrency', value: '4' }).onConflict('key').ignore()
 
   const existingTables = await knex.raw("SELECT name FROM sqlite_master WHERE type='table'").then(r => r.map(row => row.name))
   const missingTables = ALL_TABLES.filter(t => !existingTables.includes(t))
 
   if (missingTables.length === 0) {
     console.log(' * All tables exist.')
-    return
+  } else {
+    for (const tableName of missingTables) {
+      console.log(` * Creating missing table: ${tableName}`)
+      await TABLE_DDL[tableName](knex)
+    }
+    console.log(' * Missing tables created.')
   }
 
-  for (const tableName of missingTables) {
-    console.log(` * Creating missing table: ${tableName}`)
-    await TABLE_DDL[tableName](knex)
-  }
-  console.log(' * Missing tables created.')
+  await knex('setting').insert({ key: 'scrape_concurrency', value: '4' }).onConflict('key').ignore()
 }
 
 export { initDatabase }

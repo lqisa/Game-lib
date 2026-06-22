@@ -5,19 +5,14 @@
     @click="handleClick"
   >
     <div class="game-cover">
-      <q-img
+      <img
         v-if="game.cover_path"
         :src="coverSrc"
         class="game-cover__img"
-        fit="contain"
-      >
-        <template v-slot:error>
-          <div class="absolute-full flex flex-center bg-grey-4 text-grey-6">
-            <q-icon name="videogame_asset" size="48px" />
-          </div>
-        </template>
-      </q-img>
-      <div v-else class="game-cover__placeholder flex flex-center bg-grey-4 text-grey-6">
+        loading="lazy"
+        @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+      />
+      <div v-if="!game.cover_path" class="game-cover__placeholder flex flex-center bg-grey-4 text-grey-6">
         <q-icon name="videogame_asset" size="48px" />
       </div>
       <div v-if="selectable && selected" class="absolute-top-left q-pa-xs">
@@ -96,6 +91,7 @@ const handleClick = (e: MouseEvent) => {
 .game-cover__img {
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 
 .game-cover__placeholder {

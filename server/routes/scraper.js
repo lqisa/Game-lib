@@ -114,9 +114,13 @@ router.post('/auto/search', async (req, res, next) => {
     }
     const searchName = name || keyword
     const hasRJ = /RJ\d+/.test(searchName)
+    const letterCount = (searchName.match(/[a-zA-Z]/g) || []).length
+    const isMostlyEnglish = searchName.length > 0 && (letterCount / searchName.length) >= 0.9
     const sources = hasRJ
       ? ['dlsite', 'bangumi', 'vndb']
-      : ['bangumi', 'dlsite', 'vndb']
+      : isMostlyEnglish
+        ? ['vndb', 'bangumi', 'dlsite']
+        : ['bangumi', 'dlsite', 'vndb']
 
     const token = await getBangumiToken()
 
@@ -238,19 +242,23 @@ router.post('/adopt/batch', async (req, res, next) => {
     if (!Array.isArray(games)) {
       return res.status(400).send({ error: 'games is required' })
     }
+    const limit = 20
     const results = []
-    for (const game of games) {
-      const { gameId, sourceType, sourceId } = game
-      if (!gameId || !sourceType || !sourceId) {
-        results.push({ gameId: gameId || null, success: false, error: 'gameId, sourceType, sourceId required' })
-        continue
-      }
-      try {
-        const updated = await adoptOne(game)
-        results.push({ gameId, success: true, game: updated })
-      } catch (err) {
-        results.push({ gameId, success: false, error: err.message })
-      }
+    for (let i = 0; i < games.length; i += limit) {
+      const chunk = games.slice(i, i + limit)
+      const chunkResults = await Promise.all(chunk.map(async (game) => {
+        const { gameId, sourceType, sourceId } = game
+        if (!gameId || !sourceType || !sourceId) {
+          return { gameId: gameId || null, success: false, error: 'gameId, sourceType, sourceId required' }
+        }
+        try {
+          const updated = await adoptOne(game)
+          return { gameId, success: true, game: updated }
+        } catch (err) {
+          return { gameId, success: false, error: err.message }
+        }
+      }))
+      results.push(...chunkResults)
     }
     res.send({ results })
   } catch (err) {
