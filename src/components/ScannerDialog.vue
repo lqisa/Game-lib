@@ -192,7 +192,7 @@
       :game-id="scrapingRow?.gameId || 0"
       :default-keyword="scrapingRow?.searchKeyword"
       :default-source="scrapingRow?.source || undefined"
-      :initial-results="scrapingRow ? (searchCache.get(cacheKey(scrapingRow))?.results || null) : null"
+      :initial-results="scrapingRow ? (searchCache.get(cacheKey(scrapingRow))?.results ?? null) : null"
       :initial-segments="scrapingRow ? (segmentsCache.get(scrapingRow.name) || null) : null"
       @adopted="onAdopted"
       @searched="onSearched"
@@ -570,7 +570,7 @@ const batchScrape = async () => {
           }
         }
         if (cachedEntry) {
-          row.source = (cachedEntry.source as SourceType) || null
+          row.source = (cachedEntry.source as SourceType | null) || null
           const cached = cachedEntry.results
           if (cached.length > 0) {
             row.searchResult = cached[0] ?? null

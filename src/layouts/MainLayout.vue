@@ -11,11 +11,8 @@
       v-model="drawer"
       show-if-above
       bordered
-      :width="180"
-      :mini-width="56"
-      :mini="miniState"
-      @mouseover="miniState = false"
-      @mouseout="miniState = true"
+      :width="56"
+      :breakpoint="0"
     >
       <q-list>
         <q-item clickable v-ripple to="/" exact>
@@ -23,12 +20,14 @@
             <q-icon name="videogame_asset" />
           </q-item-section>
           <q-item-section>Game Lib</q-item-section>
+          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Game Lib</q-tooltip>
         </q-item>
         <q-item clickable v-ripple to="/settings">
           <q-item-section avatar>
             <q-icon name="settings" />
           </q-item-section>
           <q-item-section>Setting</q-item-section>
+          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Setting</q-tooltip>
         </q-item>
       </q-list>
     </q-drawer>
@@ -43,5 +42,4 @@
 import { ref } from 'vue'
 
 const drawer = ref(true)
-const miniState = ref(true)
 </script>

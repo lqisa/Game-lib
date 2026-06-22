@@ -7,9 +7,8 @@
     <div class="game-cover">
       <img
         v-if="game.cover_path"
-        :src="coverSrc"
+        v-lazy-img="coverSrc"
         class="game-cover__img"
-        loading="lazy"
         @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
       />
       <div v-if="!game.cover_path" class="game-cover__placeholder flex flex-center bg-grey-4 text-grey-6">
