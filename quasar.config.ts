@@ -188,9 +188,7 @@ export default defineConfig((/* ctx */) => {
       bundler: 'packager', // 'packager' or 'builder'
 
       packager: {
-        extraResource: [
-          path.resolve(__dirname, 'server'),
-        ],
+        extraResource: [path.resolve(__dirname, 'server')],
         afterCopy: [
           ({ buildPath }: { buildPath: string }) => {
             const localesDir = path.join(buildPath, 'locales');

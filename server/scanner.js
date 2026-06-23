@@ -1,16 +1,14 @@
-import fs from 'node:fs'
+import fs from 'node:fs';
 
 const scanDirectory = (dirPath) => {
   if (!fs.existsSync(dirPath)) {
-    return []
+    return [];
   }
 
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true })
-  const subDirs = entries
-    .filter(e => e.isDirectory())
-    .map(e => e.name)
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const subDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
 
-  return subDirs
-}
+  return subDirs;
+};
 
-export { scanDirectory }
+export { scanDirectory };

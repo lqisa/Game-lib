@@ -1,36 +1,36 @@
-import express from 'express'
-import path from 'node:path'
-import fs from 'node:fs'
-import routes from './routes/index.js'
-import { getDataDir } from './config.js'
+import express from 'express';
+import path from 'node:path';
+import fs from 'node:fs';
+import routes from './routes/index.js';
+import { getDataDir } from './config.js';
 
 const createApp = (frontendDir) => {
-  const app = express()
+  const app = express();
 
-  app.use(express.json({ limit: '50mb' }))
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }))
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-  app.use('/api', routes)
+  app.use('/api', routes);
 
-  const coversDir = path.join(getDataDir(), 'covers')
+  const coversDir = path.join(getDataDir(), 'covers');
   if (!fs.existsSync(coversDir)) {
-    fs.mkdirSync(coversDir, { recursive: true })
+    fs.mkdirSync(coversDir, { recursive: true });
   }
-  app.use('/covers', express.static(coversDir))
+  app.use('/covers', express.static(coversDir));
 
   if (frontendDir) {
-    app.use(express.static(frontendDir))
+    app.use(express.static(frontendDir));
     app.get('{*path}', (_req, res) => {
-      res.sendFile(path.join(frontendDir, 'index.html'))
-    })
+      res.sendFile(path.join(frontendDir, 'index.html'));
+    });
   }
 
   app.use((err, req, res, _next) => {
-    console.error('API Error:', err.message)
-    res.status(err.status || 500).send({ error: err.message || 'Internal Server Error' })
-  })
+    console.error('API Error:', err.message);
+    res.status(err.status || 500).send({ error: err.message || 'Internal Server Error' });
+  });
 
-  return app
-}
+  return app;
+};
 
-export { createApp }
+export { createApp };

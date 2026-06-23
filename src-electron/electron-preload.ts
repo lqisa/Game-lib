@@ -28,14 +28,13 @@
  * }
  */
 
-import { contextBridge, ipcRenderer } from "electron";
-import { quasarRuntime } from "#q-app/electron/preload";
+import { contextBridge, ipcRenderer } from 'electron';
+import { quasarRuntime } from '#q-app/electron/preload';
 
-contextBridge.exposeInMainWorld("quasarRuntime", quasarRuntime);
+contextBridge.exposeInMainWorld('quasarRuntime', quasarRuntime);
 
-contextBridge.exposeInMainWorld("electronAPI", {
+contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: (title: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory', title),
-  openPath: (targetPath: string): Promise<void> =>
-    ipcRenderer.invoke('shell:openPath', targetPath),
+  openPath: (targetPath: string): Promise<void> => ipcRenderer.invoke('shell:openPath', targetPath),
 });

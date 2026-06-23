@@ -1,109 +1,132 @@
-import { load } from 'cheerio'
-import { retryGet } from './axios.js'
+import { load } from 'cheerio';
+import { retryGet } from './axios.js';
 
 const searchDLSite = async (keyword) => {
-  const url = `https://www.dlsite.com/maniax/api/=/product.json?work_category%5B0%5D=%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0&keyword=${encodeURIComponent(keyword)}&order%5B%5D=trend&_locale=zh-cn`
+  const url = `https://www.dlsite.com/maniax/api/=/product.json?work_category%5B0%5D=%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0&keyword=${encodeURIComponent(keyword)}&order%5B%5D=trend&_locale=zh-cn`;
   const response = await retryGet(url, {
-    headers: { cookie: 'locale=zh-cn' }
-  })
+    headers: { cookie: 'locale=zh-cn' },
+  });
 
-  const items = response.data
-  if (!Array.isArray(items)) return []
+  const items = response.data;
+  if (!Array.isArray(items)) return [];
 
-  return items.map(item => {
-    const workno = item.workno || ''
-    const rjcode = workno.replace('RJ', '')
-    let coverUrl = ''
-    const img = item.image_main || item.image_thum || item.image_mini
-    if (img && typeof img === 'object') {
-      coverUrl = img.url || ''
-    } else if (typeof img === 'string') {
-      coverUrl = img
-    }
-    if (coverUrl && coverUrl.startsWith('//')) {
-      coverUrl = `https:${coverUrl}`
-    }
-    return {
-      id: rjcode,
-      rjcode,
-      name: item.work_name || '',
-      makerName: item.maker_name || '',
-      coverUrl
-    }
-  }).filter(r => r.rjcode)
-}
+  return items
+    .map((item) => {
+      const workno = item.workno || '';
+      const rjcode = workno.replace('RJ', '');
+      let coverUrl = '';
+      const img = item.image_main || item.image_thum || item.image_mini;
+      if (img && typeof img === 'object') {
+        coverUrl = img.url || '';
+      } else if (typeof img === 'string') {
+        coverUrl = img;
+      }
+      if (coverUrl && coverUrl.startsWith('//')) {
+        coverUrl = `https:${coverUrl}`;
+      }
+      return {
+        id: rjcode,
+        rjcode,
+        name: item.work_name || '',
+        makerName: item.maker_name || '',
+        coverUrl,
+      };
+    })
+    .filter((r) => r.rjcode);
+};
 
 const fetchDLSiteDetail = async (rjcode) => {
-  const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html`
+  const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html`;
   const response = await retryGet(url, {
-    headers: { cookie: 'locale=zh-cn' }
-  })
-  const $ = load(response.data)
+    headers: { cookie: 'locale=zh-cn' },
+  });
+  const $ = load(response.data);
 
-  const work = { id: rjcode, tags: [], genres: [], makers: [] }
+  const work = { id: rjcode, tags: [], genres: [], makers: [] };
 
-  const title = $('meta[property="og:title"]').attr('content')
-  work.title = title ? title.replace(/ \[.+\] \| DLsite$/, '') : ''
+  const title = $('meta[property="og:title"]').attr('content');
+  work.title = title ? title.replace(/ \[.+\] \| DLsite$/, '') : '';
 
-  const candidateStr = $('.work_slider_container .slider_item.active img-with-fallback').attr(':candidates')
-  let imgList = []
+  const candidateStr = $('.work_slider_container .slider_item.active img-with-fallback').attr(
+    ':candidates',
+  );
+  let imgList = [];
   if (candidateStr) {
     try {
-      const parsed = JSON.parse(candidateStr.replace(/'/g, '"'))
+      const parsed = JSON.parse(candidateStr.replace(/'/g, '"'));
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const first = parsed[0]
-        imgList = Array.isArray(first) ? first : [first]
+        const first = parsed[0];
+        imgList = Array.isArray(first) ? first : [first];
       }
     } catch {
-      imgList = candidateStr.replace(/[\[\]'\\]/g, '').split(',').filter(Boolean)
+      imgList = candidateStr
+        .replace(/[\[\]'\\]/g, '')
+        .split(',')
+        .filter(Boolean);
     }
   }
-  const fallbackImg = $("meta[itemprop='image']").attr('content') || ''
-  const twitterImg = $('meta[name="twitter:image:src"]').attr('content') || ''
-  let coverURL = ''
+  const fallbackImg = $("meta[itemprop='image']").attr('content') || '';
+  const twitterImg = $('meta[name="twitter:image:src"]').attr('content') || '';
+  let coverURL = '';
   if (imgList.length > 0) {
-    coverURL = imgList[0].startsWith('//') ? `https:${imgList[0]}` : imgList[0]
+    coverURL = imgList[0].startsWith('//') ? `https:${imgList[0]}` : imgList[0];
   } else if (fallbackImg) {
-    coverURL = fallbackImg.startsWith('//') ? `https:${fallbackImg}` : fallbackImg
+    coverURL = fallbackImg.startsWith('//') ? `https:${fallbackImg}` : fallbackImg;
   } else if (twitterImg) {
-    coverURL = twitterImg.startsWith('//') ? `https:${twitterImg}` : twitterImg
+    coverURL = twitterImg.startsWith('//') ? `https:${twitterImg}` : twitterImg;
   }
-  work.coverURL = coverURL
+  work.coverURL = coverURL;
 
-  const circleEl = $('span[class="maker_name"]').children('a')
-  const circleName = circleEl.text().trim()
+  const circleEl = $('span[class="maker_name"]').children('a');
+  const circleName = circleEl.text().trim();
   if (circleName) {
-    work.makers.push(circleName)
+    work.makers.push(circleName);
   }
 
   if (!work.makers.length) {
-    const authorEl = $('#work_outline th').filter(function () { return $(this).text().trim() === '作者' })
-      .parent().children('td').children('a').first()
-    const authorName = authorEl.text().trim()
+    const authorEl = $('#work_outline th')
+      .filter(function () {
+        return $(this).text().trim() === '作者';
+      })
+      .parent()
+      .children('td')
+      .children('a')
+      .first();
+    const authorName = authorEl.text().trim();
     if (authorName) {
-      work.makers.push(authorName)
+      work.makers.push(authorName);
     }
   }
 
   $('th').each((_, el) => {
-    const label = $(el).text().trim()
+    const label = $(el).text().trim();
     if (label === '分类') {
-      $(el).next('td').find('a').each((_, a) => {
-        work.genres.push($(a).text().trim())
-      })
+      $(el)
+        .next('td')
+        .find('a')
+        .each((_, a) => {
+          work.genres.push($(a).text().trim());
+        });
     }
     if (label === '标签') {
-      $(el).next('td').find('a').each((_, a) => {
-        work.tags.push($(a).text().trim())
-      })
+      $(el)
+        .next('td')
+        .find('a')
+        .each((_, a) => {
+          work.tags.push($(a).text().trim());
+        });
     }
-  })
+  });
 
-  work.description = $('.work_parts_container .work_parts .work_text').text().trim()
-    || $('meta[property="og:description"]').attr('content')?.replace(/「DLsite.*/, '').trim()
-    || ''
+  work.description =
+    $('.work_parts_container .work_parts .work_text').text().trim() ||
+    $('meta[property="og:description"]')
+      .attr('content')
+      ?.replace(/「DLsite.*/, '')
+      .trim() ||
+    '';
 
-  return work
-}
+  return work;
+};
 
-export { searchDLSite, fetchDLSiteDetail }
+export { searchDLSite, fetchDLSiteDetail };

@@ -1,6 +1,6 @@
 <template>
   <q-dialog v-model="show" persistent>
-    <q-card style="min-width: 500px; max-width: 600px; max-height: 85vh;">
+    <q-card style="min-width: 500px; max-width: 600px; max-height: 85vh">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle2">Filter</div>
         <q-space />
@@ -12,7 +12,7 @@
         <div v-if="librariesLoading" class="text-center q-pa-xs">
           <q-spinner-dots size="20px" color="primary" />
         </div>
-        <div v-else style="padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 12px;">
+        <div v-else style="padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 12px">
           <q-checkbox
             v-for="lib in filteredLibraries"
             :key="lib.id"
@@ -28,7 +28,7 @@
         <div v-if="makersLoading" class="text-center q-pa-xs">
           <q-spinner-dots size="20px" color="primary" />
         </div>
-        <div v-else style="padding: 0 16px 8px;">
+        <div v-else style="padding: 0 16px 8px">
           <q-select
             v-model="localFilter.makerIds"
             :options="makerFilterOptions"
@@ -45,7 +45,7 @@
             outlined
             placeholder="Select makers..."
             virtual-scroll-item-size="32"
-            style="width: 100%;"
+            style="width: 100%"
           />
         </div>
 
@@ -53,7 +53,7 @@
         <div v-if="genresLoading" class="text-center q-pa-xs">
           <q-spinner-dots size="20px" color="primary" />
         </div>
-        <div v-else style="padding: 0 16px 8px;">
+        <div v-else style="padding: 0 16px 8px">
           <q-select
             v-model="localFilter.genreIds"
             :options="genres"
@@ -70,7 +70,7 @@
             outlined
             placeholder="Select genres..."
             virtual-scroll-item-size="32"
-            style="width: 100%;"
+            style="width: 100%"
           />
         </div>
 
@@ -78,7 +78,7 @@
         <div v-if="tagsLoading" class="text-center q-pa-xs">
           <q-spinner-dots size="20px" color="primary" />
         </div>
-        <div v-else style="padding: 0 16px 8px;">
+        <div v-else style="padding: 0 16px 8px">
           <q-select
             v-model="localFilter.tagIds"
             :options="tagFilterOptions"
@@ -95,12 +95,12 @@
             outlined
             placeholder="Select tags..."
             virtual-scroll-item-size="32"
-            style="width: 100%;"
+            style="width: 100%"
           />
         </div>
 
         <div class="text-subtitle2 text-dark q-pb-sm q-pt-md q-pl-md">Scrape Status</div>
-        <div style="padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px;">
+        <div style="padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px">
           <q-radio v-model="localFilter.scraped" val="all" label="All" dense />
           <q-radio v-model="localFilter.scraped" val="yes" label="Scraped" dense />
           <q-radio v-model="localFilter.scraped" val="no" label="Not scraped" dense />
@@ -116,155 +116,170 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import api from '../composables/useApi'
+import { ref, computed, watch } from 'vue';
+import api from '../composables/useApi';
 
 interface FilterState {
-  libraryIds: number[]
-  makerIds: number[]
-  genreIds: number[]
-  tagIds: number[]
-  scraped: 'all' | 'yes' | 'no'
+  libraryIds: number[];
+  makerIds: number[];
+  genreIds: number[];
+  tagIds: number[];
+  scraped: 'all' | 'yes' | 'no';
 }
 
 const props = defineProps<{
-  modelValue: boolean
-  filter: FilterState
-}>()
+  modelValue: boolean;
+  filter: FilterState;
+}>();
 
 const emit = defineEmits<{
-  'update:modelValue': [val: boolean]
-  'apply': [filter: FilterState]
-}>()
+  'update:modelValue': [val: boolean];
+  apply: [filter: FilterState];
+}>();
 
 const show = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
-})
+  set: (val) => emit('update:modelValue', val),
+});
 
-const localFilter = ref<FilterState>({ libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'yes' })
+const localFilter = ref<FilterState>({
+  libraryIds: [],
+  makerIds: [],
+  genreIds: [],
+  tagIds: [],
+  scraped: 'yes',
+});
 
-const libraries = ref<{ id: number; name: string; path: string }[]>([])
-const makers = ref<{ id: number; name: string }[]>([])
-const genres = ref<{ id: number; name: string }[]>([])
-const tags = ref<{ id: number; name: string }[]>([])
+const libraries = ref<{ id: number; name: string; path: string }[]>([]);
+const makers = ref<{ id: number; name: string }[]>([]);
+const genres = ref<{ id: number; name: string }[]>([]);
+const tags = ref<{ id: number; name: string }[]>([]);
 
-const librariesLoading = ref(false)
-const makersLoading = ref(false)
-const genresLoading = ref(false)
-const tagsLoading = ref(false)
+const librariesLoading = ref(false);
+const makersLoading = ref(false);
+const genresLoading = ref(false);
+const tagsLoading = ref(false);
 
-const librarySearch = ref('')
-const makerFilterOptions = ref<{ id: number; name: string }[]>([])
-const tagFilterOptions = ref<{ id: number; name: string }[]>([])
+const librarySearch = ref('');
+const makerFilterOptions = ref<{ id: number; name: string }[]>([]);
+const tagFilterOptions = ref<{ id: number; name: string }[]>([]);
 
 const filteredLibraries = computed(() => {
-  if (!librarySearch.value) return libraries.value
-  const q = librarySearch.value.toLowerCase()
-  return libraries.value.filter(l => l.name.toLowerCase().includes(q))
-})
+  if (!librarySearch.value) return libraries.value;
+  const q = librarySearch.value.toLowerCase();
+  return libraries.value.filter((l) => l.name.toLowerCase().includes(q));
+});
 
 const onMakerFilter = (val: string, update: (fn: () => void) => void) => {
   update(() => {
     if (!val) {
-      makerFilterOptions.value = makers.value
+      makerFilterOptions.value = makers.value;
     } else {
-      const needle = val.toLowerCase()
-      makerFilterOptions.value = makers.value.filter(m => m.name.toLowerCase().includes(needle))
+      const needle = val.toLowerCase();
+      makerFilterOptions.value = makers.value.filter((m) => m.name.toLowerCase().includes(needle));
     }
-  })
-}
+  });
+};
 
 const onGenreFilter = (val: string, update: (fn: () => void) => void) => {
   update(() => {
-    if (!val) return
-    const needle = val.toLowerCase()
-    return genres.value.filter(g => g.name.toLowerCase().includes(needle))
-  })
-}
+    if (!val) return;
+    const needle = val.toLowerCase();
+    return genres.value.filter((g) => g.name.toLowerCase().includes(needle));
+  });
+};
 
 const onTagFilter = (val: string, update: (fn: () => void) => void) => {
   update(() => {
     if (!val) {
-      tagFilterOptions.value = tags.value
+      tagFilterOptions.value = tags.value;
     } else {
-      const needle = val.toLowerCase()
-      tagFilterOptions.value = tags.value.filter(t => t.name.toLowerCase().includes(needle))
+      const needle = val.toLowerCase();
+      tagFilterOptions.value = tags.value.filter((t) => t.name.toLowerCase().includes(needle));
     }
-  })
-}
+  });
+};
 
 const loadLibraries = async () => {
-  if (libraries.value.length > 0) return
-  librariesLoading.value = true
+  if (libraries.value.length > 0) return;
+  librariesLoading.value = true;
   try {
-    const res = await api.get('/libraries')
-    libraries.value = res.data
+    const res = await api.get('/libraries');
+    libraries.value = res.data;
   } finally {
-    librariesLoading.value = false
+    librariesLoading.value = false;
   }
-}
+};
 
 const loadMakers = async () => {
-  if (makers.value.length > 0) return
-  makersLoading.value = true
+  if (makers.value.length > 0) return;
+  makersLoading.value = true;
   try {
-    const res = await api.get('/games/makers')
-    makers.value = res.data
-    makerFilterOptions.value = res.data
+    const res = await api.get('/games/makers');
+    makers.value = res.data;
+    makerFilterOptions.value = res.data;
   } finally {
-    makersLoading.value = false
+    makersLoading.value = false;
   }
-}
+};
 
 const loadGenres = async () => {
-  if (genres.value.length > 0) return
-  genresLoading.value = true
+  if (genres.value.length > 0) return;
+  genresLoading.value = true;
   try {
-    const res = await api.get('/games/genres')
-    genres.value = res.data
+    const res = await api.get('/games/genres');
+    genres.value = res.data;
   } finally {
-    genresLoading.value = false
+    genresLoading.value = false;
   }
-}
+};
 
 const loadTags = async () => {
-  if (tags.value.length > 0) return
-  tagsLoading.value = true
+  if (tags.value.length > 0) return;
+  tagsLoading.value = true;
   try {
-    const res = await api.get('/games/tags')
-    tags.value = res.data
-    tagFilterOptions.value = res.data
+    const res = await api.get('/games/tags');
+    tags.value = res.data;
+    tagFilterOptions.value = res.data;
   } finally {
-    tagsLoading.value = false
+    tagsLoading.value = false;
   }
-}
+};
 
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    localFilter.value = {
-      libraryIds: [...props.filter.libraryIds],
-      makerIds: [...props.filter.makerIds],
-      genreIds: [...props.filter.genreIds],
-      tagIds: [...props.filter.tagIds],
-      scraped: props.filter.scraped,
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (val) {
+      localFilter.value = {
+        libraryIds: [...props.filter.libraryIds],
+        makerIds: [...props.filter.makerIds],
+        genreIds: [...props.filter.genreIds],
+        tagIds: [...props.filter.tagIds],
+        scraped: props.filter.scraped,
+      };
+      librarySearch.value = '';
+      makerFilterOptions.value = makers.value;
+      tagFilterOptions.value = tags.value;
+      void loadLibraries();
+      void loadMakers();
+      void loadGenres();
+      void loadTags();
     }
-    librarySearch.value = ''
-    makerFilterOptions.value = makers.value
-    tagFilterOptions.value = tags.value
-    void loadLibraries()
-    void loadMakers()
-    void loadGenres()
-    void loadTags()
-  }
-})
+  },
+);
 
 const resetFilter = () => {
-  localFilter.value = { libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'yes' }
-}
+  localFilter.value = { libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'yes' };
+};
 
 const applyFilter = () => {
-  emit('apply', { ...localFilter.value, libraryIds: [...localFilter.value.libraryIds], makerIds: [...localFilter.value.makerIds], genreIds: [...localFilter.value.genreIds], tagIds: [...localFilter.value.tagIds] })
-  show.value = false
-}
+  emit('apply', {
+    ...localFilter.value,
+    libraryIds: [...localFilter.value.libraryIds],
+    makerIds: [...localFilter.value.makerIds],
+    genreIds: [...localFilter.value.genreIds],
+    tagIds: [...localFilter.value.tagIds],
+  });
+  show.value = false;
+};
 </script>

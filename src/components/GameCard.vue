@@ -9,13 +9,21 @@
         v-if="game.cover_path"
         v-lazy-img="coverSrc"
         class="game-cover__img"
-        @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+        @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
       />
-      <div v-if="!game.cover_path" class="game-cover__placeholder flex flex-center bg-grey-4 text-grey-6">
+      <div
+        v-if="!game.cover_path"
+        class="game-cover__placeholder flex flex-center bg-grey-4 text-grey-6"
+      >
         <q-icon name="videogame_asset" size="48px" />
       </div>
       <div v-if="selectable && selected" class="absolute-top-left q-pa-xs">
         <q-icon name="check_circle" color="primary" size="24px" />
+      </div>
+      <div v-if="duplicate" class="absolute-top-right q-pa-xs" style="z-index: 1">
+        <q-icon name="content_copy" color="warning" size="18px">
+          <q-tooltip>与其他游戏共享来源</q-tooltip>
+        </q-icon>
       </div>
       <div class="game-cover__title">
         <div class="text-subtitle2 ellipsis game-cover__name">{{ game.name }}</div>
@@ -25,52 +33,59 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from 'vue';
 
 interface Game {
-  id: number
-  name: string
-  cover_path: string | null
-  library_name: string
-  library_path: string
-  sub_path: string
+  id: number;
+  name: string;
+  cover_path: string | null;
+  library_name: string;
+  library_path: string;
+  sub_path: string;
 }
 
-const props = withDefaults(defineProps<{
-  game: Game
-  selectable?: boolean
-  selected?: boolean
-}>(), {
-  selectable: false,
-  selected: false,
-})
+const props = withDefaults(
+  defineProps<{
+    game: Game;
+    selectable?: boolean;
+    selected?: boolean;
+    duplicate?: boolean;
+  }>(),
+  {
+    selectable: false,
+    selected: false,
+    duplicate: false,
+  },
+);
 
 const emit = defineEmits<{
-  click: []
-  select: [e: MouseEvent]
-}>()
+  click: [];
+  select: [e: MouseEvent];
+}>();
 
 const coverSrc = computed(() => {
   if (props.game.cover_path) {
-    return `/covers/${props.game.cover_path}`
+    return `/covers/${props.game.cover_path}`;
   }
-  return ''
-})
+  return '';
+});
 
 const handleClick = (e: MouseEvent) => {
   if (props.selectable) {
-    emit('select', e)
+    emit('select', e);
   } else {
-    emit('click')
+    emit('click');
   }
-}
+};
 </script>
 
 <style scoped>
 .game-card {
   position: relative;
   user-select: none;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 .game-card:hover {
   transform: translateY(-2px);
@@ -110,5 +125,15 @@ const handleClick = (e: MouseEvent) => {
   right: 0;
   padding: 4px 8px;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+}
+</style>
+
+<style>
+body.body--dark .game-cover {
+  background: #2a2a2a;
+}
+body.body--dark .game-cover__placeholder {
+  background: #2a2a2a !important;
+  color: rgba(255, 255, 255, 0.5) !important;
 }
 </style>

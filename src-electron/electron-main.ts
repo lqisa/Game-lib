@@ -1,13 +1,10 @@
-import { BrowserWindow, app, ipcMain, dialog, shell } from "electron";
-import path from "node:path";
-import os from "node:os";
-import fs from "node:fs";
-import type http from "node:http";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import {
-  registerQuasarRuntime,
-  resolveElectronAssetsPath
-} from "#q-app/electron/main";
+import { BrowserWindow, app, ipcMain, dialog, shell } from 'electron';
+import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs';
+import type http from 'node:http';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { registerQuasarRuntime, resolveElectronAssetsPath } from '#q-app/electron/main';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const platform = process.platform || os.platform();
@@ -37,13 +34,13 @@ async function startServer(): Promise<number> {
 
   return new Promise((resolve, reject) => {
     const tryListen = (port: number) => {
-      const server = expressApp.listen(port, "127.0.0.1", () => {
+      const server = expressApp.listen(port, '127.0.0.1', () => {
         currentServer = server;
         console.log(` * Express server running on http://127.0.0.1:${port}`);
         resolve(port);
       });
-      server.on("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE" && port === EXPRESS_PORT) {
+      server.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE' && port === EXPRESS_PORT) {
           console.log(` * Port ${port} in use, trying ${port + 1}...`);
           tryListen(port + 1);
         } else {
@@ -66,13 +63,13 @@ async function restartServer(): Promise<void> {
 
 async function createWindow() {
   const mainWindow = new BrowserWindow({
-    icon: resolveElectronAssetsPath("icons/icon.png"),
+    icon: resolveElectronAssetsPath('icons/icon.png'),
     width: 1200,
     height: 800,
     useContentSize: true,
     webPreferences: {
       contextIsolation: true,
-      preload: path.join(import.meta.dirname, "electron-preload.cjs"),
+      preload: path.join(import.meta.dirname, 'electron-preload.cjs'),
     },
   });
 
@@ -90,21 +87,21 @@ async function createWindow() {
 void app.whenReady().then(async () => {
   await registerQuasarRuntime();
 
-  const userDataDir = app.getPath('userData')
-  process.env.GAME_LIB_DATA_DIR = userDataDir
+  const userDataDir = app.getPath('userData');
+  process.env.GAME_LIB_DATA_DIR = userDataDir;
 
   ipcMain.handle('dialog:openDirectory', async (_event, title: string) => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory'],
-      title: title || 'Select Directory'
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths[0]
-  })
+      title: title || 'Select Directory',
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
 
   ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
-    await shell.openPath(targetPath)
-  })
+    await shell.openPath(targetPath);
+  });
 
   await startServer();
 
@@ -123,15 +120,15 @@ void app.whenReady().then(async () => {
 
   void createWindow();
 
-  app.on("activate", () => {
+  app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       void createWindow();
     }
   });
 });
 
-app.on("window-all-closed", () => {
-  if (platform !== "darwin") {
+app.on('window-all-closed', () => {
+  if (platform !== 'darwin') {
     app.quit();
   }
 });
