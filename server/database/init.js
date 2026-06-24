@@ -88,6 +88,7 @@ const TABLE_DDL = {
       table.string('source_type').notNullable();
       table.string('source_id').notNullable();
       table.text('source_url');
+      table.text('name');
       table.text('raw_data');
       table.unique(['game_id', 'source_type', 'source_id']);
       table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
@@ -158,6 +159,19 @@ const initDatabase = async () => {
     );
     await knex('setting').insert({ key: 'migration_v2', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v2 done.');
+  }
+
+  const v3 = await knex('setting').where({ key: 'migration_v3' }).first();
+  if (!v3) {
+    console.log(' * Running migration v3: add name column to game_source...');
+    const hasName = await knex.raw("PRAGMA table_info('game_source')").then(
+      (r) => r.some((col) => col.name === 'name')
+    );
+    if (!hasName) {
+      await knex.raw('ALTER TABLE game_source ADD COLUMN name TEXT');
+    }
+    await knex('setting').insert({ key: 'migration_v3', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v3 done.');
   }
 };
 

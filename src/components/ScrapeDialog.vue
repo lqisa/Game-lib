@@ -368,8 +368,9 @@ const onDialogShow = async () => {
   detail.value = null;
   searched.value = false;
 
+  const searchName = props.gameName;
   const rawKeyword =
-    props.defaultKeyword || props.gameName.match(/RJ\d+/)?.[0] || props.gameName;
+    props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
   keyword.value = getCleanedName(rawKeyword);
 
   const validSources: SourceType[] = ['dlsite', 'bangumi', 'vndb'];

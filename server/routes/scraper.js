@@ -217,10 +217,11 @@ const adoptOne = async (data, trx) => {
       source_type: sourceType,
       source_id: sourceId,
       source_url: sourceUrl || null,
+      name: name || null,
       raw_data: null,
     })
     .onConflict(['game_id', 'source_type', 'source_id'])
-    .merge(['source_url', 'raw_data']);
+    .merge(['source_url', 'name', 'raw_data']);
 
   if (Array.isArray(makers) && makers.length > 0) {
     const makerIds = await insertMakersTrx(makers, d);

@@ -42,7 +42,7 @@ const getGameDetail = async (id) => {
 
   const sources = await db('game_source')
     .where('game_id', id)
-    .select('id', 'source_type', 'source_id', 'source_url');
+    .select('id', 'source_type', 'source_id', 'source_url', 'name');
 
   const library = await db('library').where({ id: game.library_id }).first();
 
@@ -136,6 +136,23 @@ const getGames = async ({
   } else {
     games = await query.groupBy('game.id');
   }
+
+  if (games.length > 0) {
+    const gameIds = games.map((g) => g.id);
+    const sourceNames = await db('game_source')
+      .whereIn('game_id', gameIds)
+      .whereNotNull('name')
+      .orderBy('id')
+      .select('game_id', 'name');
+    const nameMap = {};
+    for (const s of sourceNames) {
+      if (!nameMap[s.game_id]) nameMap[s.game_id] = s.name;
+    }
+    for (const g of games) {
+      g.sourceName = nameMap[g.id] || null;
+    }
+  }
+
   return { games, total: total.count, page, pageSize };
 };
 

@@ -5,6 +5,9 @@
       <q-btn flat round icon="refresh" class="q-mb-md" @click="showScrapeDialog = true">
         <q-tooltip>Re-scrape</q-tooltip>
       </q-btn>
+      <q-btn flat round icon="delete" color="negative" class="q-mb-md" @click="confirmDelete = true">
+        <q-tooltip>Delete</q-tooltip>
+      </q-btn>
 
       <div class="row q-col-gutter-md">
         <div class="col-12 col-sm-4">
@@ -68,7 +71,11 @@
         </div>
 
         <div class="col-12 col-sm-8">
-          <div class="text-h5 q-mb-sm">{{ game.name }}</div>
+          <div class="text-h5 q-mb-sm">{{ displayName }}</div>
+          <div v-if="displayName !== game.name" class="text-caption text-grey">
+            <q-icon name="folder" size="xs" class="q-mr-xs" />
+            {{ game.name }}
+          </div>
 
           <div v-if="game.makers?.length" class="q-mb-sm">
             <span class="text-grey">Makers: </span>
@@ -126,6 +133,20 @@
       <q-spinner-dots size="40px" />
     </div>
 
+    <q-dialog v-model="confirmDelete" persistent>
+      <q-card>
+        <q-card-section class="text-h6">Confirm Delete</q-card-section>
+        <q-card-section>
+          Are you sure you want to delete "{{ displayName }}"?
+          <div class="text-caption text-grey q-mt-xs">This will also remove all associated sources, makers, genres, and tags.</div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" color="grey" v-close-popup />
+          <q-btn flat label="Delete" color="negative" @click="doDelete" :loading="deleting" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <ScrapeDialog
       v-model="showScrapeDialog"
       :game-name="game?.name || ''"
@@ -140,7 +161,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import api from '../composables/useApi';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
 
@@ -153,7 +174,7 @@ interface GameDetail {
   makers: { id: number; name: string }[];
   genres: { id: number; name: string }[];
   tags: { id: number; name: string }[];
-  sources: { id: number; source_type: string; source_id: string; source_url: string | null }[];
+  sources: { id: number; source_type: string; source_id: string; source_url: string | null; name: string | null }[];
   library: { id: number; name: string; path: string } | null;
   duplicateSources: {
     sourceType: string;
@@ -163,10 +184,18 @@ interface GameDetail {
 }
 
 const route = useRoute();
+const router = useRouter();
 const game = ref<GameDetail | null>(null);
 const showScrapeDialog = ref(false);
+const confirmDelete = ref(false);
+const deleting = ref(false);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
+
+const displayName = computed(() => {
+  const source = game.value?.sources?.find((s) => s.name);
+  return source?.name || game.value?.name || '';
+});
 
 const sourceColor = (source: string) => {
   if (source === 'dlsite') return 'deep-purple';
@@ -228,6 +257,20 @@ const onReScrape = async (data: AdoptData) => {
     description: data.detail.description,
   });
   await loadGame();
+};
+
+const doDelete = async () => {
+  if (!game.value) return;
+  deleting.value = true;
+  try {
+    await api.delete(`/games/${game.value.id}`);
+    confirmDelete.value = false;
+    void router.replace('/');
+  } catch {
+    // handled by error interceptor
+  } finally {
+    deleting.value = false;
+  }
 };
 
 onMounted(() => {

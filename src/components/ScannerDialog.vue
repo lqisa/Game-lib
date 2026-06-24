@@ -223,7 +223,7 @@
                     color="primary"
                     label="Reselect"
                     flat
-                    :disable="row.status === 'searching'"
+                    :disable="row.status !== 'searched' && row.status !== 'adopted'"
                     @click="openScrapeDialog(row)"
                     style="min-width: 56px"
                   />
@@ -256,10 +256,11 @@
                     style="min-width: 64px"
                   />
                   <q-btn
-                    size="sm"
-                    color="grey"
+                    size="xs"
+                    color="grey-7"
                     icon="block"
                     flat
+                    round
                     class="q-ml-xs"
                     @click="blacklistRow = row"
                   >
@@ -552,7 +553,6 @@ const loadUnscraped = async () => {
 
   for (const row of scanResults.value) {
     const { keyword, segments } = splitKeyword(row.name);
-    row.searchKeyword = keyword;
     segmentsCache.set(row.name, [keyword, ...segments.filter((s) => s !== keyword)]);
   }
 
@@ -791,7 +791,7 @@ const batchScrape = async () => {
             try {
               const cacheRes = await api.post('/cache/search', {
                 key: autoKey,
-                source: hitSource,
+                source: hitSource === 'auto' ? 'dlsite' : hitSource,
                 keyword,
                 results,
               });
@@ -895,7 +895,7 @@ const submitAdopted = async () => {
     if (adoptedRows.length > 0) {
       const games: SubmitGame[] = adoptedRows.map((row) => {
         const d = row.adoptData!;
-        const source = d.source || 'dlsite';
+        const source: SourceType = (d.source && d.source !== ('auto' as string)) ? d.source : 'dlsite';
         return {
           gameId: row.gameId,
           sourceType: source,
@@ -1008,7 +1008,7 @@ watch(modelValue, (val) => {
 <style scoped>
 .scan-header {
   display: grid;
-  grid-template-columns: 180px 1fr 70px 150px;
+  grid-template-columns: 180px 1fr 70px 200px;
   gap: 0 12px;
   align-items: center;
   height: 36px;
@@ -1020,7 +1020,7 @@ watch(modelValue, (val) => {
   z-index: 1;
 }
 .scan-header--compact {
-  grid-template-columns: 40px 1fr 60px 140px;
+  grid-template-columns: 40px 1fr 60px 180px;
   gap: 0 8px;
 }
 .scan-header__cover {
@@ -1048,7 +1048,7 @@ watch(modelValue, (val) => {
 
 .scan-row {
   display: grid;
-  grid-template-columns: 180px 1fr 70px 150px;
+  grid-template-columns: 180px 1fr 70px 200px;
   gap: 0 12px;
   align-items: center;
   height: 260px;
@@ -1103,7 +1103,7 @@ watch(modelValue, (val) => {
   align-items: center;
 }
 .scan-row--compact {
-  grid-template-columns: 40px 1fr 60px 140px;
+  grid-template-columns: 40px 1fr 60px 180px;
   gap: 0 8px;
   height: 48px;
   padding: 0;

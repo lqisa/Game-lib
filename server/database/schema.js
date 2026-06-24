@@ -60,6 +60,7 @@ const createSchema = () =>
       table.string('source_type').notNullable();
       table.string('source_id').notNullable();
       table.text('source_url');
+      table.text('name');
       table.text('raw_data');
       table.unique(['game_id', 'source_type', 'source_id']);
       table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');

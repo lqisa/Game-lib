@@ -105,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../composables/useApi';
 import GameCard from '../components/GameCard.vue';
@@ -362,8 +362,21 @@ watch(sortBy, () => {
   void loadGames();
 });
 
+const SCROLL_KEY = '__game_lib_scroll__';
+
+const restoreScroll = async () => {
+  const saved = sessionStorage.getItem(SCROLL_KEY);
+  if (!saved) return;
+  sessionStorage.removeItem(SCROLL_KEY);
+  const top = Number(saved);
+  if (!top) return;
+  await nextTick(() => {
+    window.scrollTo(0, top);
+  });
+};
+
 onMounted(() => {
-  void loadGames();
+  void loadGames().then(() => restoreScroll());
   window.addEventListener('keydown', onKeydown);
 });
 

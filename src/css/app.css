@@ -1,1 +1,26 @@
 /* app global css */
+
+/* Dark mode scrollbar */
+html.body--dark::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.body--dark::-webkit-scrollbar-track {
+  background: #1d1d1d;
+}
+
+html.body--dark::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+html.body--dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Firefox */
+html.body--dark {
+  scrollbar-color: rgba(255, 255, 255, 0.2) #1d1d1d;
+  scrollbar-width: thin;
+}

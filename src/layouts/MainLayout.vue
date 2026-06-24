@@ -49,12 +49,16 @@ const $q = useQuasar();
 const drawer = ref(true);
 
 const stored = localStorage.getItem('dark');
-if (stored !== null) $q.dark.set(stored === 'true');
+if (stored !== null) {
+  $q.dark.set(stored === 'true');
+  document.documentElement.classList.toggle('body--dark', stored === 'true');
+}
 
 const dark = computed({
   get: () => $q.dark.isActive,
   set: (val: boolean) => {
     $q.dark.set(val);
+    document.documentElement.classList.toggle('body--dark', val);
     localStorage.setItem('dark', String(val));
   },
 });

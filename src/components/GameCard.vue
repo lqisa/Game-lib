@@ -26,7 +26,16 @@
         </q-icon>
       </div>
       <div class="game-cover__title">
-        <div class="text-subtitle2 ellipsis game-cover__name">{{ game.name }}</div>
+        <div class="text-subtitle2 ellipsis game-cover__name">
+          {{ game.sourceName || game.name }}
+          <q-tooltip
+            v-if="game.sourceName"
+            anchor="bottom middle"
+            self="top middle"
+          >
+            {{ game.name }}
+          </q-tooltip>
+        </div>
       </div>
     </div>
   </q-card>
@@ -42,6 +51,7 @@ interface Game {
   library_name: string;
   library_path: string;
   sub_path: string;
+  sourceName?: string | null;
 }
 
 const props = withDefaults(
