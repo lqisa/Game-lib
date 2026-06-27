@@ -26,7 +26,7 @@
           </div>
 
           <div class="text-caption text-grey q-mt-sm">
-            Path: {{ game.library?.path }}\{{ game.sub_path }}
+            Path: {{ game.library ? game.library.path + '\\' + game.sub_path : game.sub_path }}
             <q-btn
               v-if="hasElectronAPI"
               flat
@@ -204,9 +204,17 @@ const sourceColor = (source: string) => {
   return 'grey';
 };
 
+const isAbsolute = (p: string) => /^[a-zA-Z]:/.test(p) || p.startsWith('\\\\');
+
 const openDir = async () => {
-  if (!game.value?.library?.path || !window.electronAPI) return;
-  const fullPath = game.value.library.path + '\\' + game.value.sub_path;
+  if (!window.electronAPI) return;
+  if (!game.value?.sub_path) return;
+  const fullPath = isAbsolute(game.value.sub_path)
+    ? game.value.sub_path
+    : game.value.library?.path
+      ? game.value.library.path + '\\' + game.value.sub_path
+      : null;
+  if (!fullPath) return;
   await window.electronAPI.openPath(fullPath);
 };
 

@@ -49,7 +49,24 @@
       </template>
     </div>
 
-    <div ref="gridContainer" class="q-pa-md" style="position: relative">
+    <div
+      ref="gridContainer"
+      class="q-pa-md"
+      style="position: relative"
+      @dragenter.prevent="onDragEnter"
+      @dragover.prevent="onDragOver"
+      @dragleave.prevent="onDragLeave"
+      @drop.prevent="onDrop"
+    >
+      <div
+        v-if="dragOver"
+        class="drop-overlay flex flex-center"
+      >
+        <div class="text-center">
+          <q-icon name="cloud_upload" size="64px" color="primary" />
+          <div class="text-h6 text-primary q-mt-sm">Drop folder to search</div>
+        </div>
+      </div>
       <div
         class="row q-col-gutter-md"
         @mousedown="onGridMouseDown"
@@ -101,15 +118,23 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <ScrapeDialog
+      v-model="showDropScrape"
+      :game-name="dropFolderName"
+      @adopted="onDropAdopt"
+    />
   </q-page>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
+
 import api from '../composables/useApi';
 import GameCard from '../components/GameCard.vue';
 import ScannerDialog from '../components/ScannerDialog.vue';
+import ScrapeDialog from '../components/ScrapeDialog.vue';
 import FilterDialog from '../components/FilterDialog.vue';
 
 interface GameItem {
@@ -124,6 +149,7 @@ interface GameItem {
 
 interface FilterState {
   libraryIds: number[];
+  noLibrary: boolean;
   makerIds: number[];
   genreIds: number[];
   tagIds: number[];
@@ -136,6 +162,11 @@ const loading = ref(false);
 const keyword = ref('');
 const total = ref(0);
 const showScanner = ref(false);
+const showDropScrape = ref(false);
+const dropFolderName = ref('');
+const dropFolderPath = ref('');
+const dragOver = ref(false);
+let dragCounter = 0;
 const duplicateGameIds = ref<Set<number>>(new Set());
 
 const loadDuplicates = async () => {
@@ -156,6 +187,7 @@ const loadDuplicates = async () => {
 const showFilter = ref(false);
 const currentFilter = ref<FilterState>({
   libraryIds: [],
+  noLibrary: false,
   makerIds: [],
   genreIds: [],
   tagIds: [],
@@ -179,7 +211,7 @@ const toggleSortOrder = () => {
 const activeFilterCount = computed(() => {
   const f = currentFilter.value;
   let count = 0;
-  if (f.libraryIds.length > 0) count++;
+  if (f.libraryIds.length > 0 || f.noLibrary) count++;
   if (f.makerIds.length > 0) count++;
   if (f.genreIds.length > 0) count++;
   if (f.tagIds.length > 0) count++;
@@ -335,6 +367,7 @@ const loadGames = async () => {
     const params: Record<string, string | number> = { pageSize: 0 };
     if (keyword.value) params.keyword = keyword.value;
     if (f.libraryIds.length > 0) params.libraryIds = f.libraryIds.join(',');
+    if (f.noLibrary) params.noLibrary = 'true';
     if (f.makerIds.length > 0) params.makerIds = f.makerIds.join(',');
     if (f.genreIds.length > 0) params.genreIds = f.genreIds.join(',');
     if (f.tagIds.length > 0) params.tagIds = f.tagIds.join(',');
@@ -364,15 +397,121 @@ watch(sortBy, () => {
 
 const SCROLL_KEY = '__game_lib_scroll__';
 
-const restoreScroll = async () => {
+const restoreScroll = () => {
   const saved = sessionStorage.getItem(SCROLL_KEY);
   if (!saved) return;
   sessionStorage.removeItem(SCROLL_KEY);
   const top = Number(saved);
   if (!top) return;
-  await nextTick(() => {
+  void nextTick(() => {
     window.scrollTo(0, top);
   });
+};
+
+const getSourceUrl = (source: string, sourceId: string): string => {
+  if (source === 'dlsite')
+    return `https://www.dlsite.com/maniax/work/=/product_id/RJ${sourceId}.html`;
+  if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
+  if (source === 'vndb') return `https://vndb.org/${sourceId}`;
+  return '';
+};
+
+const onDragEnter = () => {
+  dragCounter++;
+  dragOver.value = true;
+};
+
+const onDragOver = () => {
+  dragOver.value = true;
+};
+
+const onDragLeave = () => {
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    dragOver.value = false;
+  }
+};
+
+const onDrop = (e: DragEvent) => {
+  dragOver.value = false;
+  dragCounter = 0;
+  const items = e.dataTransfer?.items;
+  if (!items || items.length === 0) return;
+  const firstItem = items[0];
+  if (!firstItem) return;
+  const entry = firstItem.webkitGetAsEntry();
+  if (!entry?.isDirectory) return;
+  const file = e.dataTransfer?.files[0];
+  if (!file) return;
+  const fullPath = window.electronAPI?.getFilePath(file) || entry.name;
+  dropFolderPath.value = fullPath;
+  dropFolderName.value = fullPath.split(/[/\\]/).pop() || fullPath;
+  showDropScrape.value = true;
+};
+
+interface DropAdoptData {
+  source: string;
+  sourceId: string;
+  name: string;
+  makerName: string;
+  coverUrl: string;
+  detail: {
+    title: string;
+    coverURL: string;
+    makers: string[];
+    genres: string[];
+    tags: string[];
+    description: string;
+  };
+}
+
+const normalizePath = (p: string) => p.replace(/\//g, '\\').toLowerCase().replace(/\\+$/, '');
+
+const onDropAdopt = async (data: DropAdoptData) => {
+  try {
+    const libsRes = await api.get('/libraries');
+    const libs = libsRes.data || [];
+
+    const dropNorm = normalizePath(dropFolderPath.value);
+    const matchedLib = libs.find((lib: { id: number; name: string; path: string }) => {
+      const libNorm = normalizePath(lib.path);
+      return dropNorm.startsWith(libNorm + '\\');
+    });
+
+    let libraryId: number | undefined;
+    let subPath: string;
+    if (matchedLib) {
+      libraryId = matchedLib.id;
+      const libPrefix = matchedLib.path.replace(/\//g, '\\').replace(/\\+$/, '');
+      subPath = dropFolderPath.value.replace(/\//g, '\\').substring(libPrefix.length + 1);
+    } else {
+      libraryId = undefined;
+      subPath = dropFolderPath.value;
+    }
+
+    const gameRes = await api.post('/games', {
+      name: dropFolderName.value,
+      sub_path: subPath,
+      ...(libraryId && { library_id: libraryId }),
+    });
+    const gameId = gameRes.data.id;
+    await api.post('/scraper/adopt', {
+      gameId,
+      sourceType: data.source,
+      sourceId: data.sourceId,
+      sourceUrl: getSourceUrl(data.source, data.sourceId),
+      name: data.detail.title,
+      coverUrl: data.detail.coverURL,
+      makers: data.detail.makers,
+      genres: data.detail.genres,
+      tags: data.detail.tags,
+      description: data.detail.description,
+    });
+    await loadGames();
+  } catch {
+    // handled by error interceptor
+  }
 };
 
 onMounted(() => {
@@ -399,6 +538,15 @@ onUnmounted(() => {
   background: rgba(25, 118, 210, 0.1);
   pointer-events: none;
   z-index: 1000;
+}
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  z-index: 1001;
+  border: 3px dashed #1976d2;
+  border-radius: 8px;
+  pointer-events: none;
 }
 </style>
 

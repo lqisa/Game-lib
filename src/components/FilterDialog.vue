@@ -21,6 +21,13 @@
             :label="lib.name"
             dense
           />
+          <q-checkbox
+            v-model="localFilter.noLibrary"
+            :true-value="true"
+            :false-value="false"
+            label="Dropped"
+            dense
+          />
           <div v-if="filteredLibraries.length === 0" class="text-caption text-grey">No match</div>
         </div>
 
@@ -121,6 +128,7 @@ import api from '../composables/useApi';
 
 interface FilterState {
   libraryIds: number[];
+  noLibrary: boolean;
   makerIds: number[];
   genreIds: number[];
   tagIds: number[];
@@ -144,6 +152,7 @@ const show = computed({
 
 const localFilter = ref<FilterState>({
   libraryIds: [],
+  noLibrary: false,
   makerIds: [],
   genreIds: [],
   tagIds: [],
@@ -252,6 +261,7 @@ watch(
     if (val) {
       localFilter.value = {
         libraryIds: [...props.filter.libraryIds],
+        noLibrary: props.filter.noLibrary,
         makerIds: [...props.filter.makerIds],
         genreIds: [...props.filter.genreIds],
         tagIds: [...props.filter.tagIds],
@@ -269,7 +279,7 @@ watch(
 );
 
 const resetFilter = () => {
-  localFilter.value = { libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'yes' };
+  localFilter.value = { libraryIds: [], noLibrary: false, makerIds: [], genreIds: [], tagIds: [], scraped: 'yes' };
 };
 
 const applyFilter = () => {

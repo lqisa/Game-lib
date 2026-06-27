@@ -224,7 +224,7 @@ interface AdoptData {
 const props = defineProps<{
   modelValue: boolean;
   gameName: string;
-  gameId: number;
+  gameId?: number;
   defaultKeyword?: string | undefined;
   defaultSource?: SourceType | undefined;
   initialResults?: SearchResult[] | null;

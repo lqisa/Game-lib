@@ -173,6 +173,31 @@ const initDatabase = async () => {
     await knex('setting').insert({ key: 'migration_v3', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v3 done.');
   }
+
+  const v4 = await knex('setting').where({ key: 'migration_v4' }).first();
+  if (!v4) {
+    console.log(' * Running migration v4: make library_id nullable in game...');
+    await knex.raw('PRAGMA foreign_keys = OFF');
+    await knex.raw(`
+      CREATE TABLE game_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        cover_path TEXT,
+        description TEXT,
+        library_id INTEGER,
+        sub_path TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (library_id) REFERENCES library(id) ON DELETE CASCADE
+      )
+    `);
+    await knex.raw('INSERT INTO game_new SELECT * FROM game');
+    await knex.raw('DROP TABLE game');
+    await knex.raw('ALTER TABLE game_new RENAME TO game');
+    await knex.raw('PRAGMA foreign_keys = ON');
+    await knex('setting').insert({ key: 'migration_v4', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v4 done.');
+  }
 };
 
 export { initDatabase };

@@ -27,7 +27,7 @@ const createSchema = () =>
       table.string('name').notNullable();
       table.text('cover_path');
       table.text('description');
-      table.integer('library_id').notNullable();
+      table.integer('library_id').nullable();
       table.string('sub_path').notNullable();
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());

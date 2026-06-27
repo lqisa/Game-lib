@@ -151,6 +151,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useQuasar } from 'quasar';
 import api from '../composables/useApi';
 
 interface Library {
@@ -176,6 +177,25 @@ const newBlacklistItem = ref('');
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
+const $q = useQuasar();
+
+const normalizePath = (p: string) => p.replace(/\//g, '\\').toLowerCase().replace(/\\+$/, '');
+
+const checkNestedLibrary = (newPath: string, excludeId?: number): { conflict: 'child' | 'parent'; lib: Library } | null => {
+  const newNorm = normalizePath(newPath);
+  for (const lib of libraries.value) {
+    if (excludeId && lib.id === excludeId) continue;
+    const libNorm = normalizePath(lib.path);
+    if (newNorm.startsWith(libNorm + '\\')) {
+      return { conflict: 'child', lib };
+    }
+    if (libNorm.startsWith(newNorm + '\\')) {
+      return { conflict: 'parent', lib };
+    }
+  }
+  return null;
+};
+
 const fetchLibraries = async () => {
   const res = await api.get('/libraries');
   libraries.value = res.data;
@@ -192,6 +212,16 @@ const fetchToken = async () => {
 
 const addLibrary = async () => {
   if (!newLibName.value || !newLibPath.value) return;
+  const nested = checkNestedLibrary(newLibPath.value);
+  if (nested) {
+    $q.notify({
+      type: 'negative',
+      message: nested.conflict === 'child'
+        ? `Path is a subdirectory of library "${nested.lib.name}"`
+        : `Path contains existing library "${nested.lib.name}"`,
+    });
+    return;
+  }
   await api.post('/libraries', { name: newLibName.value, path: newLibPath.value });
   newLibName.value = '';
   newLibPath.value = '';
@@ -208,6 +238,16 @@ const openEditDialog = (lib: Library) => {
 
 const saveEditLibrary = async () => {
   if (!editLibName.value || !editLibPath.value) return;
+  const nested = checkNestedLibrary(editLibPath.value, editLibId.value);
+  if (nested) {
+    $q.notify({
+      type: 'negative',
+      message: nested.conflict === 'child'
+        ? `Path is a subdirectory of library "${nested.lib.name}"`
+        : `Path contains existing library "${nested.lib.name}"`,
+    });
+    return;
+  }
   await api.put(`/libraries/${editLibId.value}`, {
     name: editLibName.value,
     path: editLibPath.value,

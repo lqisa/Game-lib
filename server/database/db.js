@@ -76,6 +76,7 @@ const getGames = async ({
   pageSize = 50,
   keyword = '',
   libraryIds,
+  noLibrary,
   makerIds,
   genreIds,
   tagIds,
@@ -96,8 +97,14 @@ const getGames = async ({
     query = query.where('game.name', 'like', `%${keyword}%`);
   }
 
-  if (libraryIds && libraryIds.length > 0) {
+  if (libraryIds && libraryIds.length > 0 && noLibrary) {
+    query = query.where(function () {
+      this.whereIn('game.library_id', libraryIds).orWhereNull('game.library_id');
+    });
+  } else if (libraryIds && libraryIds.length > 0) {
     query = query.whereIn('game.library_id', libraryIds);
+  } else if (noLibrary) {
+    query = query.whereNull('game.library_id');
   }
 
   if (makerIds && makerIds.length > 0) {

@@ -21,6 +21,7 @@ router.get('/', async (req, res, next) => {
       pageSize,
       keyword,
       libraryIds,
+      noLibrary,
       makerIds,
       genreIds,
       tagIds,
@@ -33,6 +34,7 @@ router.get('/', async (req, res, next) => {
       pageSize: pageSize !== undefined ? Number(pageSize) : 50,
       keyword: keyword || '',
       libraryIds: libraryIds ? String(libraryIds).split(',').map(Number) : undefined,
+      noLibrary: noLibrary === 'true',
       makerIds: makerIds ? String(makerIds).split(',').map(Number) : undefined,
       genreIds: genreIds ? String(genreIds).split(',').map(Number) : undefined,
       tagIds: tagIds ? String(tagIds).split(',').map(Number) : undefined,
@@ -182,8 +184,11 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { name, library_id, sub_path, cover_path, description } = req.body;
-    if (!name || !library_id || !sub_path) {
-      return res.status(400).send({ error: 'name, library_id, sub_path are required' });
+    if (!name || !sub_path) {
+      return res.status(400).send({ error: 'name and sub_path are required' });
+    }
+    if (!library_id && !/^[a-zA-Z]:|^\\/.test(sub_path)) {
+      return res.status(400).send({ error: 'sub_path must be absolute when library_id is not provided' });
     }
     const [id] = await db.insertGame({ name, library_id, sub_path, cover_path, description });
     const game = await db.getGameDetail(id);
