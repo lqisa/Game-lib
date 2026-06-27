@@ -410,7 +410,7 @@ const restoreScroll = () => {
 
 const getSourceUrl = (source: string, sourceId: string): string => {
   if (source === 'dlsite')
-    return `https://www.dlsite.com/maniax/work/=/product_id/RJ${sourceId}.html`;
+    return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
   return '';

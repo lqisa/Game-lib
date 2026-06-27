@@ -13,7 +13,7 @@ const searchDLSite = async (keyword) => {
   return items
     .map((item) => {
       const workno = item.workno || '';
-      const rjcode = workno.replace('RJ', '');
+      const rjcode = workno;
       let coverUrl = '';
       const img = item.image_main || item.image_thum || item.image_mini;
       if (img && typeof img === 'object') {
@@ -32,11 +32,18 @@ const searchDLSite = async (keyword) => {
         coverUrl,
       };
     })
-    .filter((r) => r.rjcode);
+    .filter((r) => r.rjcode && /^(RJ|VJ|BG|RE)\d+$/i.test(r.rjcode));
+};
+
+const normalizeDlsiteCode = (code) => {
+  const match = code.match(/^(RJ|VJ|BG|RE)(\d+)$/i);
+  if (match) return { prefix: match[1].toUpperCase(), num: match[2] };
+  return { prefix: 'RJ', num: code.replace(/^(RJ|VJ|BG|RE)/i, '') };
 };
 
 const fetchDLSiteDetail = async (rjcode) => {
-  const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html`;
+  const { prefix, num } = normalizeDlsiteCode(rjcode);
+  const url = `https://www.dlsite.com/maniax/work/=/product_id/${prefix}${num}.html`;
   const response = await retryGet(url, {
     headers: { cookie: 'locale=zh-cn' },
   });

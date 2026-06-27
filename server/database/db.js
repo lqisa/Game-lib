@@ -329,16 +329,26 @@ const getSearchCacheByKeywords = async (keywords) => {
 };
 
 const getDuplicateSources = async () => {
-  const rows = await db('game_source as gs')
+  const dupKeys = await db('game_source')
+    .select('source_type', 'source_id')
+    .groupBy('source_type', 'source_id')
+    .havingRaw('COUNT(*) > 1');
+
+  if (dupKeys.length === 0) return [];
+
+  let query = db('game_source as gs')
     .join('game as g', 'g.id', 'gs.game_id')
-    .select('gs.source_type', 'gs.source_id', 'gs.game_id', 'g.name as game_name')
-    .whereIn(db.raw('(gs.source_type, gs.source_id)'), function () {
-      this.select('source_type', 'source_id')
-        .from('game_source')
-        .groupBy('source_type', 'source_id')
-        .havingRaw('COUNT(*) > 1');
-    })
-    .orderBy('gs.source_type', 'gs.source_id');
+    .select('gs.source_type', 'gs.source_id', 'gs.game_id', 'g.name as game_name');
+
+  dupKeys.forEach((key, index) => {
+    if (index === 0) {
+      query = query.where({ 'gs.source_type': key.source_type, 'gs.source_id': key.source_id });
+    } else {
+      query = query.orWhere({ 'gs.source_type': key.source_type, 'gs.source_id': key.source_id });
+    }
+  });
+
+  const rows = await query.orderBy('gs.source_type', 'gs.source_id');
 
   const groups = {};
   for (const row of rows) {

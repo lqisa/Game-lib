@@ -190,21 +190,20 @@ const downloadCover = async (coverUrl, sourceType, sourceId) => {
   }
 };
 
-const adoptOne = async (data, trx) => {
+const adoptOne = async (data, trx, predownloadedCover) => {
   const {
     gameId,
     sourceType,
     sourceId,
     sourceUrl,
     name,
-    coverUrl,
     makers,
     genres,
     tags,
     description,
   } = data;
 
-  const coverPath = await downloadCover(coverUrl, sourceType, sourceId);
+  const coverPath = predownloadedCover !== undefined ? predownloadedCover : await downloadCover(data.coverUrl, sourceType, sourceId);
 
   const d = trx || db.knex;
   await d('game')
@@ -284,8 +283,9 @@ router.post('/adopt', async (req, res, next) => {
     if (!gameId || !sourceType || !sourceId) {
       return res.status(400).send({ error: 'gameId, sourceType, sourceId required' });
     }
+    const coverPath = await downloadCover(req.body.coverUrl, sourceType, sourceId);
     await db.knex.transaction(async (trx) => {
-      await adoptOne(req.body, trx);
+      await adoptOne(req.body, trx, coverPath);
     });
     const game = await db.getGameDetail(gameId);
     res.send(game);
@@ -323,21 +323,88 @@ router.post('/adopt/batch', async (req, res, next) => {
     if (!Array.isArray(games)) {
       return res.status(400).send({ error: 'games is required' });
     }
-    const limit = pLimit(CONCURRENCY);
-    const results = await Promise.all(
+
+    const COVER_CONCURRENCY = 10;
+    const coverLimit = pLimit(COVER_CONCURRENCY);
+
+    const coverResults = await Promise.all(
       games.map((game) =>
-        limit(async () => {
-          const { gameId, sourceType, sourceId } = game;
-          if (!gameId || !sourceType || !sourceId) {
-            return {
-              gameId: gameId || null,
-              success: false,
-              error: 'gameId, sourceType, sourceId required',
-            };
+        coverLimit(async () => {
+          if (!game.gameId || !game.sourceType || !game.sourceId) {
+            return { gameId: game.gameId || null, coverPath: null, error: 'gameId, sourceType, sourceId required' };
           }
           try {
+            const coverPath = await downloadCover(game.coverUrl, game.sourceType, game.sourceId);
+            return { gameId: game.gameId, coverPath, error: null };
+          } catch (err) {
+            return { gameId: game.gameId, coverPath: null, error: err.message };
+          }
+        }),
+      ),
+    );
+
+    const coverMap = new Map(coverResults.map((r) => [r.gameId, r]));
+
+    const DB_CONCURRENCY = 3;
+    const dbLimit = pLimit(DB_CONCURRENCY);
+
+    const results = await Promise.all(
+      games.map((game) =>
+        dbLimit(async () => {
+          const { gameId, sourceType, sourceId } = game;
+          const coverResult = coverMap.get(gameId);
+
+          if (!gameId || !sourceType || !sourceId) {
+            return { gameId: gameId || null, success: false, error: 'gameId, sourceType, sourceId required' };
+          }
+          if (coverResult?.error === 'gameId, sourceType, sourceId required') {
+            return { gameId, success: false, error: coverResult.error };
+          }
+
+          try {
             await db.knex.transaction(async (trx) => {
-              await adoptOne(game, trx);
+              const coverPath = coverResult?.coverPath || null;
+              const { sourceUrl, name, makers, genres, tags, description } = game;
+
+              await trx('game')
+                .where({ id: gameId })
+                .update({ description, cover_path: coverPath, updated_at: db.knex.fn.now() });
+
+              await trx('game_source')
+                .insert({
+                  game_id: gameId,
+                  source_type: sourceType,
+                  source_id: sourceId,
+                  source_url: sourceUrl || null,
+                  name: name || null,
+                  raw_data: null,
+                })
+                .onConflict(['game_id', 'source_type', 'source_id'])
+                .merge(['source_url', 'name', 'raw_data']);
+
+              if (Array.isArray(makers) && makers.length > 0) {
+                const makerIds = await insertMakersTrx(makers, trx);
+                await trx('game_maker').where({ game_id: gameId }).del();
+                if (makerIds.length > 0) {
+                  await trx('game_maker').insert(makerIds.map((m) => ({ game_id: gameId, maker_id: m })));
+                }
+              }
+
+              if (Array.isArray(genres) && genres.length > 0) {
+                const genreIds = await insertNamesTrx('genre', genres, trx);
+                await trx('game_genre').where({ game_id: gameId }).del();
+                if (genreIds.length > 0) {
+                  await trx('game_genre').insert(genreIds.map((g) => ({ game_id: gameId, genre_id: g })));
+                }
+              }
+
+              if (Array.isArray(tags) && tags.length > 0) {
+                const tagIds = await insertNamesTrx('tag', tags, trx);
+                await trx('game_tag').where({ game_id: gameId }).del();
+                if (tagIds.length > 0) {
+                  await trx('game_tag').insert(tagIds.map((t) => ({ game_id: gameId, tag_id: t })));
+                }
+              }
             });
             return { gameId, success: true };
           } catch (err) {
@@ -346,6 +413,7 @@ router.post('/adopt/batch', async (req, res, next) => {
         }),
       ),
     );
+
     res.send({ results });
   } catch (err) {
     next(err);

@@ -444,7 +444,7 @@ const sourceColor = (source: SourceType) => {
 
 const getSourceUrl = (source: SourceType, sourceId: string): string => {
   if (source === 'dlsite')
-    return `https://www.dlsite.com/maniax/work/=/product_id/RJ${sourceId}.html`;
+    return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
   return '';
@@ -485,7 +485,7 @@ const actionOrder: Record<ScanRow['status'], number> = {
 
 const sortedResults = computed(() => {
   let list = scanResults.value;
-  const kw = searchKeyword.value.trim().toLowerCase();
+  const kw = searchKeyword.value?.trim().toLowerCase();
   if (kw) {
     list = list.filter(
       (r) =>

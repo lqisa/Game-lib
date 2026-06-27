@@ -135,31 +135,57 @@ router.post('/check-conflicts', async (req, res, next) => {
     }
 
     const conflicts = [];
-    for (const [, group] of groups) {
-      const batchGameIds = group.batchGames.map((g) => g.gameId);
-      const hasIntraBatchConflict = batchGameIds.length > 1;
 
-      // Query database for other games already using this source
-      const existing = await db
+    // Single batch query to fetch all existing sources at once (fixes N+1 performance issue)
+    const allSourceKeys = Array.from(groups.keys());
+    if (allSourceKeys.length > 0) {
+      let query = db
         .knex('game_source as gs')
-        .join('game as g', 'g.id', 'gs.game_id')
-        .where({ 'gs.source_type': group.sourceType, 'gs.source_id': group.sourceId })
-        .whereNotIn('gs.game_id', batchGameIds)
-        .select('gs.game_id', 'g.name as game_name');
+        .join('game as g', 'g.id', 'gs.game_id');
+      
+      allSourceKeys.forEach((key, index) => {
+        const [sourceType, sourceId] = key.split(':');
+        if (index === 0) {
+          query = query.where({ 'gs.source_type': sourceType, 'gs.source_id': sourceId });
+        } else {
+          query = query.orWhere({ 'gs.source_type': sourceType, 'gs.source_id': sourceId });
+        }
+      });
+      
+      const allExisting = await query.select('gs.source_type', 'gs.source_id', 'gs.game_id', 'g.name as game_name');
 
-      if (hasIntraBatchConflict || existing.length > 0) {
-        const games = [];
-        for (const bg of group.batchGames) {
-          games.push({ gameId: bg.gameId, name: bg.name });
+      // Group results by source key for O(1) lookup
+      const existingMap = new Map();
+      for (const row of allExisting) {
+        const key = `${row.source_type}:${row.source_id}`;
+        if (!existingMap.has(key)) {
+          existingMap.set(key, []);
         }
-        for (const r of existing) {
-          games.push({ gameId: r.game_id, name: r.game_name });
+        existingMap.get(key).push({ gameId: row.game_id, name: row.game_name });
+      }
+
+      for (const [key, group] of groups) {
+        const batchGameIds = group.batchGames.map((g) => g.gameId);
+        const hasIntraBatchConflict = batchGameIds.length > 1;
+
+        // Filter out batch games from existing results
+        const batchSet = new Set(batchGameIds);
+        const existing = (existingMap.get(key) || []).filter((e) => !batchSet.has(e.gameId));
+
+        if (hasIntraBatchConflict || existing.length > 0) {
+          const games = [];
+          for (const bg of group.batchGames) {
+            games.push({ gameId: bg.gameId, name: bg.name });
+          }
+          for (const e of existing) {
+            games.push({ gameId: e.gameId, name: e.name });
+          }
+          conflicts.push({
+            sourceType: group.sourceType,
+            sourceId: group.sourceId,
+            games,
+          });
         }
-        conflicts.push({
-          sourceType: group.sourceType,
-          sourceId: group.sourceId,
-          games,
-        });
       }
     }
 
