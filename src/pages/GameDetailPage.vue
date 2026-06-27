@@ -151,9 +151,9 @@
       v-model="showScrapeDialog"
       :game-name="game?.name || ''"
       :game-id="game?.id || 0"
-      :default-keyword="
-        game?.sources?.[0]?.source_id ? `RJ${game.sources[0].source_id}` : undefined
-      "
+      :default-keyword="game?.name || undefined"
+      :default-source="scrapeDefaultSource"
+      :initial-segments="splitKeyword(game?.name || '').segments"
       @adopted="onReScrape"
     />
   </q-page>
@@ -164,6 +164,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../composables/useApi';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
+import { splitKeyword } from '../composables/useSplitKeyword';
 
 interface GameDetail {
   id: number;
@@ -187,6 +188,12 @@ const route = useRoute();
 const router = useRouter();
 const game = ref<GameDetail | null>(null);
 const showScrapeDialog = ref(false);
+
+const scrapeDefaultSource = computed<'dlsite' | 'bangumi' | 'vndb' | undefined>(() => {
+  const type = game.value?.sources?.[0]?.source_type;
+  if (type === 'dlsite' || type === 'bangumi' || type === 'vndb') return type;
+  return undefined;
+});
 const confirmDelete = ref(false);
 const deleting = ref(false);
 

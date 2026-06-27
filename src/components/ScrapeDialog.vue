@@ -1,14 +1,6 @@
 <template>
   <q-dialog v-model="show" persistent @show="onDialogShow">
-    <q-card
-      style="
-        min-width: 800px;
-        max-width: 1000px;
-        max-height: 80vh;
-        display: flex;
-        flex-direction: column;
-      "
-    >
+    <q-card class="scrape-dialog-card">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle1">Scrape: {{ gameName }}</div>
         <q-btn
@@ -64,9 +56,9 @@
         </div>
       </q-card-section>
 
-      <q-card-section class="col overflow-hidden q-pt-none">
-        <div class="row no-wrap" style="height: 100%">
-          <div class="col-5" style="overflow-y: auto; max-height: 50vh">
+      <q-card-section class="scrape-content">
+        <div class="row no-wrap scrape-content-row">
+          <div class="col-5 scrape-results-col">
             <div v-if="results.length > 0">
               <div
                 v-for="(r, idx) in results"
@@ -76,7 +68,7 @@
               >
                 <q-card :class="{ 'scrape-result--selected': selectedIdx === idx }" flat bordered>
                   <div class="row no-wrap">
-                    <div style="width: 60px; flex-shrink: 0">
+                    <div class="scrape-cover-box">
                       <q-img
                         v-if="r.coverUrl"
                         :src="r.coverUrl"
@@ -89,16 +81,16 @@
                           </div>
                         </template>
                       </q-img>
-                      <div v-else class="scrape-cover-placeholder flex flex-center" style="aspect-ratio: 3/4">
+                      <div v-else class="scrape-cover-placeholder flex flex-center scrape-cover-ratio">
                         <q-icon name="videogame_asset" size="18px" color="grey" />
                       </div>
                     </div>
-                    <div class="col q-pa-xs" style="min-width: 0">
-                      <div class="text-caption ellipsis-2-lines" style="line-height: 1.3">
+                    <div class="col q-pa-xs scrape-info-col">
+                      <div class="text-caption ellipsis-2-lines scrape-result-name">
                         {{ r.name }}
                       </div>
                       <div class="text-caption text-grey ellipsis">{{ r.makerName }}</div>
-                      <div class="text-caption text-grey" style="font-size: 10px">{{ r.id }}</div>
+                      <div class="text-caption text-grey scrape-result-id">{{ r.id }}</div>
                     </div>
                   </div>
                 </q-card>
@@ -116,7 +108,7 @@
 
           <q-separator vertical class="q-mx-sm" />
 
-          <div class="col" style="overflow-y: auto; max-height: 50vh">
+          <div class="col scrape-preview-col">
             <div v-if="selectedResult">
               <div class="row q-col-gutter-md">
                 <div class="col-5">
@@ -163,8 +155,7 @@
                     </div>
                     <div
                       v-if="detail.description"
-                      class="text-caption q-mt-sm"
-                      style="white-space: pre-wrap; max-height: 120px; overflow-y: auto"
+                      class="text-caption q-mt-sm scrape-description"
                     >
                       {{ detail.description }}
                     </div>
@@ -172,7 +163,7 @@
                 </div>
               </div>
             </div>
-            <div v-else class="flex flex-center text-grey" style="height: 100%; min-height: 200px">
+            <div v-else class="flex flex-center text-grey scrape-empty-state">
               <div class="text-center">
                 <q-icon name="touch_app" size="48px" color="grey-4" />
                 <div class="q-mt-sm">Select a result to preview</div>
@@ -394,6 +385,53 @@ const onDialogShow = async () => {
 </script>
 
 <style scoped>
+.scrape-dialog-card {
+  min-width: 88vw;
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.scrape-content {
+  flex: 1 1 0%;
+  overflow: hidden;
+  padding-top: 0;
+  display: flex;
+}
+.scrape-content-row {
+  flex: 1 1 0%;
+}
+.scrape-results-col {
+  overflow-y: auto;
+}
+.scrape-preview-col {
+  overflow-y: auto;
+  max-height: inherit;
+}
+.scrape-cover-box {
+  width: 60px;
+  flex-shrink: 0;
+}
+.scrape-cover-ratio {
+  aspect-ratio: 3 / 4;
+}
+.scrape-info-col {
+  min-width: 0;
+}
+.scrape-result-name {
+  line-height: 1.3;
+}
+.scrape-result-id {
+  font-size: 10px;
+}
+.scrape-description {
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.scrape-empty-state {
+  height: 100%;
+  min-height: 200px;
+}
 .scrape-result--selected {
   background: #e3f2fd;
 }
