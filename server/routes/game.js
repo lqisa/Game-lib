@@ -1,6 +1,8 @@
 import express from 'express';
+import path from 'node:path';
+import fs from 'node:fs';
 import * as db from '../database/db.js';
-import { scanDirectory } from '../scanner.js';
+import { scanDirectory, expandDirectory } from '../scanner.js';
 
 const getBlacklist = async () => {
   const row = await db.knex('setting').where({ key: 'blacklist' }).first();
@@ -269,11 +271,15 @@ router.post('/scan', async (req, res, next) => {
       return res.status(404).send({ error: 'Library not found' });
     }
 
-    const allDirs = scanDirectory(library.path);
+    const { dirs, archives } = scanDirectory(library.path);
     const blacklist = await getBlacklist();
+    const blacklistSet = new Set(blacklist);
     const filteredDirs = blacklist.length > 0
-      ? allDirs.filter((d) => !new Set(blacklist).has(d))
-      : allDirs;
+      ? dirs.filter((d) => !blacklistSet.has(d))
+      : dirs;
+    const filteredArchives = blacklist.length > 0
+      ? archives.filter((a) => !blacklistSet.has(a))
+      : archives;
 
     const existingGames = await db
       .knex('game')
@@ -282,11 +288,20 @@ router.post('/scan', async (req, res, next) => {
     const existingPaths = new Set(existingGames.map((g) => g.sub_path));
 
     const newDirs = filteredDirs.filter((d) => !existingPaths.has(d));
+    const newArchives = filteredArchives.filter((a) => !existingPaths.has(a));
 
+    const allNewEntries = [...newDirs, ...newArchives];
     const dirSet = new Set(filteredDirs);
-    const removedGames = existingGames.filter((g) => !dirSet.has(g.sub_path));
+    const archiveSet = new Set(filteredArchives);
+    const allCurrentPaths = new Set([...dirSet, ...archiveSet]);
+    const removedGames = existingGames.filter((g) => !allCurrentPaths.has(g.sub_path));
 
-    res.send({ allDirs: filteredDirs, newDirs, removedGames });
+    res.send({
+      allDirs: filteredDirs,
+      archives: filteredArchives,
+      newDirs: allNewEntries,
+      removedGames,
+    });
   } catch (err) {
     next(err);
   }
@@ -300,7 +315,9 @@ router.post('/scan/add', async (req, res, next) => {
     }
 
     const rows = dirs.map((d) => ({
-      name: d,
+      name: d.includes('/') || d.includes('\\')
+        ? path.basename(d, path.extname(d))
+        : d,
       library_id: libraryId,
       sub_path: d,
     }));
@@ -315,6 +332,39 @@ router.post('/scan/add', async (req, res, next) => {
     }
 
     res.status(201).send({ added: rows.length, games: inserted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/scan/expand', async (req, res, next) => {
+  try {
+    const { libraryId, subPath } = req.body;
+    if (!libraryId || !subPath) {
+      return res.status(400).send({ error: 'libraryId and subPath are required' });
+    }
+    const library = await db.knex('library').where({ id: libraryId }).first();
+    if (!library) {
+      return res.status(404).send({ error: 'Library not found' });
+    }
+
+    const fullPath = path.join(library.path, subPath);
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).send({ error: 'Directory not found' });
+    }
+
+    const { dirs, archives, hasSubDirs } = expandDirectory(fullPath);
+
+    const prefixedDirs = dirs.map((d) => subPath + '/' + d);
+    const prefixedArchives = archives.map((a) => subPath + '/' + a);
+
+    const allPaths = [...prefixedDirs, ...prefixedArchives];
+    const existingRows = allPaths.length > 0
+      ? await db.knex('game').where({ library_id: libraryId }).whereIn('sub_path', allPaths).select('sub_path')
+      : [];
+    const existingPaths = new Set(existingRows.map((r) => r.sub_path));
+
+    res.send({ dirs: prefixedDirs, archives: prefixedArchives, hasSubDirs, existingPaths: [...existingPaths] });
   } catch (err) {
     next(err);
   }

@@ -110,7 +110,9 @@ const TABLE_DDL = {
     }),
   adopt_cache: (knex) =>
     knex.schema.createTable('adopt_cache', (table) => {
-      table.integer('game_id').primary();
+      table.integer('game_id').notNullable().defaultTo(0);
+      table.integer('library_id').notNullable().defaultTo(0);
+      table.string('sub_path').notNullable().defaultTo('');
       table.string('source_type').notNullable();
       table.string('source_id').notNullable();
       table.text('source_url');
@@ -122,6 +124,7 @@ const TABLE_DDL = {
       table.text('description');
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
+      table.primary(['library_id', 'sub_path']);
     }),
 };
 
@@ -213,6 +216,37 @@ const initDatabase = async () => {
     await knex.raw('PRAGMA foreign_keys = ON');
     await knex('setting').insert({ key: 'migration_v4', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v4 done.');
+  }
+
+  const v5 = await knex('setting').where({ key: 'migration_v5' }).first();
+  if (!v5) {
+    console.log(' * Running migration v5: rebuild adopt_cache with library_id + sub_path...');
+    await knex.raw('PRAGMA foreign_keys = OFF');
+    await knex.raw(`
+      CREATE TABLE adopt_cache_new (
+        game_id INTEGER NOT NULL DEFAULT 0,
+        library_id INTEGER NOT NULL DEFAULT 0,
+        sub_path TEXT NOT NULL DEFAULT '',
+        source_type TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        source_url TEXT,
+        name TEXT,
+        cover_url TEXT,
+        makers TEXT NOT NULL DEFAULT '[]',
+        genres TEXT NOT NULL DEFAULT '[]',
+        tags TEXT NOT NULL DEFAULT '[]',
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (library_id, sub_path)
+      )
+    `);
+    await knex.raw('INSERT INTO adopt_cache_new (game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at) SELECT game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at FROM adopt_cache');
+    await knex.raw('DROP TABLE adopt_cache');
+    await knex.raw('ALTER TABLE adopt_cache_new RENAME TO adopt_cache');
+    await knex.raw('PRAGMA foreign_keys = ON');
+    await knex('setting').insert({ key: 'migration_v5', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v5 done.');
   }
 };
 

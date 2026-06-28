@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="show" persistent @show="onDialogShow">
+  <q-dialog v-model="show" persistent @show="onDialogShow" @keydown.esc="show = false">
     <q-card class="scrape-dialog-card">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle1">Scrape: {{ gameName }}</div>
@@ -173,6 +173,7 @@
         </div>
       </q-card-section>
       <q-card-actions align="right" class="scrape-actions q-px-md q-py-sm">
+        <q-btn flat label="Cancel" color="grey-7" v-close-popup />
         <q-btn color="positive" label="Adopt" @click="adopt" :disable="!selectedResult || detailLoading" />
       </q-card-actions>
     </q-card>

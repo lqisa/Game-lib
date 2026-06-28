@@ -49,7 +49,7 @@
             color="warning"
             label="Force Refresh"
             @click="forceRefresh"
-            :disable="scanResults.length === 0"
+            :disable="totalCount === 0"
           />
           <q-btn
             color="positive"
@@ -65,8 +65,8 @@
           <q-badge v-if="staleCount > 0" color="negative" class="text-body2">
             {{ staleCount }} to delete
           </q-badge>
-          <q-badge v-else-if="scanResults.length > 0" color="grey-7" class="text-body2">
-            {{ scanResults.length }} unscraped
+          <q-badge v-else-if="totalCount > 0" color="grey-7" class="text-body2">
+            {{ totalCount }} unscraped
           </q-badge>
           <q-space />
           <q-input
@@ -129,7 +129,11 @@
           <template v-slot="{ item: row }">
             <div
               class="scan-row q-px-md"
-              :class="{ 'scan-row--stale': row.status === 'stale', 'scan-row--compact': compact }"
+              :class="{
+                'scan-row--stale': row.status === 'stale',
+                'scan-row--compact': compact,
+              }"
+              :style="{ paddingLeft: `${24 + row.depth * 24}px` }"
             >
               <div class="scan-row__cover">
                 <div v-if="row.searchResult?.coverUrl" class="scan-row__cover-wrap">
@@ -167,12 +171,27 @@
                   </q-tooltip>
                 </div>
                 <div v-else class="scan-row__cover-empty flex flex-center">
-                  <q-icon name="folder" :size="compact ? '16px' : '48px'" color="grey" />
+                  <q-icon :name="row.isArchive ? 'archive' : 'folder'" :size="compact ? '16px' : '48px'" color="grey" />
                 </div>
               </div>
 
               <div class="scan-row__info">
                 <div class="row items-center no-wrap">
+                  <q-btn
+                    v-if="row.hasChildren !== false && !row.isArchive"
+                    flat
+                    round
+                    dense
+                    size="xs"
+                    :icon="row.expanded ? 'expand_more' : 'chevron_right'"
+                    :loading="row.loading && row.children.length === 0"
+                    @click="expandRow(row)"
+                    class="q-mr-xs"
+                    style="flex-shrink: 0"
+                  >
+                    <q-tooltip>{{ row.expanded ? 'Collapse' : 'Expand scan' }}</q-tooltip>
+                  </q-btn>
+                  <span v-else style="width: 28px; flex-shrink: 0"></span>
                   <span class="text-body2 ellipsis">
                     {{ row.name }}
                     <q-tooltip anchor="top left" self="bottom left">{{ row.subPath }}</q-tooltip>
@@ -382,6 +401,8 @@ interface AdoptData {
 
 interface AdoptCacheEntry {
   game_id: number;
+  library_id: number;
+  sub_path: string;
   source_type: string;
   source_id: string;
   source_url: string | null;
@@ -403,10 +424,16 @@ interface ScanRow {
   searchKeyword: string;
   source: SourceType | null;
   loading: boolean;
+  children: ScanRow[];
+  expanded: boolean;
+  isArchive: boolean;
+  depth: number;
+  hasChildren: boolean | null;
 }
 
 interface SubmitGame {
   gameId: number;
+  subPath: string;
   sourceType: string;
   sourceId: string;
   sourceUrl: string;
@@ -469,6 +496,8 @@ const searchKeyword = ref('');
 const compact = ref(false);
 const rowHeight = computed(() => (compact.value ? 48 : 260));
 
+const normalizeName = (name: string) => name.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3400-\u4DBF\u3005-\u3006\u30FC]/g, '').replace(/\s+/g, ' ').trim();
+
 const toggleSort = (field: 'name' | 'status' | 'action') => {
   if (sortBy.value === field) {
     sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
@@ -496,36 +525,76 @@ const actionOrder: Record<ScanRow['status'], number> = {
   stale: 5,
 };
 
+const flattenTree = (rows: ScanRow[]): ScanRow[] => {
+  const result: ScanRow[] = [];
+  for (const row of rows) {
+    result.push(row);
+    if (row.expanded && row.children.length > 0) {
+      result.push(...flattenTree(row.children));
+    }
+  }
+  return result;
+};
+
+const flattenAllRows = (rows: ScanRow[]): ScanRow[] => {
+  const result: ScanRow[] = [];
+  for (const row of rows) {
+    result.push(row);
+    if (row.children.length > 0) {
+      result.push(...flattenAllRows(row.children));
+    }
+  }
+  return result;
+};
+
+const flattenTreeSorted = (
+  rows: ScanRow[],
+  field: 'name' | 'status' | 'action',
+  order: 'asc' | 'desc',
+): ScanRow[] => {
+  const sorted = [...rows].sort((a, b) => {
+    let cmp: number;
+    if (field === 'name') {
+      cmp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    } else {
+      const ord = field === 'status' ? statusOrder : actionOrder;
+      cmp = ord[a.status] - ord[b.status];
+    }
+    return order === 'desc' ? -cmp : cmp;
+  });
+  const result: ScanRow[] = [];
+  for (const row of sorted) {
+    result.push(row);
+    if (row.expanded && row.children.length > 0) {
+      result.push(...flattenTreeSorted(row.children, field, order));
+    }
+  }
+  return result;
+};
+
 const sortedResults = computed(() => {
-  let list = scanResults.value;
+  const list =
+    sortBy.value === 'none'
+      ? flattenTree(scanResults.value)
+      : flattenTreeSorted(scanResults.value, sortBy.value, sortOrder.value);
   const kw = searchKeyword.value?.trim().toLowerCase();
   if (kw) {
-    list = list.filter(
+    return list.filter(
       (r) =>
         r.name.toLowerCase().includes(kw) ||
         r.subPath.toLowerCase().includes(kw) ||
         (r.searchResult?.name?.toLowerCase().includes(kw) ?? false),
     );
   }
-  if (sortBy.value === 'none') return list;
-
-  let sorted: ScanRow[];
-  if (sortBy.value === 'name') {
-    sorted = [...list].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
-    );
-  } else {
-    const order = sortBy.value === 'status' ? statusOrder : actionOrder;
-    sorted = [...list].sort((a, b) => order[a.status] - order[b.status]);
-  }
-  return sortOrder.value === 'desc' ? sorted.reverse() : sorted;
+  return list;
 });
 
 const hasPending = computed(() =>
-  scanResults.value.some((r) => r.status === 'pending' || r.status === 'error'),
+  flattenAllRows(scanResults.value).some((r) => r.status === 'pending' || r.status === 'error'),
 );
-const adoptedCount = computed(() => scanResults.value.filter((r) => r.status === 'adopted').length);
-const staleCount = computed(() => scanResults.value.filter((r) => r.status === 'stale').length);
+const adoptedCount = computed(() => flattenAllRows(scanResults.value).filter((r) => r.status === 'adopted').length);
+const staleCount = computed(() => flattenAllRows(scanResults.value).filter((r) => r.status === 'stale').length);
+const totalCount = computed(() => flattenAllRows(scanResults.value).length);
 
 let scrapeConcurrency = 4;
 
@@ -552,17 +621,12 @@ const loadUnscraped = async () => {
     return;
   }
   const res = await api.get('/games/unscraped', { params: { libraryId: selectedLibrary.value } });
-  scanResults.value = res.data.map((g: { id: number; name: string; sub_path: string }) => ({
-    name: g.name,
-    subPath: g.sub_path,
-    status: 'pending' as const,
-    searchResult: null,
-    adoptData: null,
-    searchKeyword: g.name,
-    source: null as SourceType | null,
-    loading: false,
-    gameId: g.id,
-  }));
+  const archiveExtRe = /\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.\d+)?$|\.(zip|7z|rar)$/i;
+  scanResults.value = res.data.map((g: { id: number; name: string; sub_path: string }) => {
+    const isArchive = archiveExtRe.test(g.name);
+    const cleanName = isArchive ? g.name.replace(archiveExtRe, '') : g.name;
+    return { name: cleanName, subPath: g.sub_path, status: 'pending' as const, searchResult: null, adoptData: null, searchKeyword: cleanName, source: null as SourceType | null, loading: false, gameId: g.id, children: [], expanded: false, isArchive, depth: 0, hasChildren: null };
+  });
 
   for (const row of scanResults.value) {
     const { keyword, segments } = splitKeyword(row.name);
@@ -574,8 +638,9 @@ const loadUnscraped = async () => {
 };
 
 const preloadCache = async () => {
-  if (scanResults.value.length === 0) return;
-  const keywords = scanResults.value.map((r) => r.searchKeyword || r.name);
+  const allRows = flattenAllRows(scanResults.value);
+  if (allRows.length === 0) return;
+  const keywords = allRows.map((r) => r.searchKeyword || r.name);
   try {
     const res = await api.post('/cache/search/preload', { keywords });
     const entries = res.data.entries || [];
@@ -588,14 +653,26 @@ const preloadCache = async () => {
 };
 
 const preloadAdoptCache = async () => {
-  if (scanResults.value.length === 0) return;
-  const gameIds = scanResults.value.map((r) => r.gameId);
+  const allRows = flattenAllRows(scanResults.value);
+  if (allRows.length === 0) return;
+  const realIdRows = allRows.filter((r) => r.gameId > 0);
+  const tempIdRows = allRows.filter((r) => r.gameId === 0);
+  const gameIds = realIdRows.map((r) => r.gameId);
+  const subPaths = tempIdRows.map((r) => r.subPath);
   try {
-    const res = await api.get('/cache/adopt', { params: { gameIds: gameIds.join(',') } });
+    const params: Record<string, string> = {};
+    if (gameIds.length > 0) params.gameIds = gameIds.join(',');
+    if (subPaths.length > 0 && selectedLibrary.value) {
+      params.libraryId = String(selectedLibrary.value);
+      params.subPaths = subPaths.join(',');
+    }
+    if (!params.gameIds && !params.subPaths) return;
+    const res = await api.get('/cache/adopt', { params });
     const entries: AdoptCacheEntry[] = res.data.entries || [];
-    const adoptMap = new Map(entries.map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
-    for (const row of scanResults.value) {
-      const cached = adoptMap.get(row.gameId);
+    const adoptByGameId = new Map(entries.filter((e) => e.game_id > 0).map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
+    const adoptBySubPath = new Map(entries.filter((e) => e.sub_path).map((e): [string, AdoptCacheEntry] => [e.sub_path, e]));
+    for (const row of allRows) {
+      const cached = row.gameId > 0 ? adoptByGameId.get(row.gameId) : adoptBySubPath.get(row.subPath);
       if (cached) {
         row.source = cached.source_type as SourceType;
         row.searchResult = {
@@ -637,26 +714,30 @@ const scanDir = async () => {
   scanning.value = true;
   try {
     const res = await api.post('/games/scan', { libraryId: selectedLibrary.value });
-    const newDirs: string[] = res.data.newDirs;
+    const newEntries: string[] = res.data.newDirs;
+    const allArchives: string[] = res.data.archives || [];
+    const archiveSet = new Set(allArchives);
     const removedGames: { id: number; name: string; sub_path: string }[] =
       res.data.removedGames || [];
 
+    const allRows = flattenAllRows(scanResults.value);
     const removedPaths = new Set(removedGames.map((g) => g.sub_path));
-    for (const row of scanResults.value) {
+    for (const row of allRows) {
       if (removedPaths.has(row.subPath)) {
         row.status = 'stale';
       }
     }
 
-    if (newDirs.length > 0) {
+    if (newEntries.length > 0) {
       const addRes = await api.post('/games/scan/add', {
         libraryId: selectedLibrary.value,
-        dirs: newDirs,
+        dirs: newEntries,
       });
       const addedGames: { id: number; name: string; sub_path: string }[] = addRes.data.games || [];
-      const existingPaths = new Set(scanResults.value.map((r) => r.subPath));
+      const existingPaths = new Set(allRows.map((r) => r.subPath));
       for (const g of addedGames) {
         if (!existingPaths.has(g.sub_path)) {
+          const isArchive = archiveSet.has(g.sub_path);
           const { keyword, segments } = splitKeyword(g.name);
           segmentsCache.set(g.name, [keyword, ...segments.filter((s) => s !== keyword)]);
           scanResults.value.push({
@@ -666,9 +747,14 @@ const scanDir = async () => {
             status: 'pending',
             searchResult: null,
             adoptData: null,
-            searchKeyword: g.name,
+            searchKeyword: isArchive ? g.name.replace(/\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.r\d+)?$|\.(zip|7z|rar)$/i, '') : g.name,
             source: null,
             loading: false,
+            children: [],
+            expanded: false,
+            isArchive,
+            depth: 0,
+            hasChildren: null,
           });
         }
       }
@@ -735,6 +821,125 @@ const openScrapeDialog = (row: ScanRow) => {
   showScrapeDialog.value = true;
 };
 
+const expandRow = async (row: ScanRow) => {
+  if (row.expanded) {
+    row.expanded = false;
+    return;
+  }
+  if (row.children.length > 0) {
+    row.expanded = true;
+    return;
+  }
+  if (!selectedLibrary.value) return;
+
+  row.loading = true;
+  try {
+    const res = await api.post('/games/scan/expand', {
+      libraryId: selectedLibrary.value,
+      subPath: row.subPath,
+    });
+    const dirs: string[] = res.data.dirs || [];
+    const archives: string[] = res.data.archives || [];
+    const hasSubDirs: Record<string, boolean> = res.data.hasSubDirs || {};
+    const existingPaths: Set<string> = new Set(res.data.existingPaths || []);
+
+    const allEntries = [...dirs, ...archives].filter((e) => !existingPaths.has(e));
+    if (allEntries.length === 0) {
+      row.hasChildren = false;
+      return;
+    }
+
+    const childDepth = row.depth + 1;
+    for (const entry of allEntries) {
+      const isArchive = archives.includes(entry);
+      const dirName = entry.split('/').pop() || entry;
+      const displayName = isArchive
+        ? dirName.replace(/\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.r\d+)?$|\.(zip|7z|rar)$/i, '')
+        : dirName;
+      const { keyword, segments } = splitKeyword(displayName);
+      segmentsCache.set(displayName, [keyword, ...segments.filter((s) => s !== keyword)]);
+      row.children.push({
+        gameId: 0,
+        name: displayName,
+        subPath: entry,
+        status: 'pending',
+        searchResult: null,
+        adoptData: null,
+        searchKeyword: isArchive
+          ? displayName.replace(/\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.r\d+)?$|\.(zip|7z|rar)$/i, '')
+          : displayName,
+        source: null,
+        loading: false,
+        children: [],
+        expanded: false,
+        isArchive,
+        depth: childDepth,
+        hasChildren: hasSubDirs[dirName] === true ? null : false,
+      });
+    }
+
+    row.expanded = true;
+    row.hasChildren = true;
+
+    const newRows = row.children;
+    if (newRows.length > 0) {
+      const keywords = newRows.map((r) => r.searchKeyword || r.name);
+      try {
+        const cacheRes = await api.post('/cache/search/preload', { keywords });
+        const entries = cacheRes.data.entries || [];
+        for (const entry of entries) {
+          searchCache.set(entry.key, { source: entry.source, results: entry.results });
+        }
+      } catch {
+        // preload failure is non-critical
+      }
+      if (selectedLibrary.value) {
+        try {
+          const subPathList = newRows.map((r) => r.subPath);
+          const adoptRes = await api.get('/cache/adopt', {
+            params: { libraryId: selectedLibrary.value, subPaths: subPathList.join(',') },
+          });
+          const adoptEntries: AdoptCacheEntry[] = adoptRes.data.entries || [];
+          const adoptBySubPath = new Map(adoptEntries.map((e): [string, AdoptCacheEntry] => [e.sub_path, e]));
+          for (const child of newRows) {
+            const cached = adoptBySubPath.get(child.subPath);
+            if (cached) {
+              child.source = cached.source_type as SourceType;
+              child.searchResult = {
+                id: cached.source_id,
+                name: cached.name || child.name,
+                makerName: '',
+                coverUrl: cached.cover_url || '',
+              };
+              child.adoptData = {
+                source: cached.source_type as SourceType,
+                sourceId: cached.source_id,
+                name: cached.name || child.name,
+                makerName: '',
+                coverUrl: cached.cover_url || '',
+                detail: {
+                  id: cached.source_id,
+                  title: cached.name || child.name,
+                  coverURL: cached.cover_url || '',
+                  makers: cached.makers || [],
+                  genres: cached.genres || [],
+                  tags: cached.tags || [],
+                  description: cached.description || '',
+                },
+              };
+              child.status = 'adopted';
+            }
+          }
+        } catch {
+          // adopt cache preload failure is non-critical
+        }
+      }
+    }
+  } finally {
+    row.loading = false;
+  }
+};
+
 const onAdopted = (data: AdoptData) => {
   if (!scrapingRow.value) return;
   detailCache.set(`${data.source}:${data.sourceId}`, data.detail);
@@ -747,18 +952,7 @@ const onAdopted = (data: AdoptData) => {
   scrapingRow.value.adoptData = data;
   scrapingRow.value.source = data.source;
   scrapingRow.value.status = 'adopted';
-  api.post('/cache/adopt', {
-    gameId: scrapingRow.value.gameId,
-    sourceType: data.source,
-    sourceId: data.sourceId,
-    sourceUrl: getSourceUrl(data.source, data.sourceId),
-    name: data.detail.title,
-    coverUrl: data.detail.coverURL,
-    makers: data.detail.makers,
-    genres: data.detail.genres,
-    tags: data.detail.tags,
-    description: data.detail.description,
-  }).catch(() => {});
+  saveAdoptCache(scrapingRow.value);
 };
 
 const onSearched = (source: SourceType, keyword: string, results: SearchResult[]) => {
@@ -772,6 +966,25 @@ const onSearched = (source: SourceType, keyword: string, results: SearchResult[]
       }
     })
     .catch(() => {});
+};
+
+const saveAdoptCache = (row: ScanRow) => {
+  if (!row.adoptData) return;
+  const d = row.adoptData;
+  api.post('/cache/adopt', {
+    gameId: row.gameId,
+    libraryId: selectedLibrary.value || 0,
+    subPath: row.subPath,
+    sourceType: d.source,
+    sourceId: d.sourceId,
+    sourceUrl: getSourceUrl(d.source, d.sourceId),
+    name: d.detail.title,
+    coverUrl: d.detail.coverURL,
+    makers: d.detail.makers,
+    genres: d.detail.genres,
+    tags: d.detail.tags,
+    description: d.detail.description,
+  }).catch(() => {});
 };
 
 const quickAdopt = async (row: ScanRow) => {
@@ -788,18 +1001,7 @@ const quickAdopt = async (row: ScanRow) => {
       detail: cached,
     };
     row.status = 'adopted';
-    api.post('/cache/adopt', {
-      gameId: row.gameId,
-      sourceType: row.source || 'dlsite',
-      sourceId: row.searchResult.id,
-      sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult.id),
-      name: cached.title,
-      coverUrl: cached.coverURL,
-      makers: cached.makers,
-      genres: cached.genres,
-      tags: cached.tags,
-      description: cached.description,
-    }).catch(() => {});
+    saveAdoptCache(row);
     return;
   }
   row.loading = true;
@@ -832,18 +1034,7 @@ const quickAdopt = async (row: ScanRow) => {
       detail,
     };
     row.status = 'adopted';
-    api.post('/cache/adopt', {
-      gameId: row.gameId,
-      sourceType: row.source || 'dlsite',
-      sourceId: row.searchResult.id,
-      sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult.id),
-      name: detail.title,
-      coverUrl: detail.coverURL,
-      makers: detail.makers,
-      genres: detail.genres,
-      tags: detail.tags,
-      description: detail.description,
-    }).catch(() => {});
+    saveAdoptCache(row);
   } catch {
     const sr = row.searchResult;
     const fallback: DetailResult = {
@@ -865,18 +1056,7 @@ const quickAdopt = async (row: ScanRow) => {
       detail: fallback,
     };
     row.status = 'adopted';
-    api.post('/cache/adopt', {
-      gameId: row.gameId,
-      sourceType: row.source || 'dlsite',
-      sourceId: sr.id,
-      sourceUrl: getSourceUrl(row.source || 'dlsite', sr.id),
-      name: fallback.title,
-      coverUrl: fallback.coverURL,
-      makers: fallback.makers,
-      genres: fallback.genres,
-      tags: fallback.tags,
-      description: fallback.description,
-    }).catch(() => {});
+    saveAdoptCache(row);
   } finally {
     row.loading = false;
   }
@@ -884,7 +1064,11 @@ const quickAdopt = async (row: ScanRow) => {
 
 const discardRow = (row: ScanRow) => {
   row.adoptData = null;
-  api.delete('/cache/adopt', { params: { gameIds: row.gameId } }).catch(() => {});
+  if (row.gameId > 0) {
+    api.delete('/cache/adopt', { params: { gameIds: row.gameId } }).catch(() => {});
+  } else if (selectedLibrary.value && row.subPath) {
+    api.delete('/cache/adopt', { params: { libraryId: selectedLibrary.value, subPaths: row.subPath } }).catch(() => {});
+  }
   if (row.status === 'adopted') {
     row.status = row.searchResult ? 'searched' : 'pending';
   } else {
@@ -905,7 +1089,7 @@ const togglePause = () => {
 };
 
 const batchScrape = async () => {
-  const rows = [...scanResults.value].filter((r) => r.status === 'pending' || r.status === 'error');
+  const rows = flattenAllRows(scanResults.value).filter((r) => r.status === 'pending' || r.status === 'error');
   if (rows.length === 0) return;
 
   scrapeDone.value = 0;
@@ -943,7 +1127,7 @@ const batchScrape = async () => {
             const cached = cachedEntry.results;
             if (cached.length > 0) {
               row.searchResult = cached[0] ?? null;
-              if (row.searchResult && row.searchResult.name === row.name) {
+              if (row.searchResult && normalizeName(row.searchResult.name) === normalizeName(row.name)) {
                 row.status = 'searched';
                 await quickAdopt(row);
               } else {
@@ -989,7 +1173,7 @@ const batchScrape = async () => {
             }
             if (results.length > 0) {
               row.searchResult = results[0] ?? null;
-              if (row.searchResult && row.searchResult.name === row.name) {
+              if (row.searchResult && normalizeName(row.searchResult.name) === normalizeName(row.name)) {
                 row.status = 'searched';
                 await quickAdopt(row);
               } else {
@@ -1013,21 +1197,26 @@ const batchScrape = async () => {
 };
 
 const forceRefresh = async () => {
-  const keys = scanResults.value.map((r) => `auto:${r.searchKeyword || r.name}`);
+  const allRows = flattenAllRows(scanResults.value);
+  const keys = allRows.map((r) => `auto:${r.searchKeyword || r.name}`);
   searchCache.clear();
   detailCache.clear();
   try {
     if (keys.length > 0) {
       await api.delete('/cache/search', { params: { keys: keys.join(',') } });
     }
-    const allGameIds = scanResults.value.map((r) => r.gameId);
-    if (allGameIds.length > 0) {
-      await api.delete('/cache/adopt', { params: { gameIds: allGameIds.join(',') } });
+    const realIdRows = allRows.filter((r) => r.gameId > 0);
+    const tempIdRows = allRows.filter((r) => r.gameId === 0 && r.subPath);
+    if (realIdRows.length > 0) {
+      await api.delete('/cache/adopt', { params: { gameIds: realIdRows.map((r) => r.gameId).join(',') } });
+    }
+    if (tempIdRows.length > 0 && selectedLibrary.value) {
+      await api.delete('/cache/adopt', { params: { libraryId: selectedLibrary.value, subPaths: tempIdRows.map((r) => r.subPath).join(',') } });
     }
   } catch {
     // cache delete failure is non-critical
   }
-  for (const row of scanResults.value) {
+  for (const row of allRows) {
     if (row.status === 'searched' || row.status === 'error' || row.status === 'adopted') {
       row.status = 'pending';
       row.searchResult = null;
@@ -1043,10 +1232,11 @@ const doSubmit = async (games: SubmitGame[], staleRows: ScanRow[]) => {
     const batchRes = await api.post('/scraper/adopt/batch', { games });
     const results: { gameId: number; success: boolean; error?: string }[] =
       batchRes.data.results || [];
+    const allRows = flattenAllRows(scanResults.value);
     for (const r of results) {
       if (!r.success) {
         failedIds.add(r.gameId);
-        const row = scanResults.value.find((ar) => ar.gameId === r.gameId);
+        const row = allRows.find((ar) => ar.gameId === r.gameId);
         if (row) row.status = row.searchResult ? 'searched' : 'pending';
       }
     }
@@ -1062,25 +1252,54 @@ const doSubmit = async (games: SubmitGame[], staleRows: ScanRow[]) => {
   if (staleRows.length > 0) {
     await api.post('/games/batch-delete', { ids: staleRows.map((r) => r.gameId) });
   }
-  scanResults.value = scanResults.value.filter((r) => {
-    if (r.status === 'stale') return false;
-    if (r.status === 'adopted') return failedIds.has(r.gameId);
-    return true;
-  });
+  const removeTree = (rows: ScanRow[]) => {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i]!;
+      removeTree(r.children);
+      if (r.status === 'stale') {
+        rows.splice(i, 1);
+      } else if (r.status === 'adopted' && !failedIds.has(r.gameId)) {
+        rows.splice(i, 1);
+      }
+    }
+  };
+  removeTree(scanResults.value);
   emit('done');
 };
 
 const submitAdopted = async () => {
   submitting.value = true;
-  const adoptedRows = scanResults.value.filter((r) => r.status === 'adopted' && r.adoptData);
-  const staleRows = scanResults.value.filter((r) => r.status === 'stale');
+  const adoptedRows = flattenAllRows(scanResults.value).filter((r) => r.status === 'adopted' && r.adoptData);
+  const staleRows = flattenAllRows(scanResults.value).filter((r) => r.status === 'stale' && r.gameId > 0);
   try {
+    const unregisteredRows = adoptedRows.filter((r) => r.gameId === 0);
+    if (unregisteredRows.length > 0 && selectedLibrary.value) {
+      const addRes = await api.post('/games/scan/add', {
+        libraryId: selectedLibrary.value,
+        dirs: unregisteredRows.map((r) => r.subPath),
+      });
+      const inserted: { id: number; sub_path: string }[] = addRes.data.games || [];
+      const idMap = new Map(inserted.map((g) => [g.sub_path, g.id]));
+      const subPathToGameId: Record<string, number> = {};
+      for (const row of unregisteredRows) {
+        const realId = idMap.get(row.subPath);
+        if (realId !== undefined) {
+          row.gameId = realId;
+          subPathToGameId[row.subPath] = realId;
+        }
+      }
+      if (Object.keys(subPathToGameId).length > 0) {
+        await api.post('/cache/adopt/migrate', { libraryId: selectedLibrary.value, subPathToGameId }).catch(() => {});
+      }
+    }
+
     if (adoptedRows.length > 0) {
       const games: SubmitGame[] = adoptedRows.map((row) => {
         const d = row.adoptData!;
         const source: SourceType = (d.source && d.source !== ('auto' as string)) ? d.source : 'dlsite';
         return {
           gameId: row.gameId,
+          subPath: row.subPath,
           sourceType: source,
           sourceId: d.sourceId,
           sourceUrl: getSourceUrl(source, d.sourceId),
@@ -1171,7 +1390,17 @@ const confirmBlacklist = async () => {
     const list = [blacklistRow.value.subPath];
     await api.put('/settings/blacklist', { value: JSON.stringify(list) });
   }
-  scanResults.value = scanResults.value.filter((r) => r.gameId !== blacklistRow.value!.gameId);
+  const targetId = blacklistRow.value.gameId;
+  const removeFromTree = (rows: ScanRow[]) => {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i]!;
+      removeFromTree(r.children);
+      if (r.gameId === targetId) {
+        rows.splice(i, 1);
+      }
+    }
+  };
+  removeFromTree(scanResults.value);
   blacklistRow.value = null;
 };
 

@@ -78,7 +78,9 @@ const createSchema = () =>
       table.dateTime('updated_at').defaultTo(knex.fn.now());
     })
     .createTable('adopt_cache', (table) => {
-      table.integer('game_id').primary();
+      table.integer('game_id').notNullable().defaultTo(0);
+      table.integer('library_id').notNullable().defaultTo(0);
+      table.string('sub_path').notNullable().defaultTo('');
       table.string('source_type').notNullable();
       table.string('source_id').notNullable();
       table.text('source_url');
@@ -90,6 +92,7 @@ const createSchema = () =>
       table.text('description');
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
+      table.primary(['library_id', 'sub_path']);
     });
 
 export { createSchema };

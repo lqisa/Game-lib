@@ -339,9 +339,38 @@ const getAdoptCache = async (gameIds) => {
   }));
 };
 
-const setAdoptCache = async ({ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }) => {
+const getAdoptCacheBySubPaths = async (libraryId, subPaths) => {
+  if (!libraryId || subPaths.length === 0) return [];
+  const rows = await db('adopt_cache').where({ library_id: libraryId }).whereIn('sub_path', subPaths);
+  return rows.map((r) => ({
+    ...r,
+    makers: JSON.parse(r.makers),
+    genres: JSON.parse(r.genres),
+    tags: JSON.parse(r.tags),
+  }));
+};
+
+const getAdoptCacheMixed = async (gameIds, subPathEntries) => {
+  const results = [];
+  if (gameIds.length > 0) {
+    results.push(...(await getAdoptCache(gameIds)));
+  }
+  const byLibrary = new Map();
+  for (const { libraryId, subPath } of subPathEntries) {
+    if (!byLibrary.has(libraryId)) byLibrary.set(libraryId, []);
+    byLibrary.get(libraryId).push(subPath);
+  }
+  for (const [libraryId, subPaths] of byLibrary) {
+    results.push(...(await getAdoptCacheBySubPaths(libraryId, subPaths)));
+  }
+  return results;
+};
+
+const setAdoptCache = async ({ gameId, libraryId, subPath, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }) => {
   const data = {
-    game_id: gameId,
+    game_id: gameId || 0,
+    library_id: libraryId || 0,
+    sub_path: subPath || '',
     source_type: sourceType,
     source_id: sourceId,
     source_url: sourceUrl || null,
@@ -353,7 +382,7 @@ const setAdoptCache = async ({ gameId, sourceType, sourceId, sourceUrl, name, co
     description: description || null,
     updated_at: db.fn.now(),
   };
-  await db('adopt_cache').insert(data).onConflict('game_id').merge();
+  await db('adopt_cache').insert(data).onConflict(['library_id', 'sub_path']).merge();
 };
 
 const batchSetAdoptCache = async (items) => {
@@ -365,6 +394,31 @@ const batchSetAdoptCache = async (items) => {
 const deleteAdoptCache = async (gameIds) => {
   if (gameIds.length === 0) return;
   await db('adopt_cache').whereIn('game_id', gameIds).del();
+};
+
+const deleteAdoptCacheBySubPaths = async (libraryId, subPaths) => {
+  if (!libraryId || subPaths.length === 0) return;
+  await db('adopt_cache').where({ library_id: libraryId }).whereIn('sub_path', subPaths).del();
+};
+
+const deleteAdoptCacheMixed = async (gameIds, subPathEntries) => {
+  if (gameIds.length > 0) {
+    await deleteAdoptCache(gameIds);
+  }
+  const byLibrary = new Map();
+  for (const { libraryId, subPath } of subPathEntries) {
+    if (!byLibrary.has(libraryId)) byLibrary.set(libraryId, []);
+    byLibrary.get(libraryId).push(subPath);
+  }
+  for (const [libraryId, subPaths] of byLibrary) {
+    await deleteAdoptCacheBySubPaths(libraryId, subPaths);
+  }
+};
+
+const migrateAdoptCacheGameId = async (libraryId, subPathToGameId) => {
+  for (const [subPath, gameId] of Object.entries(subPathToGameId)) {
+    await db('adopt_cache').where({ library_id: libraryId, sub_path: subPath }).update({ game_id: gameId });
+  }
 };
 
 const getDuplicateSources = async () => {
@@ -432,8 +486,13 @@ export {
   deleteSearchCache,
   getSearchCacheByKeywords,
   getAdoptCache,
+  getAdoptCacheBySubPaths,
+  getAdoptCacheMixed,
   setAdoptCache,
   batchSetAdoptCache,
   deleteAdoptCache,
+  deleteAdoptCacheBySubPaths,
+  deleteAdoptCacheMixed,
+  migrateAdoptCacheGameId,
   getDuplicateSources,
 };
