@@ -305,14 +305,16 @@ router.post('/scan/add', async (req, res, next) => {
       sub_path: d,
     }));
 
+    const inserted = [];
     if (rows.length > 0) {
       const BATCH_SIZE = 100;
       for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-        await db.knex('game').insert(rows.slice(i, i + BATCH_SIZE));
+        const ids = await db.knex('game').insert(rows.slice(i, i + BATCH_SIZE), ['id', 'name', 'sub_path']);
+        inserted.push(...ids);
       }
     }
 
-    res.status(201).send({ added: rows.length });
+    res.status(201).send({ added: rows.length, games: inserted });
   } catch (err) {
     next(err);
   }

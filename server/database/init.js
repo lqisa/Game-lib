@@ -18,6 +18,7 @@ const ALL_TABLES = [
   'game_source',
   'setting',
   'search_cache',
+  'adopt_cache',
 ];
 
 const TABLE_DDL = {
@@ -104,6 +105,21 @@ const TABLE_DDL = {
       table.string('source').notNullable();
       table.string('keyword').notNullable();
       table.text('results').notNullable();
+      table.dateTime('created_at').defaultTo(knex.fn.now());
+      table.dateTime('updated_at').defaultTo(knex.fn.now());
+    }),
+  adopt_cache: (knex) =>
+    knex.schema.createTable('adopt_cache', (table) => {
+      table.integer('game_id').primary();
+      table.string('source_type').notNullable();
+      table.string('source_id').notNullable();
+      table.text('source_url');
+      table.text('name');
+      table.text('cover_url');
+      table.text('makers').notNullable().defaultTo('[]');
+      table.text('genres').notNullable().defaultTo('[]');
+      table.text('tags').notNullable().defaultTo('[]');
+      table.text('description');
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
     }),

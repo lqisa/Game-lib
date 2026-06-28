@@ -380,6 +380,19 @@ interface AdoptData {
   detail: DetailResult;
 }
 
+interface AdoptCacheEntry {
+  game_id: number;
+  source_type: string;
+  source_id: string;
+  source_url: string | null;
+  name: string | null;
+  cover_url: string | null;
+  makers: string[];
+  genres: string[];
+  tags: string[];
+  description: string | null;
+}
+
 interface ScanRow {
   gameId: number;
   name: string;
@@ -557,6 +570,7 @@ const loadUnscraped = async () => {
   }
 
   await preloadCache();
+  await preloadAdoptCache();
 };
 
 const preloadCache = async () => {
@@ -573,10 +587,48 @@ const preloadCache = async () => {
   }
 };
 
+const preloadAdoptCache = async () => {
+  if (scanResults.value.length === 0) return;
+  const gameIds = scanResults.value.map((r) => r.gameId);
+  try {
+    const res = await api.get('/cache/adopt', { params: { gameIds: gameIds.join(',') } });
+    const entries: AdoptCacheEntry[] = res.data.entries || [];
+    const adoptMap = new Map(entries.map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
+    for (const row of scanResults.value) {
+      const cached = adoptMap.get(row.gameId);
+      if (cached) {
+        row.source = cached.source_type as SourceType;
+        row.searchResult = {
+          id: cached.source_id,
+          name: cached.name || row.name,
+          makerName: '',
+          coverUrl: cached.cover_url || '',
+        };
+        row.adoptData = {
+          source: cached.source_type as SourceType,
+          sourceId: cached.source_id,
+          name: cached.name || row.name,
+          makerName: '',
+          coverUrl: cached.cover_url || '',
+          detail: {
+            id: cached.source_id,
+            title: cached.name || row.name,
+            coverURL: cached.cover_url || '',
+            makers: cached.makers || [],
+            genres: cached.genres || [],
+            tags: cached.tags || [],
+            description: cached.description || '',
+          },
+        };
+        row.status = 'adopted';
+      }
+    }
+  } catch {
+    // preload failure is non-critical
+  }
+};
+
 const onLibraryChange = () => {
-  searchCache.clear();
-  segmentsCache.clear();
-  detailCache.clear();
   void loadUnscraped();
 };
 
@@ -589,19 +641,88 @@ const scanDir = async () => {
     const removedGames: { id: number; name: string; sub_path: string }[] =
       res.data.removedGames || [];
 
+    const removedPaths = new Set(removedGames.map((g) => g.sub_path));
+    for (const row of scanResults.value) {
+      if (removedPaths.has(row.subPath)) {
+        row.status = 'stale';
+      }
+    }
+
     if (newDirs.length > 0) {
-      await api.post('/games/scan/add', {
+      const addRes = await api.post('/games/scan/add', {
         libraryId: selectedLibrary.value,
         dirs: newDirs,
       });
-    }
-
-    await loadUnscraped();
-
-    const removedIds = new Set(removedGames.map((g) => g.id));
-    for (const row of scanResults.value) {
-      if (removedIds.has(row.gameId)) {
-        row.status = 'stale';
+      const addedGames: { id: number; name: string; sub_path: string }[] = addRes.data.games || [];
+      const existingPaths = new Set(scanResults.value.map((r) => r.subPath));
+      for (const g of addedGames) {
+        if (!existingPaths.has(g.sub_path)) {
+          const { keyword, segments } = splitKeyword(g.name);
+          segmentsCache.set(g.name, [keyword, ...segments.filter((s) => s !== keyword)]);
+          scanResults.value.push({
+            gameId: g.id,
+            name: g.name,
+            subPath: g.sub_path,
+            status: 'pending',
+            searchResult: null,
+            adoptData: null,
+            searchKeyword: g.name,
+            source: null,
+            loading: false,
+          });
+        }
+      }
+      const newRows = scanResults.value.filter(
+        (r) => addedGames.some((g) => g.id === r.gameId),
+      );
+      if (newRows.length > 0) {
+        const keywords = newRows.map((r) => r.searchKeyword || r.name);
+        try {
+          const cacheRes = await api.post('/cache/search/preload', { keywords });
+          const entries = cacheRes.data.entries || [];
+          for (const entry of entries) {
+            searchCache.set(entry.key, { source: entry.source, results: entry.results });
+          }
+        } catch {
+          // preload failure is non-critical
+        }
+        const newGameIds = newRows.map((r) => r.gameId);
+        try {
+          const adoptRes = await api.get('/cache/adopt', { params: { gameIds: newGameIds.join(',') } });
+          const entries: AdoptCacheEntry[] = adoptRes.data.entries || [];
+          const adoptMap = new Map(entries.map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
+          for (const row of newRows) {
+            const cached = adoptMap.get(row.gameId);
+            if (cached) {
+              row.source = cached.source_type as SourceType;
+              row.searchResult = {
+                id: cached.source_id,
+                name: cached.name || row.name,
+                makerName: '',
+                coverUrl: cached.cover_url || '',
+              };
+              row.adoptData = {
+                source: cached.source_type as SourceType,
+                sourceId: cached.source_id,
+                name: cached.name || row.name,
+                makerName: '',
+                coverUrl: cached.cover_url || '',
+                detail: {
+                  id: cached.source_id,
+                  title: cached.name || row.name,
+                  coverURL: cached.cover_url || '',
+                  makers: cached.makers || [],
+                  genres: cached.genres || [],
+                  tags: cached.tags || [],
+                  description: cached.description || '',
+                },
+              };
+              row.status = 'adopted';
+            }
+          }
+        } catch {
+          // preload failure is non-critical
+        }
       }
     }
   } finally {
@@ -626,6 +747,18 @@ const onAdopted = (data: AdoptData) => {
   scrapingRow.value.adoptData = data;
   scrapingRow.value.source = data.source;
   scrapingRow.value.status = 'adopted';
+  api.post('/cache/adopt', {
+    gameId: scrapingRow.value.gameId,
+    sourceType: data.source,
+    sourceId: data.sourceId,
+    sourceUrl: getSourceUrl(data.source, data.sourceId),
+    name: data.detail.title,
+    coverUrl: data.detail.coverURL,
+    makers: data.detail.makers,
+    genres: data.detail.genres,
+    tags: data.detail.tags,
+    description: data.detail.description,
+  }).catch(() => {});
 };
 
 const onSearched = (source: SourceType, keyword: string, results: SearchResult[]) => {
@@ -655,6 +788,18 @@ const quickAdopt = async (row: ScanRow) => {
       detail: cached,
     };
     row.status = 'adopted';
+    api.post('/cache/adopt', {
+      gameId: row.gameId,
+      sourceType: row.source || 'dlsite',
+      sourceId: row.searchResult.id,
+      sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult.id),
+      name: cached.title,
+      coverUrl: cached.coverURL,
+      makers: cached.makers,
+      genres: cached.genres,
+      tags: cached.tags,
+      description: cached.description,
+    }).catch(() => {});
     return;
   }
   row.loading = true;
@@ -687,6 +832,18 @@ const quickAdopt = async (row: ScanRow) => {
       detail,
     };
     row.status = 'adopted';
+    api.post('/cache/adopt', {
+      gameId: row.gameId,
+      sourceType: row.source || 'dlsite',
+      sourceId: row.searchResult.id,
+      sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult.id),
+      name: detail.title,
+      coverUrl: detail.coverURL,
+      makers: detail.makers,
+      genres: detail.genres,
+      tags: detail.tags,
+      description: detail.description,
+    }).catch(() => {});
   } catch {
     const sr = row.searchResult;
     const fallback: DetailResult = {
@@ -708,6 +865,18 @@ const quickAdopt = async (row: ScanRow) => {
       detail: fallback,
     };
     row.status = 'adopted';
+    api.post('/cache/adopt', {
+      gameId: row.gameId,
+      sourceType: row.source || 'dlsite',
+      sourceId: sr.id,
+      sourceUrl: getSourceUrl(row.source || 'dlsite', sr.id),
+      name: fallback.title,
+      coverUrl: fallback.coverURL,
+      makers: fallback.makers,
+      genres: fallback.genres,
+      tags: fallback.tags,
+      description: fallback.description,
+    }).catch(() => {});
   } finally {
     row.loading = false;
   }
@@ -715,6 +884,7 @@ const quickAdopt = async (row: ScanRow) => {
 
 const discardRow = (row: ScanRow) => {
   row.adoptData = null;
+  api.delete('/cache/adopt', { params: { gameIds: row.gameId } }).catch(() => {});
   if (row.status === 'adopted') {
     row.status = row.searchResult ? 'searched' : 'pending';
   } else {
@@ -850,14 +1020,19 @@ const forceRefresh = async () => {
     if (keys.length > 0) {
       await api.delete('/cache/search', { params: { keys: keys.join(',') } });
     }
+    const allGameIds = scanResults.value.map((r) => r.gameId);
+    if (allGameIds.length > 0) {
+      await api.delete('/cache/adopt', { params: { gameIds: allGameIds.join(',') } });
+    }
   } catch {
     // cache delete failure is non-critical
   }
   for (const row of scanResults.value) {
-    if (row.status === 'searched' || row.status === 'error') {
+    if (row.status === 'searched' || row.status === 'error' || row.status === 'adopted') {
       row.status = 'pending';
       row.searchResult = null;
       row.source = null;
+      row.adoptData = null;
     }
   }
 };
@@ -873,6 +1048,14 @@ const doSubmit = async (games: SubmitGame[], staleRows: ScanRow[]) => {
         failedIds.add(r.gameId);
         const row = scanResults.value.find((ar) => ar.gameId === r.gameId);
         if (row) row.status = row.searchResult ? 'searched' : 'pending';
+      }
+    }
+    const adoptedGameIds = games.map((g) => g.gameId);
+    if (adoptedGameIds.length > 0) {
+      try {
+        await api.delete('/cache/adopt', { params: { gameIds: adoptedGameIds.join(',') } });
+      } catch {
+        // adopt cache delete failure is non-critical
       }
     }
   }
@@ -997,10 +1180,6 @@ watch(modelValue, (val) => {
     void fetchSettings()
       .then(() => fetchLibraries())
       .then(() => loadUnscraped());
-  } else {
-    searchCache.clear();
-    segmentsCache.clear();
-    detailCache.clear();
   }
 });
 </script>

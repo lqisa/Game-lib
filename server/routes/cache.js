@@ -113,4 +113,58 @@ router.post('/search/preload', async (req, res, next) => {
   }
 });
 
+router.get('/adopt', async (req, res, next) => {
+  try {
+    const { gameIds } = req.query;
+    if (!gameIds) {
+      return res.status(400).send({ error: 'gameIds is required' });
+    }
+    const ids = String(gameIds).split(',').map(Number).filter((n) => !isNaN(n));
+    const entries = await db.getAdoptCache(ids);
+    res.send({ entries });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/adopt', async (req, res, next) => {
+  try {
+    const { gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description } = req.body;
+    if (!gameId || !sourceType || !sourceId) {
+      return res.status(400).send({ error: 'gameId, sourceType, sourceId are required' });
+    }
+    await db.setAdoptCache({ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description });
+    res.send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/adopt/batch', async (req, res, next) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).send({ error: 'items array is required' });
+    }
+    await db.batchSetAdoptCache(items);
+    res.send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/adopt', async (req, res, next) => {
+  try {
+    const { gameIds } = req.query;
+    if (!gameIds) {
+      return res.status(400).send({ error: 'gameIds is required' });
+    }
+    const ids = String(gameIds).split(',').map(Number).filter((n) => !isNaN(n));
+    await db.deleteAdoptCache(ids);
+    res.send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

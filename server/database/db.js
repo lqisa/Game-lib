@@ -328,6 +328,45 @@ const getSearchCacheByKeywords = async (keywords) => {
   return rows.map((r) => ({ ...r, results: JSON.parse(r.results) }));
 };
 
+const getAdoptCache = async (gameIds) => {
+  if (gameIds.length === 0) return [];
+  const rows = await db('adopt_cache').whereIn('game_id', gameIds);
+  return rows.map((r) => ({
+    ...r,
+    makers: JSON.parse(r.makers),
+    genres: JSON.parse(r.genres),
+    tags: JSON.parse(r.tags),
+  }));
+};
+
+const setAdoptCache = async ({ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }) => {
+  const data = {
+    game_id: gameId,
+    source_type: sourceType,
+    source_id: sourceId,
+    source_url: sourceUrl || null,
+    name: name || null,
+    cover_url: coverUrl || null,
+    makers: JSON.stringify(makers || []),
+    genres: JSON.stringify(genres || []),
+    tags: JSON.stringify(tags || []),
+    description: description || null,
+    updated_at: db.fn.now(),
+  };
+  await db('adopt_cache').insert(data).onConflict('game_id').merge();
+};
+
+const batchSetAdoptCache = async (items) => {
+  for (const item of items) {
+    await setAdoptCache(item);
+  }
+};
+
+const deleteAdoptCache = async (gameIds) => {
+  if (gameIds.length === 0) return;
+  await db('adopt_cache').whereIn('game_id', gameIds).del();
+};
+
 const getDuplicateSources = async () => {
   const dupKeys = await db('game_source')
     .select('source_type', 'source_id')
@@ -392,5 +431,9 @@ export {
   batchSetSearchCache,
   deleteSearchCache,
   getSearchCacheByKeywords,
+  getAdoptCache,
+  setAdoptCache,
+  batchSetAdoptCache,
+  deleteAdoptCache,
   getDuplicateSources,
 };
