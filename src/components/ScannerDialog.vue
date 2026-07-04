@@ -370,34 +370,7 @@ import { ref, computed, watch } from 'vue';
 import api from '../composables/useApi';
 import { splitKeyword, segmentsCache } from '../composables/useSplitKeyword';
 import ScrapeDialog from './ScrapeDialog.vue';
-
-type SourceType = 'dlsite' | 'bangumi' | 'vndb';
-
-interface SearchResult {
-  id: string;
-  name: string;
-  makerName: string;
-  coverUrl: string;
-}
-
-interface DetailResult {
-  id: string;
-  title: string;
-  coverURL: string;
-  makers: string[];
-  genres: string[];
-  tags: string[];
-  description: string;
-}
-
-interface AdoptData {
-  source: SourceType;
-  sourceId: string;
-  name: string;
-  makerName: string;
-  coverUrl: string;
-  detail: DetailResult;
-}
+import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
 
 interface AdoptCacheEntry {
   game_id: number;
@@ -479,6 +452,7 @@ const sourceColor = (source: SourceType) => {
   if (source === 'dlsite') return 'deep-purple';
   if (source === 'bangumi') return 'orange';
   if (source === 'vndb') return 'cyan';
+  if (source === 'steam') return 'blue-grey';
   return 'grey';
 };
 
@@ -487,6 +461,7 @@ const getSourceUrl = (source: SourceType, sourceId: string): string => {
     return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
+  if (source === 'steam') return `https://store.steampowered.com/app/${sourceId}`;
   return '';
 };
 
@@ -722,9 +697,30 @@ const scanDir = async () => {
 
     const allRows = flattenAllRows(scanResults.value);
     const removedPaths = new Set(removedGames.map((g) => g.sub_path));
+    const existingGameIds = new Set(allRows.map((r) => r.gameId));
     for (const row of allRows) {
       if (removedPaths.has(row.subPath)) {
         row.status = 'stale';
+      }
+    }
+    for (const g of removedGames) {
+      if (!existingGameIds.has(g.id)) {
+        scanResults.value.push({
+          gameId: g.id,
+          name: g.name,
+          subPath: g.sub_path,
+          status: 'stale',
+          searchResult: null,
+          adoptData: null,
+          searchKeyword: g.name,
+          source: null,
+          loading: false,
+          children: [],
+          expanded: false,
+          isArchive: false,
+          depth: 0,
+          hasChildren: null,
+        });
       }
     }
 
@@ -1304,7 +1300,7 @@ const submitAdopted = async () => {
           sourceId: d.sourceId,
           sourceUrl: getSourceUrl(source, d.sourceId),
           name: d.detail.title,
-          coverUrl: d.detail.coverURL,
+          coverUrl: d.detail.coverURL || d.coverUrl,
           makers: d.detail.makers,
           genres: d.detail.genres,
           tags: d.detail.tags,

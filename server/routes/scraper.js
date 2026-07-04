@@ -1,11 +1,12 @@
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import axios from 'axios';
 import * as db from '../database/db.js';
 import { searchDLSite, fetchDLSiteDetail } from '../scraper/dlsite.js';
+import { scraperAxios } from '../scraper/axios.js';
 import { searchBangumi, fetchBangumiDetail } from '../scraper/bangumi.js';
 import { searchVNDB, fetchVNDBDetail } from '../scraper/vndb.js';
+import { searchSteam, fetchSteamDetail } from '../scraper/steam.js';
 import { getDataDir } from '../config.js';
 
 const router = express.Router();
@@ -106,6 +107,35 @@ router.post('/vndb/fetch', async (req, res, next) => {
   }
 });
 
+router.post('/steam/search', async (req, res, next) => {
+  try {
+    const { keyword } = req.body;
+    if (!keyword) {
+      return res.status(400).send({ error: 'keyword is required' });
+    }
+    const results = await searchSteam(keyword);
+    res.send({ results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/steam/fetch', async (req, res, next) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).send({ error: 'id is required' });
+    }
+    const detail = await fetchSteamDetail(id);
+    if (!detail) {
+      return res.status(404).send({ error: 'detail not found' });
+    }
+    res.send(detail);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/auto/search', async (req, res, next) => {
   try {
     const { keyword, name } = req.body;
@@ -116,11 +146,14 @@ router.post('/auto/search', async (req, res, next) => {
     const hasRJ = /RJ\d+/.test(searchName);
     const letterCount = (searchName.match(/[a-zA-Z]/g) || []).length;
     const isMostlyEnglish = searchName.length > 0 && letterCount / searchName.length >= 0.9;
-    const sources = hasRJ
-      ? ['dlsite', 'bangumi', 'vndb']
-      : isMostlyEnglish
-        ? ['vndb', 'bangumi', 'dlsite']
-        : ['bangumi', 'dlsite', 'vndb'];
+    let sources;
+    if (hasRJ) {
+      sources = ['dlsite', 'bangumi', 'vndb', 'steam'];
+    } else if (isMostlyEnglish) {
+      sources = ['steam', 'vndb', 'bangumi', 'dlsite'];
+    } else {
+      sources = ['bangumi', 'dlsite', 'vndb', 'steam'];
+    }
 
     const token = await getBangumiToken();
 
@@ -133,6 +166,8 @@ router.post('/auto/search', async (req, res, next) => {
           results = await searchBangumi(keyword, token);
         } else if (source === 'vndb') {
           results = await searchVNDB(keyword);
+        } else if (source === 'steam') {
+          results = await searchSteam(keyword);
         }
         if (results.length > 0) {
           return res.send({ source, results });
@@ -181,7 +216,15 @@ const downloadCover = async (coverUrl, sourceType, sourceId) => {
     const ext = coverUrl.match(/\.(jpg|jpeg|png|webp)/)?.[1] || 'jpg';
     const filename = `${sourceType}_${sourceId}.${ext}`;
     const filePath = path.join(COVERS_DIR, filename);
-    const response = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 15000 });
+    const headers = {};
+    if (coverUrl.includes('img.dlsite.jp')) {
+      headers['Referer'] = 'https://www.dlsite.com/';
+    }
+    const response = await scraperAxios.get(coverUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      headers,
+    });
     fs.writeFileSync(filePath, response.data);
     return filename;
   } catch (err) {

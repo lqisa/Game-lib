@@ -28,6 +28,9 @@ async function startServer(): Promise<number> {
   const { createApp } = await import(appUrl);
   const { initDatabase } = await import(initUrl);
   await initDatabase();
+  const proxyUrl = pathToFileURL(path.resolve(serverDir, 'scraper', 'axios.js')).href;
+  const { initProxy } = await import(proxyUrl);
+  await initProxy();
 
   const frontendDir = path.resolve(__dirname);
   const expressApp = createApp(frontendDir);

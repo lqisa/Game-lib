@@ -1,5 +1,17 @@
 import { load } from 'cheerio';
-import { retryGet } from './axios.js';
+import { scraperAxios, retryGet } from './axios.js';
+
+const buildDlsiteCoverUrl = (rjcode, isAnnounce) => {
+  const match = rjcode.match(/^(RJ|VJ|BG|RE)(\d+)$/i);
+  if (!match) return '';
+  const prefix = match[1].toUpperCase();
+  const num = parseInt(match[2], 10);
+  const folder = String(Math.ceil(num / 1000) * 1000).padStart(8, '0');
+  if (isAnnounce) {
+    return `https://img.dlsite.jp/modpub/images2/ana/doujin/${prefix}${folder}/${rjcode.toUpperCase()}_ana_img_sam.jpg`;
+  }
+  return `https://img.dlsite.jp/modpub/images2/work/doujin/${prefix}${folder}/${rjcode.toUpperCase()}_img_main.jpg`;
+};
 
 const searchDLSite = async (keyword) => {
   const url = `https://www.dlsite.com/maniax/api/=/product.json?work_category%5B0%5D=%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0&keyword=${encodeURIComponent(keyword)}&order%5B%5D=trend&_locale=zh-cn`;
@@ -8,31 +20,83 @@ const searchDLSite = async (keyword) => {
   });
 
   const items = response.data;
-  if (!Array.isArray(items)) return [];
+  if (Array.isArray(items) && items.length > 0) {
+    return items
+      .map((item) => {
+        const workno = item.workno || '';
+        const rjcode = workno;
+        let coverUrl = '';
+        const img = item.image_main || item.image_thum || item.image_mini;
+        if (img && typeof img === 'object') {
+          coverUrl = img.url || '';
+        } else if (typeof img === 'string') {
+          coverUrl = img;
+        }
+        if (coverUrl && coverUrl.startsWith('//')) {
+          coverUrl = `https:${coverUrl}`;
+        }
+        return {
+          id: rjcode,
+          rjcode,
+          name: item.work_name || '',
+          makerName: item.maker_name || '',
+          coverUrl,
+        };
+      })
+      .filter((r) => r.rjcode && /^(RJ|VJ|BG|RE)\d+$/i.test(r.rjcode));
+  }
 
-  return items
-    .map((item) => {
-      const workno = item.workno || '';
-      const rjcode = workno;
-      let coverUrl = '';
-      const img = item.image_main || item.image_thum || item.image_mini;
-      if (img && typeof img === 'object') {
-        coverUrl = img.url || '';
-      } else if (typeof img === 'string') {
-        coverUrl = img;
-      }
-      if (coverUrl && coverUrl.startsWith('//')) {
-        coverUrl = `https:${coverUrl}`;
-      }
-      return {
-        id: rjcode,
-        rjcode,
-        name: item.work_name || '',
-        makerName: item.maker_name || '',
-        coverUrl,
-      };
-    })
-    .filter((r) => r.rjcode && /^(RJ|VJ|BG|RE)\d+$/i.test(r.rjcode));
+  try {
+    const suggestUrl = `https://www.dlsite.com/suggest/?term=${encodeURIComponent(keyword)}&site=adult-jp`;
+    const suggestResp = await retryGet(suggestUrl, {
+      headers: { cookie: 'locale=zh-cn' },
+    });
+    let suggestData = suggestResp.data;
+    if (typeof suggestData === 'string') {
+      const jsonpMatch = suggestData.match(/^[^(]*\((.+)\)$/s);
+      suggestData = jsonpMatch ? JSON.parse(jsonpMatch[1]) : JSON.parse(suggestData);
+    }
+    const works = suggestData?.work || [];
+    if (works.length > 0) {
+      return works
+        .map((w) => {
+          const rjcode = w.workno || '';
+          return {
+            id: rjcode,
+            rjcode,
+            name: w.work_name || '',
+            makerName: w.maker_name || '',
+            coverUrl: w.is_ana ? buildDlsiteCoverUrl(rjcode, true) : '',
+          };
+        })
+        .filter((r) => r.rjcode && /^(RJ|VJ|BG|RE)\d+$/i.test(r.rjcode));
+    }
+  } catch {}
+
+  const codeMatch = keyword.match(/(RJ\d+)/i);
+  if (codeMatch) {
+    const rjcode = codeMatch[1].toUpperCase();
+    const workUrl = `https://www.dlsite.com/maniax/work/=/product_id/${rjcode}.html`;
+    try {
+      await scraperAxios.get(workUrl, {
+        timeout: 10000,
+        headers: { cookie: 'locale=zh-cn' },
+        validateStatus: (s) => s === 200,
+      });
+      return [{ id: rjcode, rjcode, name: rjcode, makerName: '', coverUrl: '' }];
+    } catch {}
+    const announceUrl = `https://www.dlsite.com/maniax/announce/=/product_id/${rjcode}.html`;
+    try {
+      await scraperAxios.get(announceUrl, {
+        timeout: 10000,
+        headers: { cookie: 'locale=zh-cn' },
+        validateStatus: (s) => s === 200,
+      });
+      return [{ id: rjcode, rjcode, name: rjcode, makerName: '', coverUrl: '' }];
+    } catch {}
+  }
+
+  return [];
 };
 
 const normalizeDlsiteCode = (code) => {
@@ -43,10 +107,32 @@ const normalizeDlsiteCode = (code) => {
 
 const fetchDLSiteDetail = async (rjcode) => {
   const { prefix, num } = normalizeDlsiteCode(rjcode);
-  const url = `https://www.dlsite.com/maniax/work/=/product_id/${prefix}${num}.html`;
-  const response = await retryGet(url, {
-    headers: { cookie: 'locale=zh-cn' },
-  });
+  let response;
+  let isAnnounce = false;
+
+  try {
+    response = await retryGet(
+      `https://www.dlsite.com/maniax/work/=/product_id/${prefix}${num}.html`,
+      { headers: { cookie: 'locale=zh-cn' }, validateStatus: (s) => s === 200 },
+      1,
+    );
+  } catch {}
+
+  if (!response) {
+    try {
+      response = await retryGet(
+        `https://www.dlsite.com/maniax/announce/=/product_id/${prefix}${num}.html`,
+        { headers: { cookie: 'locale=zh-cn' }, validateStatus: (s) => s === 200 },
+        1,
+      );
+      isAnnounce = true;
+    } catch {}
+  }
+
+  if (!response) {
+    throw new Error(`Product ${prefix}${num} not found`);
+  }
+
   const $ = load(response.data);
 
   const work = { id: rjcode, tags: [], genres: [], makers: [] };
@@ -81,6 +167,9 @@ const fetchDLSiteDetail = async (rjcode) => {
     coverURL = fallbackImg.startsWith('//') ? `https:${fallbackImg}` : fallbackImg;
   } else if (twitterImg) {
     coverURL = twitterImg.startsWith('//') ? `https:${twitterImg}` : twitterImg;
+  }
+  if (!coverURL) {
+    coverURL = buildDlsiteCoverUrl(rjcode, isAnnounce);
   }
   work.coverURL = coverURL;
 

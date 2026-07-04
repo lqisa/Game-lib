@@ -8,7 +8,7 @@
         dense
         clearable
         style="max-width: 300px"
-        @keyup.enter="searchGames"
+        @clear="onSearchClear"
       >
         <template v-slot:append>
           <q-icon name="search" />
@@ -154,6 +154,7 @@ interface FilterState {
   genreIds: number[];
   tagIds: number[];
   scraped: 'all' | 'yes' | 'no';
+  duplicate: 'all' | 'yes' | 'no';
 }
 
 const router = useRouter();
@@ -192,6 +193,7 @@ const currentFilter = ref<FilterState>({
   genreIds: [],
   tagIds: [],
   scraped: 'yes',
+  duplicate: 'all',
 });
 
 const sortBy = ref('updated_at');
@@ -216,6 +218,7 @@ const activeFilterCount = computed(() => {
   if (f.genreIds.length > 0) count++;
   if (f.tagIds.length > 0) count++;
   if (f.scraped !== 'all') count++;
+  if (f.duplicate !== 'all') count++;
   return count;
 });
 
@@ -373,6 +376,8 @@ const loadGames = async () => {
     if (f.tagIds.length > 0) params.tagIds = f.tagIds.join(',');
     if (f.scraped === 'yes') params.scraped = 'true';
     else if (f.scraped === 'no') params.scraped = 'false';
+    if (f.duplicate === 'yes') params.duplicate = 'yes';
+    else if (f.duplicate === 'no') params.duplicate = 'no';
     params.sortBy = sortBy.value;
     params.sortOrder = sortOrder.value;
 
@@ -388,6 +393,20 @@ const loadGames = async () => {
 const searchGames = () => {
   games.value = [];
   void loadGames();
+};
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(keyword, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    searchGames();
+  }, 300);
+});
+
+const onSearchClear = () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchGames();
 };
 
 watch(sortBy, () => {
@@ -413,6 +432,7 @@ const getSourceUrl = (source: string, sourceId: string): string => {
     return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
+  if (source === 'steam') return `https://store.steampowered.com/app/${sourceId}`;
   return '';
 };
 

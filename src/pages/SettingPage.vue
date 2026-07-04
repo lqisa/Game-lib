@@ -64,6 +64,21 @@
 
       <q-card class="q-mb-md">
         <q-card-section>
+          <div class="text-subtitle1">Proxy</div>
+          <div class="text-caption text-grey">HTTP proxy for scraper (e.g. Clash, v2ray). Restart required after change.</div>
+        </q-card-section>
+        <q-card-section>
+          <div class="row q-gutter-md items-center">
+            <q-toggle v-model="proxyEnabled" label="Enable" />
+            <q-input v-model="proxyHost" label="Host" outlined dense style="max-width: 180px" />
+            <q-input v-model.number="proxyPort" label="Port" type="number" outlined dense style="max-width: 120px" :min="1" :max="65535" />
+            <q-btn color="primary" label="Save" @click="saveProxy" />
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <q-card class="q-mb-md">
+        <q-card-section>
           <div class="text-subtitle1">Blacklist</div>
           <div class="text-caption text-grey">Directories in this list will be excluded from scan results, game list, and cache.</div>
         </q-card-section>
@@ -172,6 +187,10 @@ const editLibName = ref('');
 const editLibPath = ref('');
 
 const concurrency = ref(4);
+const proxyEnabled = ref(false);
+const proxyHost = ref('127.0.0.1');
+const proxyPort = ref(7890);
+
 const blacklist = ref<string[]>([]);
 const newBlacklistItem = ref('');
 
@@ -315,10 +334,32 @@ const removeBlacklist = async (idx: number) => {
   await saveBlacklist();
 };
 
+const fetchProxy = async () => {
+  try {
+    const enabled = await api.get('/settings/proxy_enabled');
+    proxyEnabled.value = enabled.data.value === 'true';
+  } catch { proxyEnabled.value = false; }
+  try {
+    const host = await api.get('/settings/proxy_host');
+    proxyHost.value = host.data.value || '127.0.0.1';
+  } catch { proxyHost.value = '127.0.0.1'; }
+  try {
+    const port = await api.get('/settings/proxy_port');
+    proxyPort.value = parseInt(port.data.value, 10) || 7890;
+  } catch { proxyPort.value = 7890; }
+};
+
+const saveProxy = async () => {
+  await api.put('/settings/proxy_enabled', { value: String(proxyEnabled.value) });
+  await api.put('/settings/proxy_host', { value: proxyHost.value || '127.0.0.1' });
+  await api.put('/settings/proxy_port', { value: String(proxyPort.value || 7890) });
+};
+
 onMounted(() => {
   void fetchLibraries();
   void fetchToken();
   void fetchConcurrency();
   void fetchBlacklist();
+  void fetchProxy();
 });
 </script>

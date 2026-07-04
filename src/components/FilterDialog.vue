@@ -112,6 +112,13 @@
           <q-radio v-model="localFilter.scraped" val="yes" label="Scraped" dense />
           <q-radio v-model="localFilter.scraped" val="no" label="Not scraped" dense />
         </div>
+
+        <div class="text-subtitle2 text-dark q-pb-sm q-pt-md q-pl-md">Duplicate</div>
+        <div style="padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px">
+          <q-radio v-model="localFilter.duplicate" val="all" label="All" dense />
+          <q-radio v-model="localFilter.duplicate" val="yes" label="Has duplicate" dense />
+          <q-radio v-model="localFilter.duplicate" val="no" label="No duplicate" dense />
+        </div>
       </q-card-section>
 
       <q-card-actions align="right">
@@ -133,6 +140,7 @@ interface FilterState {
   genreIds: number[];
   tagIds: number[];
   scraped: 'all' | 'yes' | 'no';
+  duplicate: 'all' | 'yes' | 'no';
 }
 
 const props = defineProps<{
@@ -157,6 +165,7 @@ const localFilter = ref<FilterState>({
   genreIds: [],
   tagIds: [],
   scraped: 'yes',
+  duplicate: 'all',
 });
 
 const libraries = ref<{ id: number; name: string; path: string }[]>([]);
@@ -266,6 +275,7 @@ watch(
         genreIds: [...props.filter.genreIds],
         tagIds: [...props.filter.tagIds],
         scraped: props.filter.scraped,
+        duplicate: props.filter.duplicate,
       };
       librarySearch.value = '';
       makerFilterOptions.value = makers.value;
@@ -279,7 +289,7 @@ watch(
 );
 
 const resetFilter = () => {
-  localFilter.value = { libraryIds: [], noLibrary: false, makerIds: [], genreIds: [], tagIds: [], scraped: 'yes' };
+  localFilter.value = { libraryIds: [], noLibrary: false, makerIds: [], genreIds: [], tagIds: [], scraped: 'yes', duplicate: 'all' };
 };
 
 const applyFilter = () => {

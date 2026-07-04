@@ -1,8 +1,8 @@
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import axios from 'axios';
 import * as db from '../database/db.js';
+import { scraperAxios } from '../scraper/axios.js';
 import { getDataDir } from '../config.js';
 
 const router = express.Router();
@@ -20,7 +20,15 @@ const downloadCover = async (coverUrl, source, sourceId) => {
     const filename = `search_${source}_${sourceId}.${ext}`;
     const filePath = path.join(COVERS_DIR, filename);
     if (fs.existsSync(filePath)) return `/covers/${filename}`;
-    const response = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 15000 });
+    const headers = {};
+    if (coverUrl.includes('img.dlsite.jp')) {
+      headers['Referer'] = 'https://www.dlsite.com/';
+    }
+    const response = await scraperAxios.get(coverUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      headers,
+    });
     fs.writeFileSync(filePath, response.data);
     return `/covers/${filename}`;
   } catch (err) {

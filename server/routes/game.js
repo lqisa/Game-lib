@@ -28,6 +28,7 @@ router.get('/', async (req, res, next) => {
       genreIds,
       tagIds,
       scraped,
+      duplicate,
       sortBy,
       sortOrder,
     } = req.query;
@@ -41,6 +42,7 @@ router.get('/', async (req, res, next) => {
       genreIds: genreIds ? String(genreIds).split(',').map(Number) : undefined,
       tagIds: tagIds ? String(tagIds).split(',').map(Number) : undefined,
       scraped: scraped === 'true' ? true : scraped === 'false' ? false : undefined,
+      duplicate: duplicate === 'yes' ? true : duplicate === 'no' ? false : undefined,
       sortBy: sortBy || 'updated_at',
       sortOrder: sortOrder || 'desc',
     });

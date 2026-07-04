@@ -189,9 +189,9 @@ const router = useRouter();
 const game = ref<GameDetail | null>(null);
 const showScrapeDialog = ref(false);
 
-const scrapeDefaultSource = computed<'dlsite' | 'bangumi' | 'vndb' | undefined>(() => {
+const scrapeDefaultSource = computed<'dlsite' | 'bangumi' | 'vndb' | 'steam' | undefined>(() => {
   const type = game.value?.sources?.[0]?.source_type;
-  if (type === 'dlsite' || type === 'bangumi' || type === 'vndb') return type;
+  if (type === 'dlsite' || type === 'bangumi' || type === 'vndb' || type === 'steam') return type;
   return undefined;
 });
 const confirmDelete = ref(false);
@@ -208,6 +208,7 @@ const sourceColor = (source: string) => {
   if (source === 'dlsite') return 'deep-purple';
   if (source === 'bangumi') return 'orange';
   if (source === 'vndb') return 'cyan';
+  if (source === 'steam') return 'blue-grey';
   return 'grey';
 };
 
@@ -231,29 +232,14 @@ const loadGame = async () => {
   game.value = res.data;
 };
 
-type SourceType = 'dlsite' | 'bangumi' | 'vndb';
-
-interface AdoptData {
-  source: SourceType;
-  sourceId: string;
-  name: string;
-  makerName: string;
-  coverUrl: string;
-  detail: {
-    title: string;
-    coverURL: string;
-    makers: string[];
-    genres: string[];
-    tags: string[];
-    description: string;
-  };
-}
+import type { SourceType, AdoptData } from '../types/scrape';
 
 const getSourceUrl = (source: SourceType, sourceId: string): string => {
   if (source === 'dlsite')
     return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
+  if (source === 'steam') return `https://store.steampowered.com/app/${sourceId}`;
   return '';
 };
 
@@ -265,7 +251,7 @@ const onReScrape = async (data: AdoptData) => {
     sourceId: data.sourceId,
     sourceUrl: getSourceUrl(data.source, data.sourceId),
     name: data.detail.title,
-    coverUrl: data.detail.coverURL,
+    coverUrl: data.detail.coverURL || data.coverUrl,
     makers: data.detail.makers,
     genres: data.detail.genres,
     tags: data.detail.tags,

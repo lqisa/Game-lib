@@ -1,9 +1,9 @@
-import axios from 'axios';
+import { scraperAxios } from './axios.js';
 
 const VNDB_API = 'https://api.vndb.org/kana/vn';
 
 const searchVNDB = async (keyword) => {
-  const response = await axios.post(
+  const response = await scraperAxios.post(
     VNDB_API,
     {
       filters: ['search', '=', keyword],
@@ -26,7 +26,7 @@ const searchVNDB = async (keyword) => {
 };
 
 const fetchVNDBDetail = async (vnId) => {
-  const response = await axios.post(
+  const response = await scraperAxios.post(
     VNDB_API,
     {
       filters: ['id', '=', vnId],

@@ -23,6 +23,7 @@
           <q-tab name="dlsite" label="DLSite" />
           <q-tab name="bangumi" label="Bangumi" />
           <q-tab name="vndb" label="VNDB" />
+          <q-tab name="steam" label="Steam" />
         </q-tabs>
 
         <div class="row q-gutter-sm q-mb-sm">
@@ -113,8 +114,8 @@
               <div class="row q-col-gutter-md">
                 <div class="col-5">
                   <q-img
-                    v-if="selectedResult.coverUrl"
-                    :src="selectedResult.coverUrl"
+                    v-if="detailCoverUrl"
+                    :src="detailCoverUrl"
                     :ratio="3 / 4"
                     class="rounded-borders"
                   />
@@ -184,34 +185,7 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import api from '../composables/useApi';
 import { getCleanedName } from '../composables/useSplitKeyword';
-
-type SourceType = 'dlsite' | 'bangumi' | 'vndb';
-
-interface SearchResult {
-  id: string;
-  name: string;
-  makerName: string;
-  coverUrl: string;
-}
-
-interface DetailResult {
-  id: string;
-  title: string;
-  coverURL: string;
-  makers: string[];
-  genres: string[];
-  tags: string[];
-  description: string;
-}
-
-interface AdoptData {
-  source: SourceType;
-  sourceId: string;
-  name: string;
-  makerName: string;
-  coverUrl: string;
-  detail: DetailResult;
-}
+import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -243,6 +217,8 @@ const searching = ref(false);
 const searched = ref(false);
 const detail = ref<DetailResult | null>(null);
 const detailLoading = ref(false);
+const searchAbort = ref<AbortController | null>(null);
+const fetchAbort = ref<AbortController | null>(null);
 
 const segments = computed(() => {
   if (!props.initialSegments || props.initialSegments.length === 0) return [];
@@ -258,8 +234,14 @@ const selectedResult = computed(() => {
   return null;
 });
 
+const detailCoverUrl = computed(() => {
+  return detail.value?.coverURL || selectedResult.value?.coverUrl || '';
+});
+
 const doSearch = async () => {
   if (!keyword.value.trim()) return;
+  if (searchAbort.value) searchAbort.value.abort();
+  searchAbort.value = new AbortController();
   searching.value = true;
   results.value = [];
   selectedIdx.value = -1;
@@ -268,11 +250,15 @@ const doSearch = async () => {
   try {
     const res = await api.post(`/scraper/${activeSource.value}/search`, {
       keyword: keyword.value.trim(),
+    }, {
+      signal: searchAbort.value.signal,
     });
     const data = res.data;
     results.value = data.results ?? data;
     emit('searched', activeSource.value, keyword.value.trim(), results.value);
     searched.value = true;
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
   } finally {
     searching.value = false;
   }
@@ -283,10 +269,14 @@ const selectResult = async (idx: number) => {
   detail.value = null;
   const r = results.value[idx];
   if (!r) return;
+  if (fetchAbort.value) fetchAbort.value.abort();
+  fetchAbort.value = new AbortController();
   detailLoading.value = true;
   try {
     const fetchBody = activeSource.value === 'dlsite' ? { rjcode: r.id } : { id: r.id };
-    const res = await api.post(`/scraper/${activeSource.value}/fetch`, fetchBody);
+    const res = await api.post(`/scraper/${activeSource.value}/fetch`, fetchBody, {
+      signal: fetchAbort.value.signal,
+    });
     const fetched: DetailResult = res.data || {
       id: r.id,
       title: r.name,
@@ -303,7 +293,8 @@ const selectResult = async (idx: number) => {
       fetched.title = r.name;
     }
     detail.value = fetched;
-  } catch {
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
     detail.value = null;
   } finally {
     detailLoading.value = false;
@@ -312,21 +303,25 @@ const selectResult = async (idx: number) => {
 
 const adopt = () => {
   if (!selectedResult.value) return;
-  const fallback: DetailResult = detail.value || {
-    id: selectedResult.value.id,
-    title: selectedResult.value.name,
-    coverURL: selectedResult.value.coverUrl,
-    makers: [],
-    genres: [],
-    tags: [],
-    description: '',
-  };
+  const sr = selectedResult.value;
+  const coverURL = detail.value?.coverURL || sr.coverUrl;
+  const fallback: DetailResult = detail.value
+    ? { ...detail.value, coverURL }
+    : {
+        id: sr.id,
+        title: sr.name,
+        coverURL: sr.coverUrl,
+        makers: [],
+        genres: [],
+        tags: [],
+        description: '',
+      };
   emit('adopted', {
     source: activeSource.value,
-    sourceId: selectedResult.value.id,
-    name: selectedResult.value.name,
-    makerName: selectedResult.value.makerName,
-    coverUrl: selectedResult.value.coverUrl,
+    sourceId: sr.id,
+    name: sr.name,
+    makerName: sr.makerName,
+    coverUrl: coverURL,
     detail: fallback,
   });
   show.value = false;
@@ -350,7 +345,7 @@ const resolveAutoSource = (name: string): SourceType => {
   const letterCount = (name.match(/[a-zA-Z]/g) || []).length;
   const isMostlyEnglish = name.length > 0 && letterCount / name.length >= 0.9;
   if (hasRJ) return 'dlsite';
-  if (isMostlyEnglish) return 'vndb';
+  if (isMostlyEnglish) return 'steam';
   return 'bangumi';
 };
 
@@ -365,7 +360,7 @@ const onDialogShow = async () => {
     props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
   keyword.value = getCleanedName(rawKeyword);
 
-  const validSources: SourceType[] = ['dlsite', 'bangumi', 'vndb'];
+  const validSources: SourceType[] = ['dlsite', 'bangumi', 'vndb', 'steam'];
   const source = props.defaultSource;
   const tab: SourceType = source && validSources.includes(source)
     ? source

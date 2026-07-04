@@ -81,6 +81,7 @@ const getGames = async ({
   genreIds,
   tagIds,
   scraped,
+  duplicate,
   sortBy = 'updated_at',
   sortOrder = 'desc',
 } = {}) => {
@@ -132,6 +133,32 @@ const getGames = async ({
   } else if (scraped === false) {
     query = query.whereNotExists(function () {
       this.select('id').from('game_source').whereRaw('game_source.game_id = game.id');
+    });
+  }
+
+  if (duplicate === true) {
+    query = query.whereIn('game.id', function () {
+      this.select('gs.game_id').from('game_source as gs')
+        .whereIn(
+          db.raw('(gs.source_type, gs.source_id)'),
+          function () {
+            this.select('source_type', 'source_id').from('game_source')
+              .groupBy('source_type', 'source_id')
+              .havingRaw('COUNT(*) > 1');
+          }
+        );
+    });
+  } else if (duplicate === false) {
+    query = query.whereNotIn('game.id', function () {
+      this.select('gs.game_id').from('game_source as gs')
+        .whereIn(
+          db.raw('(gs.source_type, gs.source_id)'),
+          function () {
+            this.select('source_type', 'source_id').from('game_source')
+              .groupBy('source_type', 'source_id')
+              .havingRaw('COUNT(*) > 1');
+          }
+        );
     });
   }
 
