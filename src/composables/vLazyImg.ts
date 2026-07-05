@@ -9,11 +9,13 @@ let scrollSpeed = 0;
 let scrollTimer: number | null = null;
 
 const ROOT_MARGIN = 200;
+const UNLOAD_MARGIN = 600;
+const EMPTY_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-function isInViewport(el: HTMLElement): boolean {
+function isInViewport(el: HTMLElement, margin = ROOT_MARGIN): boolean {
   const rect = el.getBoundingClientRect();
   const vh = window.innerHeight;
-  return rect.bottom > -ROOT_MARGIN && rect.top < vh + ROOT_MARGIN;
+  return rect.bottom > -margin && rect.top < vh + margin;
 }
 
 function measureSpeed() {
@@ -48,6 +50,12 @@ function flushPending() {
   }
 }
 
+function unloadImage(el: HTMLImageElement) {
+  if (el.src && el.dataset.lazySrc && el.src !== EMPTY_SRC) {
+    el.src = EMPTY_SRC;
+  }
+}
+
 function getObserver() {
   if (observer) return observer;
   observer = new IntersectionObserver(
@@ -57,16 +65,16 @@ function getObserver() {
         if (entry.isIntersecting) {
           if (scrollSpeed >= 3000) {
             pending.add(el);
-          } else if (el.dataset.lazySrc) {
+          } else if (el.dataset.lazySrc && el.src !== el.dataset.lazySrc) {
             el.src = el.dataset.lazySrc;
-            observer!.unobserve(el);
           }
         } else {
           pending.delete(el);
+          unloadImage(el);
         }
       }
     },
-    { rootMargin: '200px' },
+    { rootMargin: `${UNLOAD_MARGIN}px` },
   );
   return observer;
 }

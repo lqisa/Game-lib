@@ -17,7 +17,7 @@
           <div style="min-height: 0; flex-shrink: 1; overflow: hidden;">
             <q-img
               v-if="game.cover_path"
-              :src="`/covers/${game.cover_path}`"
+              :src="coverUrl"
               :ratio="3 / 4"
               class="rounded-borders"
               style="max-height: 100%"
@@ -175,6 +175,7 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../composables/useApi';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
 import { splitKeyword } from '../composables/useSplitKeyword';
+import { useExpressUrl } from '../composables/useExpressUrl';
 
 interface GameDetail {
   id: number;
@@ -198,6 +199,15 @@ const route = useRoute();
 const router = useRouter();
 const game = ref<GameDetail | null>(null);
 const showScrapeDialog = ref(false);
+
+const { getCoversUrl } = useExpressUrl();
+
+const coverUrl = computed(() => {
+  if (game.value?.cover_path) {
+    return getCoversUrl(game.value.cover_path);
+  }
+  return '';
+});
 
 const scrapeDefaultSource = computed<'dlsite' | 'bangumi' | 'vndb' | 'steam' | undefined>(() => {
   const type = game.value?.sources?.[0]?.source_type;

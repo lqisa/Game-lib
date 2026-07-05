@@ -51,7 +51,7 @@
 
     <div
       ref="gridContainer"
-      class="q-pa-md"
+class="q-pa-md"
       style="flex: 1; min-height: 0; overflow-y: auto; position: relative;"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent="onDragOver"
@@ -67,28 +67,32 @@
           <div class="text-h6 text-primary q-mt-sm">Drop folder to search</div>
         </div>
       </div>
-      <div
-        class="row q-col-gutter-md"
+
+      <VirtualGrid
+        v-if="games.length > 0"
+        ref="virtualGrid"
+        :items="games"
+        :item-key="(g: GameItem) => g.id"
+        :row-height="rowHeight"
+        :gutter="16"
+        :buffer-rows="3"
         @mousedown="onGridMouseDown"
         @mousemove="onGridMouseMove"
         @mouseup="onGridMouseUp"
       >
-        <div
-          v-for="game in games"
-          :key="game.id"
-          class="col-6 col-sm-4 col-md-3 col-lg-2"
-          :data-game-id="game.id"
-        >
-          <GameCard
-            :game="game"
-            :selectable="selectMode"
-            :selected="selectedIds.has(game.id)"
-            :duplicate="duplicateGameIds.has(game.id)"
-            @click="goDetail(game.id)"
-            @select="toggleSelect(game.id, $event)"
-          />
-        </div>
-      </div>
+        <template #default="{ item: game }">
+          <div :data-game-id="game.id">
+            <GameCard
+              :game="game"
+              :selectable="selectMode"
+              :selected="selectedIds.has(game.id)"
+              :duplicate="duplicateGameIds.has(game.id)"
+              @click="goDetail(game.id)"
+              @select="toggleSelect(game.id, $event)"
+            />
+          </div>
+        </template>
+      </VirtualGrid>
 
       <div v-if="selectMode && dragSelecting" class="drag-select-rect" :style="dragRectStyle" />
 
@@ -133,6 +137,7 @@ import { useRouter } from 'vue-router';
 
 import api from '../composables/useApi';
 import GameCard from '../components/GameCard.vue';
+import VirtualGrid from '../components/VirtualGrid.vue';
 import ScannerDialog from '../components/ScannerDialog.vue';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
 import FilterDialog from '../components/FilterDialog.vue';
@@ -256,6 +261,24 @@ const lastSelectedId = ref<number | null>(null);
 const confirmDeleteDialog = ref(false);
 
 const gridContainer = ref<HTMLElement | null>(null);
+const virtualGrid = ref<{ scrollTo: (top: number) => void; getScrollTop: () => number } | null>(null);
+
+const CARD_ASPECT = 2.8 / 4;
+const CARD_TITLE_H = 28;
+const CARD_PADDING = 0;
+const rowHeight = computed(() => {
+  const containerW = gridContainer.value?.clientWidth ?? 1200;
+  const vw = window.innerWidth;
+  let c: number;
+  if (vw >= 1440) c = 6;
+  else if (vw >= 1024) c = 4;
+  else if (vw >= 600) c = 3;
+  else c = 2;
+  const gutter = 16;
+  const colW = (containerW - gutter * (c - 1)) / c;
+  const coverH = colW / CARD_ASPECT;
+  return Math.ceil(coverH + CARD_TITLE_H + CARD_PADDING);
+});
 
 const dragSelecting = ref(false);
 const dragStart = ref({ x: 0, y: 0 });
@@ -385,7 +408,7 @@ const onKeydown = (e: KeyboardEvent) => {
 
 const loadGames = async () => {
   if (loading.value) return;
-  window.scrollTo(0, 0);
+  virtualGrid.value?.scrollTo(0);
   loading.value = true;
   try {
     const f = currentFilter.value;
@@ -466,7 +489,7 @@ const restoreScroll = () => {
   const top = Number(saved);
   if (!top) return;
   void nextTick(() => {
-    window.scrollTo(0, top);
+    virtualGrid.value?.scrollTo(top);
   });
 };
 

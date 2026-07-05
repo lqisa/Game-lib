@@ -6,6 +6,10 @@ import type http from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerQuasarRuntime, resolveElectronAssetsPath } from '#q-app/electron/main';
 
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256');
+app.commandLine.appendSwitch('disable-features', 'MediaSessionService,HardwareMediaKeyHandling');
+app.commandLine.appendSwitch('enable-features', 'LowResImageCache');
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const platform = process.platform || os.platform();
 
@@ -73,6 +77,8 @@ async function createWindow() {
     webPreferences: {
       contextIsolation: true,
       preload: path.join(import.meta.dirname, 'electron-preload.cjs'),
+      backgroundThrottling: true,
+      spellcheck: false,
     },
   });
 

@@ -43,6 +43,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useExpressUrl } from '../composables/useExpressUrl';
 
 interface Game {
   id: number;
@@ -73,9 +74,11 @@ const emit = defineEmits<{
   select: [e: MouseEvent];
 }>();
 
+const { getCoversUrl } = useExpressUrl();
+
 const coverSrc = computed(() => {
   if (props.game.cover_path) {
-    return `/covers/${props.game.cover_path}`;
+    return getCoversUrl(props.game.cover_path);
   }
   return '';
 });
@@ -96,6 +99,7 @@ const handleClick = (e: MouseEvent) => {
   transition:
     transform 0.15s,
     box-shadow 0.15s;
+  height: 100%;
 }
 .game-card:hover {
   transform: translateY(-2px);

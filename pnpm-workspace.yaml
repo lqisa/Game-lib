@@ -7,4 +7,5 @@ allowBuilds:
   esbuild: true
   lightningcss: true
   rolldown: true
+  sqlite3: true
   unrs-resolver: true

@@ -15,8 +15,14 @@ const db = knex({
   connection: { filename: DB_PATH },
   useNullAsDefault: true,
   pool: {
+    min: 1,
+    max: 2,
+    acquireTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
     afterCreate: (conn, done) => {
-      conn.run('PRAGMA foreign_keys = ON', done);
+      conn.run('PRAGMA foreign_keys = ON');
+      conn.run('PRAGMA journal_mode = WAL');
+      conn.run('PRAGMA cache_size = -2000', done);
     },
   },
 });

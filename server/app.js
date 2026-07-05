@@ -7,6 +7,16 @@ import { getDataDir } from './config.js';
 const createApp = (frontendDir) => {
   const app = express();
 
+  app.use((_req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (_req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -16,7 +26,10 @@ const createApp = (frontendDir) => {
   if (!fs.existsSync(coversDir)) {
     fs.mkdirSync(coversDir, { recursive: true });
   }
-  app.use('/covers', express.static(coversDir));
+  app.use('/covers', express.static(coversDir, {
+    maxAge: '1h',
+    etag: true,
+  }));
 
   if (frontendDir) {
     app.use(express.static(frontendDir));
