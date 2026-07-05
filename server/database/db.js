@@ -89,7 +89,7 @@ const getGames = async ({
     .leftJoin('library', 'game.library_id', 'library.id')
     .select('game.*', 'library.name as library_name', 'library.path as library_path');
 
-  const allowedSort = ['name', 'created_at', 'updated_at'];
+  const allowedSort = ['name', 'created_at', 'updated_at', 'dir_created_at'];
   const sort = allowedSort.includes(sortBy) ? sortBy : 'updated_at';
   const order = sortOrder === 'asc' ? 'asc' : 'desc';
   query = query.orderBy(`game.${sort}`, order);

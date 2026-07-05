@@ -56,6 +56,7 @@ const TABLE_DDL = {
       table.string('sub_path').notNullable();
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
+      table.dateTime('dir_created_at');
       table.foreign('library_id').references('id').inTable('library').onDelete('CASCADE');
     }),
   game_maker: (knex) =>
@@ -247,6 +248,14 @@ const initDatabase = async () => {
     await knex.raw('PRAGMA foreign_keys = ON');
     await knex('setting').insert({ key: 'migration_v5', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v5 done.');
+  }
+
+  const v6 = await knex('setting').where({ key: 'migration_v6' }).first();
+  if (!v6) {
+    console.log(' * Running migration v6: add dir_created_at to game...');
+    await knex.raw('ALTER TABLE game ADD COLUMN dir_created_at DATETIME');
+    await knex('setting').insert({ key: 'migration_v6', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v6 done.');
   }
 };
 

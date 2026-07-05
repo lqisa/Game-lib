@@ -220,7 +220,18 @@ router.post('/', async (req, res, next) => {
     if (!library_id && !/^[a-zA-Z]:|^\\/.test(sub_path)) {
       return res.status(400).send({ error: 'sub_path must be absolute when library_id is not provided' });
     }
-    const [id] = await db.insertGame({ name, library_id, sub_path, cover_path, description });
+
+    let dirCreatedAt = null;
+    try {
+      const fullPath = library_id
+        ? path.join((await db.knex('library').where({ id: library_id }).first())?.path || '', sub_path)
+        : sub_path;
+      dirCreatedAt = fs.statSync(fullPath).birthtime;
+    } catch {
+      // ignore if path not accessible
+    }
+
+    const [id] = await db.insertGame({ name, library_id, sub_path, cover_path, description, dir_created_at: dirCreatedAt });
     const game = await db.getGameDetail(id);
     res.status(201).send(game);
   } catch (err) {
@@ -316,13 +327,28 @@ router.post('/scan/add', async (req, res, next) => {
       return res.status(400).send({ error: 'libraryId and dirs are required' });
     }
 
-    const rows = dirs.map((d) => ({
-      name: d.includes('/') || d.includes('\\')
-        ? path.basename(d, path.extname(d))
-        : d,
-      library_id: libraryId,
-      sub_path: d,
-    }));
+    const library = await db.knex('library').where({ id: libraryId }).first();
+    const libPath = library ? library.path : '';
+
+    const rows = dirs.map((d) => {
+      let dirCreatedAt = null;
+      if (libPath) {
+        try {
+          const fullPath = path.join(libPath, d);
+          dirCreatedAt = fs.statSync(fullPath).birthtime;
+        } catch {
+          // ignore if path not accessible
+        }
+      }
+      return {
+        name: d.includes('/') || d.includes('\\')
+          ? path.basename(d, path.extname(d))
+          : d,
+        library_id: libraryId,
+        sub_path: d,
+        dir_created_at: dirCreatedAt,
+      };
+    });
 
     const inserted = [];
     if (rows.length > 0) {

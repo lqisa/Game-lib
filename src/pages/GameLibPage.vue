@@ -1,6 +1,6 @@
 <template>
-  <q-page>
-    <div class="row items-center q-gutter-sm q-px-md q-py-sm toolbar-sticky">
+  <q-page style="overflow: hidden; display: flex; flex-direction: column;">
+    <div class="row items-center q-gutter-sm q-px-md q-py-sm">
       <q-input
         v-model="keyword"
         label="Search"
@@ -52,7 +52,7 @@
     <div
       ref="gridContainer"
       class="q-pa-md"
-      style="position: relative"
+      style="flex: 1; min-height: 0; overflow-y: auto; position: relative;"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent="onDragOver"
       @dragleave.prevent="onDragLeave"
@@ -128,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 
 import api from '../composables/useApi';
@@ -196,16 +196,37 @@ const currentFilter = ref<FilterState>({
   duplicate: 'all',
 });
 
-const sortBy = ref('updated_at');
-const sortOrder = ref<'asc' | 'desc'>('desc');
 const sortOptions = [
   { label: 'Name', value: 'name' },
   { label: 'Date Added', value: 'created_at' },
   { label: 'Date Updated', value: 'updated_at' },
+  { label: 'Creation Time', value: 'dir_created_at' },
 ];
+
+const SORT_KEY = '__game_lib_sort__';
+
+const loadSortPrefs = (): { sortBy: string; sortOrder: 'asc' | 'desc' } => {
+  try {
+    const saved = localStorage.getItem(SORT_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch { /* ignore */ }
+  return { sortBy: 'updated_at', sortOrder: 'desc' };
+};
+
+const saveSortPrefs = () => {
+  localStorage.setItem(SORT_KEY, JSON.stringify({
+    sortBy: sortBy.value,
+    sortOrder: sortOrder.value,
+  }));
+};
+
+const savedSort = loadSortPrefs();
+const sortBy = ref(savedSort.sortBy);
+const sortOrder = ref<'asc' | 'desc'>(savedSort.sortOrder);
 
 const toggleSortOrder = () => {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc';
+  saveSortPrefs();
   games.value = [];
   void loadGames();
 };
@@ -224,6 +245,7 @@ const activeFilterCount = computed(() => {
 
 const onApplyFilter = (filter: FilterState) => {
   currentFilter.value = filter;
+  saveFilterState();
   games.value = [];
   void loadGames();
 };
@@ -400,6 +422,7 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null;
 watch(keyword, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
+    saveFilterState();
     searchGames();
   }, 300);
 });
@@ -410,9 +433,29 @@ const onSearchClear = () => {
 };
 
 watch(sortBy, () => {
+  saveSortPrefs();
   games.value = [];
   void loadGames();
 });
+
+const FILTER_KEY = '__game_lib_filter__';
+
+const saveFilterState = () => {
+  sessionStorage.setItem(FILTER_KEY, JSON.stringify({
+    keyword: keyword.value,
+    filter: currentFilter.value,
+  }));
+};
+
+const restoreFilterState = () => {
+  try {
+    const saved = sessionStorage.getItem(FILTER_KEY);
+    if (!saved) return;
+    const { keyword: kw, filter } = JSON.parse(saved);
+    if (kw) keyword.value = kw;
+    if (filter) Object.assign(currentFilter.value, filter);
+  } catch { /* ignore */ }
+};
 
 const SCROLL_KEY = '__game_lib_scroll__';
 
@@ -535,6 +578,7 @@ const onDropAdopt = async (data: DropAdoptData) => {
 };
 
 onMounted(() => {
+  restoreFilterState();
   void loadGames().then(() => restoreScroll());
   window.addEventListener('keydown', onKeydown);
 });
@@ -542,12 +586,16 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown);
 });
+
+onBeforeUnmount(() => {
+  saveFilterState();
+});
 </script>
 
 <style scoped>
 .toolbar-sticky {
   position: sticky;
-  top: 50px;
+  top: 0;
   z-index: 100;
   background: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);

@@ -31,6 +31,7 @@ const createSchema = () =>
       table.string('sub_path').notNullable();
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
+      table.dateTime('dir_created_at');
       table.foreign('library_id').references('id').inTable('library').onDelete('CASCADE');
     })
     .createTable('game_maker', (table) => {

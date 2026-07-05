@@ -1,28 +1,34 @@
 <template>
-  <q-page>
-    <div v-if="game" class="q-pa-md">
-      <q-btn flat round icon="arrow_back" class="q-mb-md" @click="$router.push('/')" />
-      <q-btn flat round icon="refresh" class="q-mb-md" @click="showScrapeDialog = true">
-        <q-tooltip>Re-scrape</q-tooltip>
-      </q-btn>
-      <q-btn flat round icon="delete" color="negative" class="q-mb-md" @click="confirmDelete = true">
-        <q-tooltip>Delete</q-tooltip>
-      </q-btn>
+  <q-page style="overflow: hidden; display: flex; flex-direction: column;">
+    <div v-if="game" class="q-pa-md" style="display: flex; flex-direction: column; height: 100%;">
+      <div>
+        <q-btn flat round icon="arrow_back" class="q-mb-md" @click="$router.push('/')" />
+        <q-btn flat round icon="refresh" class="q-mb-md" @click="showScrapeDialog = true">
+          <q-tooltip>Re-scrape</q-tooltip>
+        </q-btn>
+        <q-btn flat round icon="delete" color="negative" class="q-mb-md" @click="confirmDelete = true">
+          <q-tooltip>Delete</q-tooltip>
+        </q-btn>
+      </div>
 
-      <div class="row q-col-gutter-md">
-        <div class="col-12 col-sm-4">
-          <q-img
-            v-if="game.cover_path"
-            :src="`/covers/${game.cover_path}`"
-            :ratio="3 / 4"
-            class="rounded-borders"
-          />
-          <div
-            v-else
-            class="bg-grey-4 rounded-borders"
-            style="aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center"
-          >
-            <q-icon name="videogame_asset" size="64px" color="grey-6" />
+      <div style="flex: 1; min-height: 0; overflow: hidden;">
+        <div style="display: flex; gap: 16px; height: 100%;">
+          <div style="flex-shrink: 0; max-width: 300px; display: flex; flex-direction: column; min-height: 0;">
+          <div style="min-height: 0; flex-shrink: 1; overflow: hidden;">
+            <q-img
+              v-if="game.cover_path"
+              :src="`/covers/${game.cover_path}`"
+              :ratio="3 / 4"
+              class="rounded-borders"
+              style="max-height: 100%"
+            />
+            <div
+              v-else
+              class="bg-grey-4 rounded-borders"
+              style="aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center; max-height: 100%"
+            >
+              <q-icon name="videogame_asset" size="64px" color="grey-6" />
+            </div>
           </div>
 
           <div class="text-caption text-grey q-mt-sm">
@@ -70,8 +76,9 @@
           </div>
         </div>
 
-        <div class="col-12 col-sm-8">
-          <div class="text-h5 q-mb-sm">{{ displayName }}</div>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;">
+            <div>
+              <div class="text-h5 q-mb-sm">{{ displayName }}</div>
           <div v-if="displayName !== game.name" class="text-caption text-grey">
             <q-icon name="folder" size="xs" class="q-mr-xs" />
             {{ game.name }}
@@ -119,10 +126,13 @@
             </q-chip>
           </div>
 
-          <div v-if="game.description" class="q-mb-sm">
-            <span class="text-grey">Description: </span>
-            <div class="text-body2 q-mt-xs" style="white-space: pre-wrap">
-              {{ game.description }}
+            </div>
+
+            <div v-if="game.description" style="flex: 1; min-height: 0; overflow-y: auto;">
+              <span class="text-grey">Description: </span>
+              <div class="text-body2 q-mt-xs" style="white-space: pre-wrap">
+                {{ game.description }}
+              </div>
             </div>
           </div>
         </div>

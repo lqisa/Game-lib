@@ -57,6 +57,7 @@ router.post('/bangumi/search', async (req, res, next) => {
     const results = await searchBangumi(keyword, token);
     res.send({ results });
   } catch (err) {
+    console.error('[bangumi/search]', err.response?.status, err.response?.data || err.message);
     next(err);
   }
 });
@@ -74,6 +75,7 @@ router.post('/bangumi/fetch', async (req, res, next) => {
     }
     res.send(detail);
   } catch (err) {
+    console.error('[bangumi/fetch]', err.response?.status, err.response?.data || err.message);
     next(err);
   }
 });
@@ -254,6 +256,10 @@ const adoptOne = async (data, trx, predownloadedCover) => {
     .update({ description, cover_path: coverPath, updated_at: db.knex.fn.now() });
 
   await d('game_source')
+    .where({ game_id: gameId })
+    .del();
+
+  await d('game_source')
     .insert({
       game_id: gameId,
       source_type: sourceType,
@@ -412,6 +418,10 @@ router.post('/adopt/batch', async (req, res, next) => {
               await trx('game')
                 .where({ id: gameId })
                 .update({ description, cover_path: coverPath, updated_at: db.knex.fn.now() });
+
+              await trx('game_source')
+                .where({ game_id: gameId })
+                .del();
 
               await trx('game_source')
                 .insert({

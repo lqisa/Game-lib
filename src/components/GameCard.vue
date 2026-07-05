@@ -107,7 +107,7 @@ const handleClick = (e: MouseEvent) => {
 
 .game-cover {
   position: relative;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 2.8 / 4;
   background: #e0e0e0;
   overflow: hidden;
 }

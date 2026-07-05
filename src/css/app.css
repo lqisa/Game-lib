@@ -1,5 +1,30 @@
 /* app global css */
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#q-app {
+  height: 100%;
+}
+
+.q-layout {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.q-page-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.q-page {
+  height: 100%;
+  overflow-y: auto;
+}
+
 /* Dark mode scrollbar */
 html.body--dark::-webkit-scrollbar {
   width: 8px;

@@ -33,13 +33,29 @@
             outlined
             dense
             class="col"
+            :disable="manualFetching"
             @keyup.enter="doSearch"
           >
             <template v-slot:append>
               <q-icon name="search" class="cursor-pointer" @click="doSearch" />
             </template>
           </q-input>
-          <q-btn color="primary" label="Search" @click="doSearch" :loading="searching" />
+          <q-input
+            v-model="idInput"
+            :label="idInputLabel"
+            outlined
+            dense
+            style="min-width: 160px"
+            :disable="searching"
+            @keyup.enter="doSearchOrFetch"
+          />
+          <q-btn
+            color="primary"
+            label="Search"
+            @click="doSearchOrFetch"
+            :loading="searching || manualFetching"
+            :disable="!keyword.trim() && !idInput.trim()"
+          />
         </div>
 
         <div v-if="segments.length > 0" class="q-mb-sm">
@@ -175,7 +191,7 @@
       </q-card-section>
       <q-card-actions align="right" class="scrape-actions q-px-md q-py-sm">
         <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-        <q-btn color="positive" label="Adopt" @click="adopt" :disable="!selectedResult || detailLoading" />
+        <q-btn color="positive" label="Adopt" @click="adopt" :disable="!selectedResult || detailLoading || manualFetching" />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -211,14 +227,27 @@ const show = computed({
 
 const activeSource = ref<SourceType>('dlsite');
 const keyword = ref('');
+const idInput = ref('');
 const results = ref<SearchResult[]>([]);
 const selectedIdx = ref(-1);
 const searching = ref(false);
 const searched = ref(false);
 const detail = ref<DetailResult | null>(null);
 const detailLoading = ref(false);
+const manualFetching = ref(false);
 const searchAbort = ref<AbortController | null>(null);
 const fetchAbort = ref<AbortController | null>(null);
+const manualFetchAbort = ref<AbortController | null>(null);
+
+const idInputLabel = computed(() => {
+  const labels: Record<SourceType, string> = {
+    dlsite: 'RJ Code (e.g. RJ123456)',
+    bangumi: 'Subject ID (e.g. 123456)',
+    vndb: 'VNDB ID (e.g. v12345)',
+    steam: 'App ID (e.g. 123456)',
+  };
+  return labels[activeSource.value] || 'Source ID';
+});
 
 const segments = computed(() => {
   if (!props.initialSegments || props.initialSegments.length === 0) return [];
@@ -242,6 +271,7 @@ const doSearch = async () => {
   if (!keyword.value.trim()) return;
   if (searchAbort.value) searchAbort.value.abort();
   searchAbort.value = new AbortController();
+  const currentAbort = searchAbort.value;
   searching.value = true;
   results.value = [];
   selectedIdx.value = -1;
@@ -251,7 +281,7 @@ const doSearch = async () => {
     const res = await api.post(`/scraper/${activeSource.value}/search`, {
       keyword: keyword.value.trim(),
     }, {
-      signal: searchAbort.value.signal,
+      signal: currentAbort.signal,
     });
     const data = res.data;
     results.value = data.results ?? data;
@@ -260,7 +290,9 @@ const doSearch = async () => {
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
   } finally {
-    searching.value = false;
+    if (searchAbort.value === currentAbort) {
+      searching.value = false;
+    }
   }
 };
 
@@ -271,11 +303,12 @@ const selectResult = async (idx: number) => {
   if (!r) return;
   if (fetchAbort.value) fetchAbort.value.abort();
   fetchAbort.value = new AbortController();
+  const currentFetch = fetchAbort.value;
   detailLoading.value = true;
   try {
     const fetchBody = activeSource.value === 'dlsite' ? { rjcode: r.id } : { id: r.id };
     const res = await api.post(`/scraper/${activeSource.value}/fetch`, fetchBody, {
-      signal: fetchAbort.value.signal,
+      signal: currentFetch.signal,
     });
     const fetched: DetailResult = res.data || {
       id: r.id,
@@ -297,20 +330,21 @@ const selectResult = async (idx: number) => {
     if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
     detail.value = null;
   } finally {
-    detailLoading.value = false;
+    if (fetchAbort.value === currentFetch) {
+      detailLoading.value = false;
+    }
   }
 };
 
 const adopt = () => {
-  if (!selectedResult.value) return;
   const sr = selectedResult.value;
-  const coverURL = detail.value?.coverURL || sr.coverUrl;
+  const coverURL = detail.value?.coverURL || sr?.coverUrl || '';
   const fallback: DetailResult = detail.value
     ? { ...detail.value, coverURL }
     : {
-        id: sr.id,
-        title: sr.name,
-        coverURL: sr.coverUrl,
+        id: sr?.id || '',
+        title: sr?.name || '',
+        coverURL: sr?.coverUrl || '',
         makers: [],
         genres: [],
         tags: [],
@@ -318,9 +352,9 @@ const adopt = () => {
       };
   emit('adopted', {
     source: activeSource.value,
-    sourceId: sr.id,
-    name: sr.name,
-    makerName: sr.makerName,
+    sourceId: sr?.id || detail.value?.id || '',
+    name: sr?.name || detail.value?.title || '',
+    makerName: sr?.makerName || '',
     coverUrl: coverURL,
     detail: fallback,
   });
@@ -333,10 +367,61 @@ const onOpenFolder = () => {
   }
 };
 
+const fetchById = async () => {
+  const id = idInput.value.trim();
+  if (!id) return;
+  if (manualFetchAbort.value) manualFetchAbort.value.abort();
+  manualFetchAbort.value = new AbortController();
+  const currentAbort = manualFetchAbort.value;
+  manualFetching.value = true;
+  results.value = [];
+  selectedIdx.value = -1;
+  detail.value = null;
+  try {
+    const fetchBody = activeSource.value === 'dlsite' ? { rjcode: id } : { id };
+    const res = await api.post(`/scraper/${activeSource.value}/fetch`, fetchBody, {
+      signal: currentAbort.signal,
+    });
+    const fetched: DetailResult = res.data || {
+      id,
+      title: '',
+      coverURL: '',
+      makers: [],
+      genres: [],
+      tags: [],
+      description: '',
+    };
+    detail.value = fetched;
+    results.value = [{
+      id: fetched.id || id,
+      name: fetched.title || id,
+      coverUrl: fetched.coverURL || '',
+      makerName: fetched.makers?.join(', ') || '',
+    }];
+    selectedIdx.value = 0;
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
+    detail.value = null;
+  } finally {
+    if (manualFetchAbort.value === currentAbort) {
+      manualFetching.value = false;
+    }
+  }
+};
+
 let skipSourceWatch = false;
+
+const doSearchOrFetch = () => {
+  if (idInput.value.trim()) {
+    void fetchById();
+  } else {
+    void doSearch();
+  }
+};
 
 watch(activeSource, () => {
   if (!props.modelValue || skipSourceWatch) return;
+  idInput.value = '';
   void doSearch();
 });
 
@@ -349,11 +434,20 @@ const resolveAutoSource = (name: string): SourceType => {
   return 'bangumi';
 };
 
+watch(show, (val) => {
+  if (!val) {
+    searchAbort.value?.abort();
+    fetchAbort.value?.abort();
+    manualFetchAbort.value?.abort();
+  }
+});
+
 const onDialogShow = async () => {
   results.value = [];
   selectedIdx.value = -1;
   detail.value = null;
   searched.value = false;
+  idInput.value = '';
 
   const searchName = props.gameName;
   const rawKeyword =
