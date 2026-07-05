@@ -11,6 +11,22 @@ app.commandLine.appendSwitch('disable-features', 'MediaSessionService,HardwareMe
 app.commandLine.appendSwitch('enable-features', 'LowResImageCache');
 app.disableHardwareAcceleration();
 
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    lightweightMode = false;
+    void createWindow();
+  }
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const platform = process.platform || os.platform();
 

@@ -52,7 +52,7 @@
     <div
       ref="gridContainer"
 class="q-pa-md"
-      style="flex: 1; min-height: 0; overflow-y: auto; position: relative;"
+      style="flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column;"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent="onDragOver"
       @dragleave.prevent="onDragLeave"
@@ -264,10 +264,8 @@ const gridContainer = ref<HTMLElement | null>(null);
 const virtualGrid = ref<{ scrollTo: (top: number) => void; getScrollTop: () => number } | null>(null);
 
 const CARD_ASPECT = 2.8 / 4;
-const CARD_TITLE_H = 28;
-const CARD_PADDING = 0;
 const rowHeight = computed(() => {
-  const containerW = gridContainer.value?.clientWidth ?? 1200;
+  const containerW = (gridContainer.value?.clientWidth ?? 1200) - 32;
   const vw = window.innerWidth;
   let c: number;
   if (vw >= 1440) c = 6;
@@ -276,8 +274,7 @@ const rowHeight = computed(() => {
   else c = 2;
   const gutter = 16;
   const colW = (containerW - gutter * (c - 1)) / c;
-  const coverH = colW / CARD_ASPECT;
-  return Math.ceil(coverH + CARD_TITLE_H + CARD_PADDING);
+  return Math.ceil(colW / CARD_ASPECT);
 });
 
 const dragSelecting = ref(false);
