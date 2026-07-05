@@ -110,6 +110,20 @@
           </div>
         </q-card-section>
       </q-card>
+
+      <q-card v-if="hasElectronAPI" class="q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle1">Application</div>
+        </q-card-section>
+        <q-card-section>
+          <q-toggle v-model="closeToTray" label="Close to tray" @update:model-value="saveCloseToTray" />
+          <div class="text-caption text-grey q-ml-sm">When closing the window, minimize to tray instead of quitting. The server keeps running in the background.</div>
+        </q-card-section>
+        <q-card-section>
+          <q-toggle v-model="autoStart" label="Launch at startup" @update:model-value="saveAutoStart" />
+          <div class="text-caption text-grey q-ml-sm">Automatically start Game Lib when the system boots. Starts minimized to tray.</div>
+        </q-card-section>
+      </q-card>
     </div>
 
     <q-dialog v-model="showAddDialog">
@@ -193,6 +207,9 @@ const proxyPort = ref(7890);
 
 const blacklist = ref<string[]>([]);
 const newBlacklistItem = ref('');
+
+const autoStart = ref(false);
+const closeToTray = ref(false);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
@@ -355,11 +372,42 @@ const saveProxy = async () => {
   await api.put('/settings/proxy_port', { value: String(proxyPort.value || 7890) });
 };
 
+const saveAutoStart = async (val: boolean) => {
+  if (!window.electronAPI) return;
+  await window.electronAPI.setAutoStart(val);
+};
+
+const fetchAutoStart = async () => {
+  if (!window.electronAPI) return;
+  try {
+    autoStart.value = await window.electronAPI.getAutoStart();
+  } catch {
+    autoStart.value = false;
+  }
+};
+
+const saveCloseToTray = async (val: boolean) => {
+  if (!window.electronAPI) return;
+  await window.electronAPI.setCloseToTray(val);
+  await api.put('/settings/close_to_tray', { value: String(val) });
+};
+
+const fetchCloseToTray = async () => {
+  if (!window.electronAPI) return;
+  try {
+    closeToTray.value = await window.electronAPI.getCloseToTray();
+  } catch {
+    closeToTray.value = false;
+  }
+};
+
 onMounted(() => {
   void fetchLibraries();
   void fetchToken();
   void fetchConcurrency();
   void fetchBlacklist();
   void fetchProxy();
+  void fetchAutoStart();
+  void fetchCloseToTray();
 });
 </script>

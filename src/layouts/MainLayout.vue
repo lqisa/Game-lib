@@ -32,6 +32,13 @@
           <q-item-section>{{ dark ? 'Dark' : 'Light' }}</q-item-section>
           <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{ dark ? 'Switch to Light' : 'Switch to Dark' }}</q-tooltip>
         </q-item>
+        <q-item v-if="hasElectronAPI" clickable v-ripple @click="enterLightweightMode">
+          <q-item-section avatar>
+            <q-icon name="power_settings_new" />
+          </q-item-section>
+          <q-item-section>Lightweight</q-item-section>
+          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Enter Lightweight Mode</q-tooltip>
+        </q-item>
       </div>
     </q-drawer>
 
@@ -48,6 +55,8 @@ import { useQuasar } from 'quasar';
 const $q = useQuasar();
 const drawer = ref(true);
 
+const hasElectronAPI = computed(() => !!window.electronAPI);
+
 const stored = localStorage.getItem('dark');
 if (stored !== null) {
   $q.dark.set(stored === 'true');
@@ -62,6 +71,11 @@ const dark = computed({
     localStorage.setItem('dark', String(val));
   },
 });
+
+const enterLightweightMode = async () => {
+  if (!window.electronAPI) return;
+  await window.electronAPI.enterLightweightMode();
+};
 </script>
 
 <style>

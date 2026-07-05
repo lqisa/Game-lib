@@ -38,4 +38,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('dialog:openDirectory', title),
   openPath: (targetPath: string): Promise<void> => ipcRenderer.invoke('shell:openPath', targetPath),
   getFilePath: (file: File): string => webUtils.getPathForFile(file),
+  enterLightweightMode: (): Promise<void> => ipcRenderer.invoke('app:enterLightweightMode'),
+  exitLightweightMode: (): Promise<void> => ipcRenderer.invoke('app:exitLightweightMode'),
+  isLightweightMode: (): Promise<boolean> => ipcRenderer.invoke('app:isLightweightMode'),
+  setAutoStart: (enabled: boolean): Promise<void> => ipcRenderer.invoke('app:setAutoStart', enabled),
+  getAutoStart: (): Promise<boolean> => ipcRenderer.invoke('app:getAutoStart'),
+  setCloseToTray: (enabled: boolean): Promise<void> => ipcRenderer.invoke('app:setCloseToTray', enabled),
+  getCloseToTray: (): Promise<boolean> => ipcRenderer.invoke('app:getCloseToTray'),
 });
