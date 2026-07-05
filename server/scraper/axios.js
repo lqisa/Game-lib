@@ -1,4 +1,5 @@
 import axios from 'axios';
+import HttpsProxyAgent from 'https-proxy-agent';
 import * as db from '../database/db.js';
 
 const scraperAxios = axios.create({
@@ -11,11 +12,8 @@ const initProxy = async () => {
     if (enabled !== 'true') return;
     const host = (await db.getSetting('proxy_host')) || '127.0.0.1';
     const port = parseInt((await db.getSetting('proxy_port')) || '7890', 10);
-    scraperAxios.defaults.proxy = {
-      protocol: 'http',
-      host,
-      port,
-    };
+    const agent = new HttpsProxyAgent(`http://${host}:${port}`);
+    scraperAxios.defaults.httpsAgent = agent;
   } catch {
     // settings may not exist yet
   }
