@@ -218,7 +218,8 @@ void app.whenReady().then(async () => {
   const userDataDir = app.getPath('userData');
   process.env.GAME_LIB_DATA_DIR = userDataDir;
 
-  const startHidden = app.commandLine.hasSwitch('hidden');
+  const startHidden = app.commandLine.hasSwitch('hidden')
+    || (platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden);
   if (startHidden) {
     lightweightMode = true;
   }
@@ -251,11 +252,17 @@ void app.whenReady().then(async () => {
   });
 
   ipcMain.handle('app:setAutoStart', (_event, enabled: boolean) => {
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
-      openAsHidden: enabled,
-      ...(platform === 'win32' && { path: app.getPath('exe') }),
-    });
+    if (platform === 'win32') {
+      app.setLoginItemSettings({
+        openAtLogin: enabled,
+        args: enabled ? ['--hidden'] : [],
+      });
+    } else {
+      app.setLoginItemSettings({
+        openAtLogin: enabled,
+        openAsHidden: enabled,
+      });
+    }
   });
 
   ipcMain.handle('app:getAutoStart', () => {
