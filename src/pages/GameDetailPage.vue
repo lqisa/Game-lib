@@ -50,7 +50,7 @@
           <div v-if="game.sources?.length" class="text-caption text-grey q-mt-xs">
             <span v-for="s in game.sources" :key="s.id" class="q-mr-md">
               {{ s.source_type }}: {{ s.source_id }}
-              <a v-if="s.source_url" :href="s.source_url" target="_blank" class="text-blue">Link</a>
+              <a v-if="s.source_url" :href="s.source_url" class="text-blue" @click.prevent="openExternal(s.source_url)">Link</a>
             </span>
           </div>
 
@@ -230,6 +230,14 @@ const sourceColor = (source: string) => {
   if (source === 'vndb') return 'cyan';
   if (source === 'steam') return 'blue-grey';
   return 'grey';
+};
+
+const openExternal = (url: string) => {
+  if (window.electronAPI) {
+    void window.electronAPI.openExternal(url);
+  } else {
+    window.open(url, '_blank');
+  }
 };
 
 const isAbsolute = (p: string) => /^[a-zA-Z]:/.test(p) || p.startsWith('\\\\');

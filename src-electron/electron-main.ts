@@ -237,6 +237,10 @@ void app.whenReady().then(async () => {
     await shell.openPath(targetPath);
   });
 
+  ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+    await shell.openExternal(url);
+  });
+
   ipcMain.handle('app:enterLightweightMode', () => {
     lightweightMode = true;
     destroyWindow();

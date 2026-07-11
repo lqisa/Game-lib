@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: (title: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory', title),
   openPath: (targetPath: string): Promise<void> => ipcRenderer.invoke('shell:openPath', targetPath),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   getFilePath: (file: File): string => webUtils.getPathForFile(file),
   enterLightweightMode: (): Promise<void> => ipcRenderer.invoke('app:enterLightweightMode'),
   exitLightweightMode: (): Promise<void> => ipcRenderer.invoke('app:exitLightweightMode'),

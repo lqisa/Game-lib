@@ -1,6 +1,7 @@
 interface ElectronAPI {
   openDirectory(title: string): Promise<string | null>;
   openPath(path: string): Promise<void>;
+  openExternal(url: string): Promise<void>;
   getFilePath(file: File): string;
   enterLightweightMode(): Promise<void>;
   exitLightweightMode(): Promise<void>;
