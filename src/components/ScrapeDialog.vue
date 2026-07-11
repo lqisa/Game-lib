@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="show" persistent @show="onDialogShow" @keydown.esc="show = false">
+  <q-dialog v-model="show" persistent transition-show="fade" transition-hide="fade" @show="onDialogShow" @keydown.esc="show = false">
     <q-card class="scrape-dialog-card">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle1">Scrape: {{ gameName }}</div>

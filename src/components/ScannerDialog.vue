@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="modelValue" persistent maximized>
+  <q-dialog v-model="modelValue" persistent maximized transition-show="fade" transition-hide="fade">
     <q-card class="column">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle1">Scan & Scrape</div>
