@@ -133,7 +133,7 @@ class="q-pa-md"
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, onBeforeRouteLeave } from 'vue-router';
 
 import api from '../composables/useApi';
 import GameCard from '../components/GameCard.vue';
@@ -605,6 +605,12 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown);
+});
+
+onBeforeRouteLeave(() => {
+  const scrollTop = virtualGrid.value?.getScrollTop() ?? 0;
+  sessionStorage.setItem(SCROLL_KEY, String(scrollTop));
+  saveFilterState();
 });
 
 onBeforeUnmount(() => {
