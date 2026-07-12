@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+      
 
 permissions:
   contents: write
@@ -17,14 +19,14 @@ jobs:
             platform: win32
             arch: x64
             ext: zip
-          - os: macos-latest
-            platform: darwin
-            arch: x64
-            ext: zip
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
-            ext: zip
+          # - os: macos-latest
+          #   platform: darwin
+          #   arch: x64
+          #   ext: zip
+          # - os: macos-latest
+          #   platform: darwin
+          #   arch: arm64
+          #   ext: zip
 
     runs-on: ${{ matrix.os }}
 
@@ -48,11 +50,11 @@ jobs:
         run: |
           Compress-Archive -Path "dist/electron/Packaged/Game Lib-*" -DestinationPath "Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip"
 
-      - name: Package artifact (macOS)
-        if: matrix.platform == 'darwin'
-        run: |
-          cd dist/electron/Packaged
-          zip -r -9 "../../../Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip" "Game Lib.app"
+      # - name: Package artifact (macOS)
+      #   if: matrix.platform == 'darwin'
+      #   run: |
+      #     cd dist/electron/Packaged
+      #     zip -r -9 "../../../Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip" "Game Lib.app"
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
