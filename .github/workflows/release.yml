@@ -35,9 +35,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Set release tag
-        run: echo "TAG=${{ inputs.tag || github.ref_name }}" >> $env:GITHUB_ENV
-
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
@@ -58,22 +55,22 @@ jobs:
       - name: Package artifact (Windows)
         if: matrix.platform == 'win32'
         run: |
-          Compress-Archive -Path "dist/electron/Packaged/Game Lib-*" -DestinationPath "Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip"
+          Compress-Archive -Path "dist/electron/Packaged/Game Lib-*" -DestinationPath "Game-Lib-${{ inputs.tag || github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip"
 
       # - name: Package artifact (macOS)
       #   if: matrix.platform == 'darwin'
       #   run: |
       #     cd dist/electron/Packaged
-      #     zip -r -9 "../../../Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip" "Game Lib.app"
+      #     zip -r -9 "../../../Game-Lib-${{ inputs.tag || github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip" "Game Lib.app"
 
       - name: Create release
         run: |
-          gh release create ${{ github.ref_name }} --generate-notes --title "${{ github.ref_name }}"
+          gh release view ${{ inputs.tag || github.ref_name }} || gh release create ${{ inputs.tag || github.ref_name }} --generate-notes --title "${{ inputs.tag || github.ref_name }}"
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload release asset
         run: |
-          gh release upload ${{ github.ref_name }} "Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip" --clobber
+          gh release upload ${{ inputs.tag || github.ref_name }} "Game-Lib-${{ inputs.tag || github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
