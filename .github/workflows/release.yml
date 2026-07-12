@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            ext: zip
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+            ext: zip
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            ext: zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: Build Electron app
+        run: npx quasar build -m electron
+
+      - name: Package artifact (Windows)
+        if: matrix.platform == 'win32'
+        run: |
+          Compress-Archive -Path "dist/electron/Packaged/Game Lib-*" -DestinationPath "Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip"
+
+      - name: Package artifact (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          cd dist/electron/Packaged
+          zip -r -9 "../../../Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip" "Game Lib.app"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Game-Lib-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip
+          generate_release_notes: true
