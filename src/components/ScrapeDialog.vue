@@ -88,7 +88,7 @@
                     <div class="scrape-cover-box">
                       <q-img
                         v-if="r.coverUrl"
-                        :src="r.coverUrl"
+                        :src="getProxyImageUrl(r.coverUrl)"
                         :ratio="3 / 4"
                         class="rounded-borders-left"
                       >
@@ -131,7 +131,7 @@
                 <div class="col-5">
                   <q-img
                     v-if="detailCoverUrl"
-                    :src="detailCoverUrl"
+                    :src="getProxyImageUrl(detailCoverUrl)"
                     :ratio="3 / 4"
                     class="rounded-borders"
                   />
@@ -201,7 +201,10 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import api from '../composables/useApi';
 import { getCleanedName } from '../composables/useSplitKeyword';
+import { useExpressUrl } from '../composables/useExpressUrl';
 import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
+
+const { getProxyImageUrl } = useExpressUrl();
 
 const props = defineProps<{
   modelValue: boolean;

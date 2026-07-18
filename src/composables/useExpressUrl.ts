@@ -6,6 +6,10 @@ export function useExpressUrl() {
   return {
     getApiUrl: (path: string) => `${baseUrl}/api${path}`,
     getCoversUrl: (path: string) => `${baseUrl}/covers/${path}`,
+    getProxyImageUrl: (remoteUrl: string) => {
+      if (!remoteUrl) return '';
+      return `${baseUrl}/api/proxy/image?url=${encodeURIComponent(remoteUrl)}`;
+    },
     baseUrl,
   };
 }

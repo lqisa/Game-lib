@@ -14,6 +14,7 @@ const initProxy = async () => {
     const port = parseInt((await db.getSetting('proxy_port')) || '7890', 10);
     const agent = new HttpsProxyAgent(`http://${host}:${port}`);
     scraperAxios.defaults.httpsAgent = agent;
+    scraperAxios.defaults.httpAgent = agent;
   } catch {
     // settings may not exist yet
   }
