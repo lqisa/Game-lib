@@ -3,7 +3,7 @@
     <q-header elevated>
       <q-toolbar>
         <q-btn flat dense round icon="menu" @click="drawer = !drawer" />
-        <q-toolbar-title>Game Lib</q-toolbar-title>
+        <q-toolbar-title>Game Lib ({{ filteredCount }})</q-toolbar-title>
       </q-toolbar>
     </q-header>
 
@@ -51,9 +51,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useQuasar } from 'quasar';
+import { useGameListStore } from '../stores/gameListStore';
 
 const $q = useQuasar();
 const drawer = ref(true);
+
+const gameListStore = useGameListStore();
+const filteredCount = computed(() => gameListStore.filteredCount);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
 

@@ -136,6 +136,7 @@ import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick
 import { useRouter, onBeforeRouteLeave } from 'vue-router';
 
 import api from '../composables/useApi';
+import { useGameListStore } from '../stores/gameListStore';
 import GameCard from '../components/GameCard.vue';
 import VirtualGrid from '../components/VirtualGrid.vue';
 import ScannerDialog from '../components/ScannerDialog.vue';
@@ -163,6 +164,7 @@ interface FilterState {
 }
 
 const router = useRouter();
+const gameListStore = useGameListStore();
 const games = ref<GameItem[]>([]);
 const loading = ref(false);
 const keyword = ref('');
@@ -426,6 +428,7 @@ const loadGames = async () => {
     const res = await api.get('/games', { params });
     games.value = res.data.games;
     total.value = res.data.total;
+    gameListStore.filteredCount = res.data.games.length;
   } finally {
     loading.value = false;
     void loadDuplicates();
@@ -615,6 +618,7 @@ onBeforeRouteLeave(() => {
 
 onBeforeUnmount(() => {
   saveFilterState();
+  gameListStore.filteredCount = 0;
 });
 </script>
 
