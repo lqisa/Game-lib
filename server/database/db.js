@@ -101,7 +101,13 @@ const getGames = async ({
   query = query.orderBy(`game.${sort}`, order);
 
   if (keyword) {
-    query = query.where('game.name', 'like', `%${keyword}%`);
+    query = query.where(function () {
+      this.where('game.name', 'like', `%${keyword}%`)
+        .orWhereIn('game.id', function () {
+          this.select('game_id').from('game_source')
+            .where('game_source.name', 'like', `%${keyword}%`);
+        });
+    });
   }
 
   if (libraryIds && libraryIds.length > 0 && noLibrary) {
