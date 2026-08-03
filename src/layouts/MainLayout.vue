@@ -3,19 +3,40 @@
     <q-header elevated>
       <q-toolbar>
         <q-btn flat dense round icon="menu" @click="drawer = !drawer" />
-        <q-toolbar-title>Game Lib ({{ filteredCount }})</q-toolbar-title>
+        <q-toolbar-title>
+          Game Lib<template v-if="gameListStore.favoritesMode"> - Favorites</template> ({{ filteredCount }})
+        </q-toolbar-title>
       </q-toolbar>
     </q-header>
 
     <q-drawer v-model="drawer" show-if-above bordered :width="56" :breakpoint="0" class="sidebar-no-scroll">
       <div class="column full-height">
         <q-list class="col">
-          <q-item clickable v-ripple to="/" exact>
+          <q-item
+            clickable
+            v-ripple
+            :active="!gameListStore.favoritesMode && $route.path === '/'"
+            active-class="text-primary"
+            @click="navigateTo('/', false)"
+          >
             <q-item-section avatar>
               <q-icon name="videogame_asset" />
             </q-item-section>
             <q-item-section>Game Lib</q-item-section>
             <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Game Lib</q-tooltip>
+          </q-item>
+          <q-item
+            clickable
+            v-ripple
+            :active="gameListStore.favoritesMode"
+            active-class="text-primary"
+            @click="navigateTo('/', true)"
+          >
+            <q-item-section avatar>
+              <q-icon name="star" />
+            </q-item-section>
+            <q-item-section>Favorites</q-item-section>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Favorites</q-tooltip>
           </q-item>
           <q-item clickable v-ripple to="/settings">
             <q-item-section avatar>
@@ -50,16 +71,23 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useGameListStore } from '../stores/gameListStore';
 
 const $q = useQuasar();
+const router = useRouter();
 const drawer = ref(true);
 
 const gameListStore = useGameListStore();
 const filteredCount = computed(() => gameListStore.filteredCount);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
+
+const navigateTo = (path: string, favorites: boolean) => {
+  gameListStore.favoritesMode = favorites;
+  void router.push(path);
+};
 
 const stored = localStorage.getItem('dark');
 if (stored !== null) {

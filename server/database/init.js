@@ -19,6 +19,7 @@ const ALL_TABLES = [
   'setting',
   'search_cache',
   'adopt_cache',
+  'favorite',
 ];
 
 const TABLE_DDL = {
@@ -126,6 +127,12 @@ const TABLE_DDL = {
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
       table.primary(['library_id', 'sub_path']);
+    }),
+  favorite: (knex) =>
+    knex.schema.createTable('favorite', (table) => {
+      table.integer('game_id').primary();
+      table.dateTime('created_at').defaultTo(knex.fn.now());
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
     }),
 };
 
@@ -256,6 +263,22 @@ const initDatabase = async () => {
     await knex.raw('ALTER TABLE game ADD COLUMN dir_created_at DATETIME');
     await knex('setting').insert({ key: 'migration_v6', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v6 done.');
+  }
+
+  const v7 = await knex('setting').where({ key: 'migration_v7' }).first();
+  if (!v7) {
+    console.log(' * Running migration v7: add favorite table...');
+    await knex.raw('PRAGMA foreign_keys = OFF');
+    await knex.raw(`
+      CREATE TABLE IF NOT EXISTS favorite (
+        game_id INTEGER PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (game_id) REFERENCES game(id) ON DELETE CASCADE
+      )
+    `);
+    await knex.raw('PRAGMA foreign_keys = ON');
+    await knex('setting').insert({ key: 'migration_v7', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v7 done.');
   }
 };
 

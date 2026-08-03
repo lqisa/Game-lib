@@ -29,6 +29,7 @@ router.get('/', async (req, res, next) => {
       tagIds,
       scraped,
       duplicate,
+      favoritesOnly,
       sortBy,
       sortOrder,
     } = req.query;
@@ -43,6 +44,7 @@ router.get('/', async (req, res, next) => {
       tagIds: tagIds ? String(tagIds).split(',').map(Number) : undefined,
       scraped: scraped === 'true' ? true : scraped === 'false' ? false : undefined,
       duplicate: duplicate === 'yes' ? true : duplicate === 'no' ? false : undefined,
+      favoritesOnly: favoritesOnly === 'true',
       sortBy: sortBy || 'updated_at',
       sortOrder: sortOrder || 'desc',
     });
@@ -268,6 +270,50 @@ router.post('/batch-delete', async (req, res, next) => {
     }
     await db.batchDeleteGames(ids);
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/favorite', async (req, res, next) => {
+  try {
+    await db.addFavorite(Number(req.params.id));
+    res.status(200).send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id/favorite', async (req, res, next) => {
+  try {
+    await db.removeFavorite(Number(req.params.id));
+    res.status(200).send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/batch-favorite', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) {
+      return res.status(400).send({ error: 'ids must be an array' });
+    }
+    await db.batchAddFavorites(ids);
+    res.status(200).send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/batch-unfavorite', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) {
+      return res.status(400).send({ error: 'ids must be an array' });
+    }
+    await db.batchRemoveFavorites(ids);
+    res.status(200).send({ ok: true });
   } catch (err) {
     next(err);
   }
