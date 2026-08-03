@@ -9,6 +9,7 @@
         v-if="game.cover_path"
         v-lazy-img="coverSrc"
         class="game-cover__img"
+        draggable="false"
         @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
       />
       <div

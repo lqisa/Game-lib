@@ -38,6 +38,10 @@ const props = withDefaults(
   },
 );
 
+const emit = defineEmits<{
+  scroll: [];
+}>();
+
 const containerRef = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
 const containerHeight = ref(0);
@@ -112,6 +116,7 @@ const onScroll = () => {
   if (containerRef.value) {
     scrollTop.value = containerRef.value.scrollTop;
   }
+  emit('scroll');
 };
 
 const updateSize = () => {

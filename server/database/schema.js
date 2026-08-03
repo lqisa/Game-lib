@@ -94,6 +94,11 @@ const createSchema = () =>
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
       table.primary(['library_id', 'sub_path']);
+    })
+    .createTable('favorite', (table) => {
+      table.integer('game_id').primary();
+      table.dateTime('created_at').defaultTo(knex.fn.now());
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
     });
 
 export { createSchema };

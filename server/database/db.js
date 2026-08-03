@@ -88,6 +88,7 @@ const getGames = async ({
   tagIds,
   scraped,
   duplicate,
+  favoritesOnly,
   sortBy = 'updated_at',
   sortOrder = 'desc',
 } = {}) => {
@@ -174,6 +175,12 @@ const getGames = async ({
     });
   }
 
+  if (favoritesOnly) {
+    query = query.whereIn('game.id', function () {
+      this.select('game_id').from('favorite');
+    });
+  }
+
   const total = await query.clone().countDistinct('game.id as count').first();
   let games;
   if (pageSize > 0) {
@@ -194,8 +201,13 @@ const getGames = async ({
     for (const s of sourceNames) {
       if (!nameMap[s.game_id]) nameMap[s.game_id] = s.name;
     }
+    const favoriteIds = await db('favorite')
+      .whereIn('game_id', gameIds)
+      .select('game_id');
+    const favSet = new Set(favoriteIds.map((f) => f.game_id));
     for (const g of games) {
       g.sourceName = nameMap[g.id] || null;
+      g.is_favorite = favSet.has(g.id);
     }
   }
 
@@ -218,6 +230,31 @@ const updateGame = async (id, data) =>
     .update({ ...data, updated_at: db.fn.now() });
 const deleteGame = async (id) => db('game').where({ id }).del();
 const batchDeleteGames = async (ids) => db('game').whereIn('id', ids).del();
+
+const addFavorite = async (gameId) =>
+  db('favorite').insert({ game_id: gameId }).onConflict('game_id').ignore();
+
+const removeFavorite = async (gameId) =>
+  db('favorite').where({ game_id: gameId }).del();
+
+const batchAddFavorites = async (ids) => {
+  if (ids.length === 0) return;
+  await db('favorite')
+    .insert(ids.map((id) => ({ game_id: id })))
+    .onConflict('game_id')
+    .ignore();
+};
+
+const batchRemoveFavorites = async (ids) => {
+  if (ids.length === 0) return;
+  await db('favorite').whereIn('game_id', ids).del();
+};
+
+const getFavoriteGameIds = async () => {
+  const rows = await db('favorite').select('game_id');
+  return rows.map((r) => r.game_id);
+};
+
 const insertLibrary = async (data) => db('library').insert(data);
 const getLibraries = async () => db('library').select('*');
 const updateLibrary = async (id, data) => db('library').where({ id }).update(data);
@@ -502,6 +539,11 @@ export {
   updateGame,
   deleteGame,
   batchDeleteGames,
+  addFavorite,
+  removeFavorite,
+  batchAddFavorites,
+  batchRemoveFavorites,
+  getFavoriteGameIds,
   insertLibrary,
   getLibraries,
   updateLibrary,
