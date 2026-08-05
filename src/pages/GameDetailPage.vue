@@ -31,7 +31,7 @@
             </div>
           </div>
 
-          <div class="text-caption text-grey q-mt-sm">
+          <div v-if="!editingPath" class="text-caption text-grey q-mt-sm">
             Path: {{ game.library ? game.library.path + '\\' + game.sub_path : game.sub_path }}
             <q-btn
               v-if="hasElectronAPI"
@@ -44,6 +44,45 @@
               @click="openDir"
             >
               <q-tooltip>Open Directory</q-tooltip>
+            </q-btn>
+            <q-btn
+              flat
+              round
+              dense
+              size="sm"
+              icon="edit"
+              color="grey-7"
+              @click="startEditPath"
+            >
+              <q-tooltip>Edit Path</q-tooltip>
+            </q-btn>
+          </div>
+          <div v-else class="q-mt-sm row items-center q-gutter-xs">
+            <q-input
+              v-model="editPathValue"
+              dense
+              outlined
+              style="flex: 1; min-width: 0"
+              @keyup.enter="submitEditPath"
+              @keyup.escape="cancelEditPath"
+            />
+            <q-btn
+              v-if="hasElectronAPI"
+              flat
+              round
+              dense
+              size="sm"
+              icon="folder_open"
+              color="grey-7"
+              @click="browseForRelocate"
+            >
+              <q-tooltip>Browse</q-tooltip>
+            </q-btn>
+            <q-btn flat round dense size="sm" icon="check" color="positive" @click="submitEditPath">
+              <q-tooltip>Save</q-tooltip>
+            </q-btn>
+            <q-btn flat round dense size="sm" icon="close" color="grey-7" @click="cancelEditPath">
+              <q-tooltip>Cancel</q-tooltip>
             </q-btn>
           </div>
 
@@ -166,11 +205,57 @@
       :initial-segments="splitKeyword(game?.name || '').segments"
       @adopted="onReScrape"
     />
+
+    <q-dialog v-model="confirmRelocate" persistent>
+      <q-card>
+        <q-card-section class="text-h6">Confirm Path Change</q-card-section>
+        <q-card-section>
+          <div class="q-mb-sm">
+            <span class="text-grey">From: </span>{{ relocateInfo?.source }}
+          </div>
+          <div class="q-mb-md">
+            <span class="text-grey">To: </span>{{ relocateInfo?.target }}
+          </div>
+          <q-toggle
+            v-model="relocateMoveFiles"
+            label="Move files to new location"
+            color="primary"
+            :disable="relocateInfo?.moveDisabled"
+          />
+          <q-banner v-if="relocateMoveFiles" dense class="bg-blue-1 text-blue-9 rounded-borders q-mt-sm">
+            <template v-slot:avatar>
+              <q-icon name="drive_file_move" color="blue" />
+            </template>
+            Will move folder to new location
+          </q-banner>
+          <q-banner v-else dense class="bg-orange-1 text-orange-9 rounded-borders q-mt-sm">
+            <template v-slot:avatar>
+              <q-icon name="edit_note" color="orange" />
+            </template>
+            Will only update path record (file will not be moved)
+          </q-banner>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" color="grey" v-close-popup />
+          <q-btn flat label="Confirm" color="primary" @click="doRelocate" :loading="relocating" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <q-dialog :model-value="relocating" persistent>
+      <q-card class="q-pa-lg" style="min-width: 200px">
+        <div class="column items-center">
+          <q-spinner size="40px" color="primary" />
+          <div class="q-mt-sm text-body2">Moving files...</div>
+        </div>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../composables/useApi';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
@@ -216,6 +301,13 @@ const scrapeDefaultSource = computed<'dlsite' | 'bangumi' | 'vndb' | 'steam' | u
 });
 const confirmDelete = ref(false);
 const deleting = ref(false);
+const editingPath = ref(false);
+const editPathValue = ref('');
+const relocating = ref(false);
+const $q = useQuasar();
+const confirmRelocate = ref(false);
+const relocateMoveFiles = ref(false);
+const relocateInfo = ref<{ source: string; target: string; moveDisabled: boolean } | null>(null);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
@@ -252,6 +344,127 @@ const openDir = async () => {
       : null;
   if (!fullPath) return;
   await window.electronAPI.openPath(fullPath);
+};
+
+const currentFullPath = computed(() => {
+  if (!game.value?.sub_path) return '';
+  return isAbsolute(game.value.sub_path)
+    ? game.value.sub_path
+    : game.value.library?.path
+      ? game.value.library.path + '\\' + game.value.sub_path
+      : '';
+});
+
+const startEditPath = () => {
+  editPathValue.value = currentFullPath.value;
+  editingPath.value = true;
+};
+
+const cancelEditPath = () => {
+  editingPath.value = false;
+  editPathValue.value = '';
+};
+
+const getGameBaseName = () => {
+  const fullPath = currentFullPath.value;
+  const lastPart = fullPath.split('\\').pop() || '';
+  const archiveExts = ['zip', '7z', 'rar', '001', '002', '003', '004', '005', '006', '007', '008', '009'];
+  const ext = lastPart.split('.').pop()?.toLowerCase() || '';
+  if (archiveExts.includes(ext)) {
+    return lastPart.substring(0, lastPart.lastIndexOf('.'));
+  }
+  return lastPart;
+};
+
+const browseForRelocate = async () => {
+  if (!window.electronAPI?.openPathForRelocate) return;
+  const selected = await window.electronAPI.openPathForRelocate();
+  if (selected) {
+    const baseName = getGameBaseName();
+    if (baseName && !selected.endsWith(baseName)) {
+      editPathValue.value = selected + '\\' + baseName;
+    } else {
+      editPathValue.value = selected;
+    }
+  }
+};
+
+const submitEditPath = () => {
+  const newPath = editPathValue.value.trim();
+  if (!newPath || newPath === currentFullPath.value) {
+    editingPath.value = false;
+    return;
+  }
+
+  const baseName = getGameBaseName();
+  if (baseName && !newPath.endsWith(baseName)) {
+    $q.dialog({
+      title: 'Path Warning',
+      message: `The new path does not contain the game name "${baseName}". Apply anyway?`,
+      cancel: true,
+      persistent: true,
+    }).onOk(() => {
+      showRelocateConfirm(newPath);
+    });
+    return;
+  }
+
+  showRelocateConfirm(newPath);
+};
+
+const showRelocateConfirm = (newPath: string) => {
+  const ext = currentFullPath.value.split('.').pop()?.toLowerCase() || '';
+  const archiveExts = ['zip', '7z', 'rar', '001', '002', '003', '004', '005', '006', '007', '008', '009'];
+  const isArchive = archiveExts.includes(ext);
+  const moveDisabled = isArchive;
+
+  relocateMoveFiles.value = !isArchive;
+  relocateInfo.value = {
+    source: currentFullPath.value,
+    target: newPath,
+    moveDisabled,
+  };
+  confirmRelocate.value = true;
+};
+
+const doRelocate = async () => {
+  if (!game.value || !editPathValue.value.trim()) return;
+  const isArchiveRelocate = relocateInfo.value?.moveDisabled;
+  const targetPath = editPathValue.value.trim();
+  const sourcePath = relocateInfo.value?.source || '';
+  confirmRelocate.value = false;
+  relocating.value = true;
+  try {
+    await api.put(`/games/${game.value.id}/relocate`, {
+      newPath: targetPath,
+      moveFiles: relocateMoveFiles.value,
+    }, {
+      timeout: 600000,
+    });
+    editingPath.value = false;
+    relocating.value = false;
+    await loadGame();
+    if (isArchiveRelocate) {
+      try {
+        await navigator.clipboard.writeText(targetPath);
+      } catch {
+        // clipboard not available
+      }
+      $q.dialog({
+        title: 'Archive Relocated',
+        message: `Target path copied to clipboard. Open the archive for extraction?`,
+        cancel: true,
+        persistent: false,
+      }).onOk(() => {
+        if (sourcePath) {
+          void window.electronAPI?.openPath(sourcePath);
+        }
+      });
+    }
+  } catch {
+    relocating.value = false;
+    confirmRelocate.value = false;
+  }
 };
 
 const loadGame = async () => {
