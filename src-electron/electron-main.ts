@@ -276,6 +276,19 @@ void app.whenReady().then(async () => {
     return closeToTray;
   });
 
+  ipcMain.handle('dialog:openPathForRelocate', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'openFile'],
+      title: 'Select Game Path',
+      filters: [
+        { name: 'Archives', extensions: ['zip', '7z', 'rar', '001'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
   await startServer();
 
   try {

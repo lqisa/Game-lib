@@ -10,6 +10,7 @@ interface ElectronAPI {
   getAutoStart(): Promise<boolean>;
   setCloseToTray(enabled: boolean): Promise<void>;
   getCloseToTray(): Promise<boolean>;
+  openPathForRelocate(): Promise<string | null>;
 }
 
 interface Window {

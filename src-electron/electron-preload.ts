@@ -46,4 +46,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAutoStart: (): Promise<boolean> => ipcRenderer.invoke('app:getAutoStart'),
   setCloseToTray: (enabled: boolean): Promise<void> => ipcRenderer.invoke('app:setCloseToTray', enabled),
   getCloseToTray: (): Promise<boolean> => ipcRenderer.invoke('app:getCloseToTray'),
+  openPathForRelocate: (): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openPathForRelocate'),
 });
