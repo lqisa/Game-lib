@@ -2,11 +2,11 @@
   <q-page style="overflow: hidden; display: flex; flex-direction: column;">
     <div v-if="game" class="q-pa-md" style="display: flex; flex-direction: column; height: 100%;">
       <div>
-        <q-btn flat round icon="arrow_back" class="q-mb-md" @click="$router.push('/')" />
-        <q-btn flat round icon="refresh" class="q-mb-md" @click="showScrapeDialog = true">
+        <q-btn flat round icon="arrow_back" style="color: var(--m3-on-surface-variant);" class="q-mb-md" @click="$router.push('/')" />
+        <q-btn flat round icon="refresh" style="color: var(--m3-primary);" class="q-mb-md" @click="showScrapeDialog = true">
           <q-tooltip>Re-scrape</q-tooltip>
         </q-btn>
-        <q-btn flat round icon="delete" color="negative" class="q-mb-md" @click="confirmDelete = true">
+        <q-btn flat round icon="delete" style="color: var(--m3-error);" class="q-mb-md" @click="confirmDelete = true">
           <q-tooltip>Delete</q-tooltip>
         </q-btn>
       </div>
@@ -117,49 +117,46 @@
 
           <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;">
             <div>
-              <div class="text-h5 q-mb-sm">{{ displayName }}</div>
-          <div v-if="displayName !== game.name" class="text-caption text-grey">
+              <div class="text-h5 q-mb-sm" style="color: var(--m3-on-surface);">{{ displayName }}</div>
+          <div v-if="displayName !== game.name" class="text-caption" style="color: var(--m3-on-surface-variant);">
             <q-icon name="folder" size="xs" class="q-mr-xs" />
             {{ game.name }}
           </div>
 
           <div v-if="game.makers?.length" class="q-mb-sm">
-            <span class="text-grey">Makers: </span>
+            <span style="color: var(--m3-on-surface-variant);">Makers: </span>
             <q-chip
               v-for="m in game.makers"
               :key="m.id"
               dense
               size="sm"
-              color="orange"
-              text-color="white"
+              style="background: var(--m3-tertiary-container); color: var(--m3-on-tertiary-container);"
             >
               {{ m.name }}
             </q-chip>
           </div>
 
           <div v-if="game.genres?.length" class="q-mb-sm">
-            <span class="text-grey">Genres: </span>
+            <span style="color: var(--m3-on-surface-variant);">Genres: </span>
             <q-chip
               v-for="g in game.genres"
               :key="g.id"
               dense
               size="sm"
-              color="blue"
-              text-color="white"
+              style="background: var(--m3-primary-container); color: var(--m3-on-primary-container);"
             >
               {{ g.name }}
             </q-chip>
           </div>
 
           <div v-if="game.tags?.length" class="q-mb-sm">
-            <span class="text-grey">Tags: </span>
+            <span style="color: var(--m3-on-surface-variant);">Tags: </span>
             <q-chip
               v-for="t in game.tags"
               :key="t.id"
               dense
               size="sm"
-              color="teal"
-              text-color="white"
+              style="background: var(--m3-secondary-container); color: var(--m3-on-secondary-container);"
             >
               {{ t.name }}
             </q-chip>
@@ -168,8 +165,8 @@
             </div>
 
             <div v-if="game.description" style="flex: 1; min-height: 0; overflow-y: auto;">
-              <span class="text-grey">Description: </span>
-              <div class="text-body2 q-mt-xs" style="white-space: pre-wrap">
+              <span style="color: var(--m3-on-surface-variant);">Description: </span>
+              <div class="text-body2 q-mt-xs" style="white-space: pre-wrap; color: var(--m3-on-surface);">
                 {{ game.description }}
               </div>
             </div>
@@ -184,14 +181,14 @@
 
     <q-dialog v-model="confirmDelete" persistent>
       <q-card>
-        <q-card-section class="text-h6">Confirm Delete</q-card-section>
+        <q-card-section class="text-h6" style="color: var(--m3-on-surface);">Confirm Delete</q-card-section>
         <q-card-section>
-          Are you sure you want to delete "{{ displayName }}"?
-          <div class="text-caption text-grey q-mt-xs">This will also remove all associated sources, makers, genres, and tags.</div>
+          <span style="color: var(--m3-on-surface);">Are you sure you want to delete "{{ displayName }}"?</span>
+          <div class="text-caption q-mt-xs" style="color: var(--m3-on-surface-variant);">This will also remove all associated sources, makers, genres, and tags.</div>
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" color="grey" v-close-popup />
-          <q-btn flat label="Delete" color="negative" @click="doDelete" :loading="deleting" />
+          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
+          <q-btn unelevated style="background: var(--m3-error) !important; color: var(--m3-on-error) !important;" label="Delete" @click="doDelete" :loading="deleting" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -208,13 +205,13 @@
 
     <q-dialog v-model="confirmRelocate" persistent>
       <q-card>
-        <q-card-section class="text-h6">Confirm Path Change</q-card-section>
+        <q-card-section class="text-h6" style="color: var(--m3-on-surface);">Confirm Path Change</q-card-section>
         <q-card-section>
           <div class="q-mb-sm">
-            <span class="text-grey">From: </span>{{ relocateInfo?.source }}
+            <span style="color: var(--m3-on-surface-variant);">From: </span><span style="color: var(--m3-on-surface);">{{ relocateInfo?.source }}</span>
           </div>
           <div class="q-mb-md">
-            <span class="text-grey">To: </span>{{ relocateInfo?.target }}
+            <span style="color: var(--m3-on-surface-variant);">To: </span><span style="color: var(--m3-on-surface);">{{ relocateInfo?.target }}</span>
           </div>
           <q-toggle
             v-model="relocateMoveFiles"
@@ -236,8 +233,8 @@
           </q-banner>
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" color="grey" v-close-popup />
-          <q-btn flat label="Confirm" color="primary" @click="doRelocate" :loading="relocating" />
+          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
+          <q-btn unelevated class="m3-btn--filled" label="Confirm" @click="doRelocate" :loading="relocating" />
         </q-card-actions>
       </q-card>
     </q-dialog>

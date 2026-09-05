@@ -98,22 +98,25 @@ const handleClick = (e: MouseEvent) => {
   position: relative;
   user-select: none;
   transition:
-    transform 0.15s,
-    box-shadow 0.15s;
+    transform 0.2s cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1);
   height: 100%;
+  border-radius: var(--m3-shape-corner-sm);
+  overflow: hidden;
 }
 .game-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--m3-elevation-1);
 }
+
 .game-card--selected {
-  box-shadow: 0 0 0 2px #1976d2;
+  box-shadow: 0 0 0 2px var(--m3-primary) !important;
 }
 
 .game-cover {
   position: relative;
   aspect-ratio: 2.8 / 4;
-  background: #e0e0e0;
+  background: var(--m3-surface-container-highest);
   overflow: hidden;
 }
 
@@ -126,6 +129,8 @@ const handleClick = (e: MouseEvent) => {
 .game-cover__placeholder {
   width: 100%;
   height: 100%;
+  background: var(--m3-surface-container-highest);
+  color: var(--m3-on-surface-variant);
 }
 
 .game-cover__name {
@@ -145,10 +150,10 @@ const handleClick = (e: MouseEvent) => {
 
 <style>
 body.body--dark .game-cover {
-  background: #2a2a2a;
+  background: var(--m3-surface-container-highest);
 }
 body.body--dark .game-cover__placeholder {
-  background: #2a2a2a !important;
-  color: rgba(255, 255, 255, 0.5) !important;
+  background: var(--m3-surface-container-highest) !important;
+  color: var(--m3-on-surface-variant) !important;
 }
 </style>

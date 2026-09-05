@@ -1,21 +1,22 @@
 <template>
   <q-page style="overflow: hidden; display: flex; flex-direction: column;">
-    <div class="row items-center q-gutter-sm q-px-md q-py-sm">
+    <div class="row items-center q-gutter-sm q-px-md q-py-sm" style="border-bottom: 1px solid var(--m3-outline-variant);">
       <q-input
         v-model="keyword"
         label="Search"
         outlined
         dense
         clearable
+        class="m3-input"
         style="max-width: 300px"
         @clear="onSearchClear"
       >
-        <template v-slot:append>
-          <q-icon name="search" />
+        <template v-slot:prepend>
+          <q-icon name="search" color="primary" />
         </template>
       </q-input>
-      <q-btn flat icon="filter_list" label="Filter" @click="showFilter = true">
-        <q-badge v-if="activeFilterCount > 0" color="orange" floating>{{
+      <q-btn flat icon="filter_list" label="Filter" class="m3-btn--tonal" @click="showFilter = true">
+        <q-badge v-if="activeFilterCount > 0" color="primary" floating>{{
           activeFilterCount
         }}</q-badge>
       </q-btn>
@@ -26,21 +27,24 @@
         outlined
         emit-value
         map-options
+        class="m3-input"
         style="min-width: 140px"
       />
       <q-btn
         flat
         round
         :icon="sortOrder === 'desc' ? 'arrow_downward' : 'arrow_upward'"
+        style="color: var(--m3-on-surface-variant);"
         @click="toggleSortOrder"
       />
-      <q-btn v-if="!favoritesMode" color="primary" label="Scan &amp; Scrape" @click="showScanner = true" />
-      <q-btn v-if="!selectMode" flat icon="checklist" label="Select" @click="enterSelectMode" />
+      <q-btn v-if="!favoritesMode" unelevated class="m3-btn--filled" label="Scan &amp; Scrape" icon="search" @click="showScanner = true" />
+      <q-btn v-if="!selectMode" flat icon="checklist" label="Select" class="m3-btn--outlined" @click="enterSelectMode" />
       <template v-else>
-        <q-btn flat label="Cancel" @click="exitSelectMode" />
+        <q-btn flat label="Cancel" class="m3-btn--text" @click="exitSelectMode" />
         <template v-if="favoritesMode">
           <q-btn
-            color="negative"
+            unelevated
+            class="m3-btn--tonal"
             icon="heart_broken"
             :label="`Unfavorite (${selectedIds.size})`"
             :disable="selectedIds.size === 0"
@@ -49,14 +53,15 @@
         </template>
         <template v-else>
           <q-btn
-            color="negative"
+            unelevated
+            style="background: var(--m3-error-container) !important; color: var(--m3-on-error-container) !important;"
             icon="delete"
             :label="`Delete (${selectedIds.size})`"
             :disable="selectedIds.size === 0"
             @click="confirmDeleteDialog = true"
           />
         </template>
-        <span class="text-caption text-grey">{{ selectedIds.size }} selected</span>
+        <span class="text-caption" style="color: var(--m3-on-surface-variant);">{{ selectedIds.size }} selected</span>
       </template>
     </div>
 
@@ -110,9 +115,9 @@ class="q-pa-md"
 
       <div v-if="selectMode && dragSelecting" class="drag-select-rect" :style="dragRectStyle" />
 
-      <div v-if="games.length === 0 && !loading" class="text-center text-grey q-mt-xl">
+      <div v-if="games.length === 0 && !loading" class="text-center q-mt-xl" style="color: var(--m3-on-surface-variant);">
         <q-icon name="videogame_asset" size="64px" />
-        <div class="text-h6 q-mt-sm">No games found</div>
+        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface);">No games found</div>
         <div class="text-body2">Add a game library in Settings, then scan for games.</div>
       </div>
 
@@ -127,12 +132,12 @@ class="q-pa-md"
     <q-dialog v-model="confirmDeleteDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-icon name="warning" color="negative" size="lg" class="q-mr-sm" />
-          <span>Delete {{ selectedIds.size }} game(s)?</span>
+          <q-icon name="warning" style="color: var(--m3-error);" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface);">Delete {{ selectedIds.size }} game(s)?</span>
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn color="negative" label="Delete" @click="doBatchDelete" />
+          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
+          <q-btn unelevated style="background: var(--m3-error) !important; color: var(--m3-on-error) !important;" label="Delete" @click="doBatchDelete" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -140,12 +145,12 @@ class="q-pa-md"
     <q-dialog v-model="confirmUnfavoriteDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-icon name="warning" color="orange" size="lg" class="q-mr-sm" />
-          <span>Remove {{ selectedIds.size }} game(s) from favorites?</span>
+          <q-icon name="warning" style="color: var(--m3-error);" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface);">Remove {{ selectedIds.size }} game(s) from favorites?</span>
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn color="orange" label="Unfavorite" @click="doBatchUnfavorite" />
+          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
+          <q-btn unelevated class="m3-btn--tonal" label="Unfavorite" @click="doBatchUnfavorite" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -153,12 +158,12 @@ class="q-pa-md"
     <q-dialog v-model="showSingleDeleteDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-icon name="warning" color="negative" size="lg" class="q-mr-sm" />
-          <span>Delete this game? This action cannot be undone.</span>
+          <q-icon name="warning" style="color: var(--m3-error);" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface);">Delete this game? This action cannot be undone.</span>
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup @click="confirmSingleDeleteId = null; showSingleDeleteDialog = false" />
-          <q-btn color="negative" label="Delete" @click="doSingleDelete" />
+          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup @click="confirmSingleDeleteId = null; showSingleDeleteDialog = false" />
+          <q-btn unelevated style="background: var(--m3-error) !important; color: var(--m3-on-error) !important;" label="Delete" @click="doSingleDelete" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -795,20 +800,13 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.toolbar-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
 .virtual-grid-wrapper {
   transition: opacity 0.15s ease;
 }
 .drag-select-rect {
   position: absolute;
-  border: 2px dashed #1976d2;
-  background: rgba(25, 118, 210, 0.1);
+  border: 2px dashed var(--m3-primary);
+  background: rgba(103, 80, 164, 0.1);
   pointer-events: none;
   z-index: 1000;
 }
@@ -817,15 +815,14 @@ onBeforeUnmount(() => {
   inset: 0;
   background: rgba(255, 255, 255, 0.92);
   z-index: 1001;
-  border: 3px dashed #1976d2;
-  border-radius: 8px;
+  border: 3px dashed var(--m3-primary);
+  border-radius: var(--m3-shape-corner-md);
   pointer-events: none;
 }
 </style>
 
 <style>
-body.body--dark .toolbar-sticky {
-  background: #1d1d1d;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+body.body--dark .drop-overlay {
+  background: rgba(28, 27, 31, 0.92);
 }
 </style>

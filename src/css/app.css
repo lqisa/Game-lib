@@ -1,8 +1,139 @@
-/* app global css */
+/* ============================================
+   M3 Design Tokens
+   ============================================ */
+
+:root {
+  --m3-primary: #6750a4;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #eaddff;
+  --m3-on-primary-container: #21005d;
+  --m3-secondary: #625b71;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #e8def8;
+  --m3-on-secondary-container: #1d192b;
+  --m3-tertiary: #7d5260;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #ffd8e4;
+  --m3-on-tertiary-container: #31111d;
+  --m3-error: #b3261e;
+  --m3-on-error: #ffffff;
+  --m3-error-container: #f9dedc;
+  --m3-on-error-container: #410e0b;
+  --m3-surface: #fffbfe;
+  --m3-surface-dim: #ded8e1;
+  --m3-surface-bright: #fef7ff;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f7f2fa;
+  --m3-surface-container: #f3edf7;
+  --m3-surface-container-high: #ece6f0;
+  --m3-surface-container-highest: #e6e0e9;
+  --m3-on-surface: #1c1b1f;
+  --m3-on-surface-variant: #49454f;
+  --m3-surface-variant: #e7e0ec;
+  --m3-outline: #79747e;
+  --m3-outline-variant: #cac4d0;
+  --m3-inverse-surface: #313033;
+  --m3-inverse-on-surface: #f4eff4;
+  --m3-inverse-primary: #d0bcff;
+  --m3-scrim: #000000;
+
+  --m3-shape-corner-none: 0px;
+  --m3-shape-corner-xs: 4px;
+  --m3-shape-corner-sm: 8px;
+  --m3-shape-corner-md: 12px;
+  --m3-shape-corner-lg: 16px;
+  --m3-shape-corner-xl: 28px;
+  --m3-shape-corner-full: 9999px;
+
+  --m3-elevation-0: none;
+  --m3-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.15), 0 1px 2px 0 rgba(0,0,0,0.3);
+  --m3-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.15), 0 1px 2px 0 rgba(0,0,0,0.3);
+  --m3-elevation-3: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px 0 rgba(0,0,0,0.3);
+
+  --m3-state-hover: 0.08;
+  --m3-state-focus: 0.12;
+  --m3-state-pressed: 0.12;
+  --m3-state-dragged: 0.16;
+
+  --m3-chip-lib: #e8def8;
+  --m3-chip-nolib: #fce4ec;
+  --m3-chip-maker: #fff3e0;
+  --m3-chip-genre: #e3f2fd;
+  --m3-chip-tag: #e0f2f1;
+  --m3-chip-scraped: #e8f5e9;
+  --m3-chip-duplicate: #fce4ec;
+  --m3-chip-clear-bg: #fce4ec;
+  --m3-chip-clear-fg: #c62828;
+  --m3-icon-lib-bg: #fce4ec;
+  --m3-icon-maker-bg: #fff3e0;
+  --m3-icon-genre-bg: #e3f2fd;
+  --m3-icon-tag-bg: #e0f2f1;
+  --m3-icon-scraped-bg: #e8f5e9;
+  --m3-icon-duplicate-bg: #fce4ec;
+}
+
+body.body--dark {
+  --m3-primary: #d0bcff;
+  --m3-on-primary: #381e72;
+  --m3-primary-container: #4f378b;
+  --m3-on-primary-container: #eaddff;
+  --m3-secondary: #ccc2dc;
+  --m3-on-secondary: #332d41;
+  --m3-secondary-container: #433949;
+  --m3-on-secondary-container: #e8def8;
+  --m3-tertiary: #efb8c8;
+  --m3-on-tertiary: #492532;
+  --m3-tertiary-container: #633b48;
+  --m3-on-tertiary-container: #ffd8e4;
+  --m3-error: #f2b8b5;
+  --m3-on-error: #601410;
+  --m3-error-container: #8c1d18;
+  --m3-on-error-container: #f9dedc;
+  --m3-surface: #1c1b1f;
+  --m3-surface-dim: #141218;
+  --m3-surface-bright: #3b3841;
+  --m3-surface-container-lowest: #0f0d13;
+  --m3-surface-container-low: #1d1b20;
+  --m3-surface-container: #211f26;
+  --m3-surface-container-high: #2b2930;
+  --m3-surface-container-highest: #36343b;
+  --m3-on-surface: #e6e1e5;
+  --m3-on-surface-variant: #cac4d0;
+  --m3-surface-variant: #49454f;
+  --m3-outline: #938f99;
+  --m3-outline-variant: #49454f;
+  --m3-inverse-surface: #e6e1e5;
+  --m3-inverse-on-surface: #313033;
+  --m3-inverse-primary: #6750a4;
+  --m3-scrim: #000000;
+
+  --m3-chip-lib: #4f378b;
+  --m3-chip-nolib: #633b48;
+  --m3-chip-maker: #6b3a2a;
+  --m3-chip-genre: #1a4a6c;
+  --m3-chip-tag: #1a4a44;
+  --m3-chip-scraped: #1b5e20;
+  --m3-chip-duplicate: #633b48;
+  --m3-chip-clear-bg: #633b48;
+  --m3-chip-clear-fg: #ffb4a2;
+  --m3-icon-lib-bg: #633b48;
+  --m3-icon-maker-bg: #6b3a2a;
+  --m3-icon-genre-bg: #1a4a6c;
+  --m3-icon-tag-bg: #1a4a44;
+  --m3-icon-scraped-bg: #1b5e20;
+  --m3-icon-duplicate-bg: #633b48;
+}
+
+/* ============================================
+   Base Layout
+   ============================================ */
 
 html, body {
   height: 100%;
   overflow: hidden;
+  font-family: 'Roboto', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--m3-surface);
+  color: var(--m3-on-surface);
 }
 
 #q-app {
@@ -25,14 +156,335 @@ html, body {
   overflow-y: auto;
 }
 
-/* Dark mode scrollbar */
-html.body--dark::-webkit-scrollbar {
+/* ============================================
+   M3 Top App Bar (q-header / q-toolbar)
+   ============================================ */
+
+.q-header {
+  background: var(--m3-surface) !important;
+  color: var(--m3-on-surface) !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid var(--m3-outline-variant) !important;
+}
+
+.q-header .q-toolbar {
+  background: transparent !important;
+  color: var(--m3-on-surface) !important;
+  min-height: 64px;
+  padding: 0 16px;
+}
+
+.q-header .q-toolbar-title {
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--m3-on-surface);
+}
+
+/* ============================================
+   M3 Navigation Rail / Drawer
+   ============================================ */
+
+.q-drawer {
+  background: var(--m3-surface-container-low) !important;
+  border-right: 1px solid var(--m3-outline-variant) !important;
+  box-shadow: none !important;
+}
+
+.q-drawer .q-item {
+  border-radius: var(--m3-shape-corner-lg);
+  margin: 2px 12px;
+  padding: 8px 0;
+  color: var(--m3-on-surface-variant);
+  min-height: 56px;
+}
+
+.q-drawer .q-item:hover {
+  background: rgba(var(--m3-primary-rgb, 103, 80, 164), var(--m3-state-hover));
+}
+
+.q-drawer .q-item.q-item--active {
+  color: var(--m3-on-secondary-container) !important;
+  background: var(--m3-secondary-container) !important;
+}
+
+.q-drawer .q-item .q-item__section--avatar {
+  color: inherit;
+  min-width: 0;
+}
+
+.q-drawer .q-item .q-icon {
+  font-size: 24px;
+}
+
+/* ============================================
+   M3 Buttons
+   ============================================ */
+
+.q-btn {
+  border-radius: var(--m3-shape-corner-lg) !important;
+  text-transform: none !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  transition: background 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+.q-btn--unelevated,
+.q-btn.btn-primary,
+.q-btn[class*="color-primary"] {
+  background: var(--m3-primary) !important;
+  color: var(--m3-on-primary) !important;
+  box-shadow: var(--m3-elevation-0) !important;
+}
+
+.q-btn--unelevated:hover,
+.q-btn.btn-primary:hover,
+.q-btn[class*="color-primary"]:hover {
+  box-shadow: var(--m3-elevation-1) !important;
+}
+
+.q-btn--flat {
+  box-shadow: none !important;
+}
+
+.q-btn--outline {
+  border: 1px solid var(--m3-outline) !important;
+  color: var(--m3-primary) !important;
+  box-shadow: none !important;
+}
+
+.q-btn--dense {
+  border-radius: var(--m3-shape-corner-sm) !important;
+}
+
+.q-btn--round {
+  border-radius: var(--m3-shape-corner-full) !important;
+}
+
+/* ============================================
+   M3 Cards
+   ============================================ */
+
+.q-card {
+  border-radius: var(--m3-shape-corner-md) !important;
+  background: var(--m3-surface-container-low) !important;
+  color: var(--m3-on-surface) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--m3-outline-variant) !important;
+}
+
+.q-card__section {
+  color: var(--m3-on-surface);
+}
+
+/* ============================================
+   M3 Text Fields (q-input / q-select)
+   ============================================ */
+
+.q-field--outlined .q-field__control {
+  border-radius: var(--m3-shape-corner-xs) !important;
+  border-color: var(--m3-outline) !important;
+}
+
+.q-field--outlined .q-field__control:hover {
+  border-color: var(--m3-on-surface) !important;
+}
+
+.q-field--outlined.q-field--focused .q-field__control {
+  border-color: var(--m3-primary) !important;
+  border-width: 2px !important;
+}
+
+.q-field--outlined .q-field__label {
+  color: var(--m3-on-surface-variant) !important;
+}
+
+.q-field--focused .q-field__label {
+  color: var(--m3-primary) !important;
+}
+
+.q-field__bottom {
+  color: var(--m3-on-surface-variant);
+}
+
+/* ============================================
+   M3 Chips
+   ============================================ */
+
+.q-chip {
+  border-radius: var(--m3-shape-corner-sm) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0;
+  height: 32px !important;
+}
+
+/* ============================================
+   M3 Switch / Toggle
+   ============================================ */
+
+.q-toggle__track {
+  border-radius: var(--m3-shape-corner-full) !important;
+}
+
+.q-toggle__thumb {
+  border-radius: var(--m3-shape-corner-full) !important;
+}
+
+/* ============================================
+   M3 List Items
+   ============================================ */
+
+.q-list {
+  color: var(--m3-on-surface);
+}
+
+.q-item {
+  color: var(--m3-on-surface);
+  min-height: 56px;
+}
+
+.q-item__label--caption {
+  color: var(--m3-on-surface-variant);
+}
+
+/* ============================================
+   M3 Dialogs
+   ============================================ */
+
+.q-dialog .q-card {
+  border-radius: var(--m3-shape-corner-xl) !important;
+  background: var(--m3-surface-container-high) !important;
+  border: none !important;
+  box-shadow: var(--m3-elevation-3) !important;
+  overflow: hidden;
+}
+
+.q-dialog .q-card__section--text {
+  color: var(--m3-on-surface);
+}
+
+.q-dialog .q-card__actions {
+  padding: 16px 24px;
+}
+
+.q-dialog .q-card__actions .q-btn {
+  color: var(--m3-primary);
+}
+
+/* ============================================
+   M3 Tooltip
+   ============================================ */
+
+.q-tooltip {
+  background: var(--m3-inverse-surface) !important;
+  color: var(--m3-inverse-on-surface) !important;
+  border-radius: var(--m3-shape-corner-xs) !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  box-shadow: none !important;
+}
+
+/* ============================================
+   M3 Badge
+   ============================================ */
+
+.q-badge {
+  border-radius: var(--m3-shape-corner-full) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  min-height: 16px;
+  padding: 0 4px;
+}
+
+/* ============================================
+   M3 Banner
+   ============================================ */
+
+.q-banner {
+  border-radius: var(--m3-shape-corner-md) !important;
+  background: var(--m3-surface-container-low) !important;
+  color: var(--m3-on-surface) !important;
+}
+
+/* ============================================
+   M3 Separator / Divider
+   ============================================ */
+
+.q-separator {
+  background: var(--m3-outline-variant) !important;
+}
+
+hr {
+  border-color: var(--m3-outline-variant);
+}
+
+/* ============================================
+   M3 Table
+   ============================================ */
+
+.q-markup-table {
+  border-radius: var(--m3-shape-corner-md) !important;
+  overflow: hidden;
+}
+
+.q-markup-table thead {
+  background: var(--m3-surface-container) !important;
+}
+
+.q-markup-table thead th {
+  color: var(--m3-on-surface-variant) !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.q-markup-table tbody tr:hover {
+  background: rgba(var(--m3-primary-rgb, 103, 80, 164), var(--m3-state-hover)) !important;
+}
+
+/* ============================================
+   M3 Spinner
+   ============================================ */
+
+.q-spinner,
+.q-spinner-dots {
+  color: var(--m3-primary) !important;
+}
+
+/* ============================================
+   M3 Icon
+   ============================================ */
+
+.text-primary {
+  color: var(--m3-primary) !important;
+}
+
+/* ============================================
+   M3 Scrollbar (both light & dark)
+   ============================================ */
+
+::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
 html.body--dark::-webkit-scrollbar-track {
-  background: #1d1d1d;
+  background: transparent;
 }
 
 html.body--dark::-webkit-scrollbar-thumb {
@@ -44,8 +496,99 @@ html.body--dark::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.35);
 }
 
-/* Firefox */
 html.body--dark {
-  scrollbar-color: rgba(255, 255, 255, 0.2) #1d1d1d;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   scrollbar-width: thin;
+}
+
+/* ============================================
+   M3 Utility Classes
+   ============================================ */
+
+.m3-surface {
+  background: var(--m3-surface);
+  color: var(--m3-on-surface);
+}
+
+.m3-surface-container {
+  background: var(--m3-surface-container);
+  color: var(--m3-on-surface);
+}
+
+.m3-btn--filled {
+  background: var(--m3-primary) !important;
+  color: var(--m3-on-primary) !important;
+  border-radius: var(--m3-shape-corner-lg) !important;
+  box-shadow: var(--m3-elevation-0) !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.m3-btn--filled:hover {
+  box-shadow: var(--m3-elevation-1) !important;
+}
+
+.m3-btn--outlined {
+  background: transparent !important;
+  color: var(--m3-primary) !important;
+  border: 1px solid var(--m3-outline) !important;
+  border-radius: var(--m3-shape-corner-lg) !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.m3-btn--tonal {
+  background: var(--m3-secondary-container) !important;
+  color: var(--m3-on-secondary-container) !important;
+  border-radius: var(--m3-shape-corner-lg) !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.m3-btn--text {
+  background: transparent !important;
+  color: var(--m3-primary) !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.m3-input .q-field__control {
+  border-radius: var(--m3-shape-corner-xs) !important;
+}
+
+.m3-title {
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--m3-on-surface);
+}
+
+.m3-headline {
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--m3-on-surface);
+}
+
+.m3-body-large {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--m3-on-surface);
+}
+
+.m3-label-large {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--m3-on-surface);
+}
+
+.m3-label-medium {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--m3-on-surface-variant);
 }

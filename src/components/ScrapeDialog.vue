@@ -51,10 +51,9 @@
           />
           <q-btn
             color="primary"
-            label="Search"
-            @click="doSearchOrFetch"
-            :loading="searching || manualFetching"
-            :disable="!keyword.trim() && !idInput.trim()"
+            :label="isSearching ? 'Stop' : 'Search'"
+            @click="isSearching ? cancelSearch() : doSearchOrFetch()"
+            :disable="!isSearching && !keyword.trim() && !idInput.trim()"
           />
         </div>
 
@@ -88,7 +87,7 @@
                     <div class="scrape-cover-box">
                       <q-img
                         v-if="r.coverUrl"
-                        :src="getProxyImageUrl(r.coverUrl)"
+                        :src="resolveCoverUrl(r.coverUrl)"
                         :ratio="3 / 4"
                         class="rounded-borders-left"
                       >
@@ -131,7 +130,7 @@
                 <div class="col-5">
                   <q-img
                     v-if="detailCoverUrl"
-                    :src="getProxyImageUrl(detailCoverUrl)"
+                    :src="resolveCoverUrl(detailCoverUrl)"
                     :ratio="3 / 4"
                     class="rounded-borders"
                   />
@@ -204,7 +203,7 @@ import { getCleanedName } from '../composables/useSplitKeyword';
 import { useExpressUrl } from '../composables/useExpressUrl';
 import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
 
-const { getProxyImageUrl } = useExpressUrl();
+const { resolveCoverUrl } = useExpressUrl();
 
 const props = defineProps<{
   modelValue: boolean;
@@ -413,6 +412,16 @@ const fetchById = async () => {
 };
 
 let skipSourceWatch = false;
+
+const isSearching = computed(() => searching.value || manualFetching.value);
+
+const cancelSearch = () => {
+  searchAbort.value?.abort();
+  fetchAbort.value?.abort();
+  manualFetchAbort.value?.abort();
+  searching.value = false;
+  manualFetching.value = false;
+};
 
 const doSearchOrFetch = () => {
   if (idInput.value.trim()) {

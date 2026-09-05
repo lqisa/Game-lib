@@ -1,65 +1,63 @@
 <template>
   <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
+    <q-header>
       <q-toolbar>
-        <q-btn flat dense round icon="menu" @click="drawer = !drawer" />
+        <q-btn flat dense round icon="menu" @click="drawer = !drawer" style="color: var(--m3-on-surface-variant);" />
         <q-toolbar-title>
-          Game Lib<template v-if="gameListStore.favoritesMode"> - Favorites</template> ({{ filteredCount }})
+          Game Lib<template v-if="gameListStore.favoritesMode"> - Favorites</template>
+          <span class="q-ml-sm text-caption" style="color: var(--m3-on-surface-variant);">({{ filteredCount }})</span>
         </q-toolbar-title>
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="drawer" show-if-above bordered :width="56" :breakpoint="0" class="sidebar-no-scroll">
-      <div class="column full-height">
-        <q-list class="col">
-          <q-item
-            clickable
-            v-ripple
-            :active="!gameListStore.favoritesMode && $route.path === '/'"
-            active-class="text-primary"
+    <q-drawer v-model="drawer" show-if-above :width="80" :breakpoint="0" class="m3-nav-rail">
+      <div class="column full-height items-center m3-nav-rail-inner">
+        <div class="col column items-center">
+          <div
+            class="m3-nav-item"
+            :class="{ 'm3-nav-item--active': !gameListStore.favoritesMode && $route.path === '/' }"
             @click="navigateTo('/', false)"
           >
-            <q-item-section avatar>
-              <q-icon name="videogame_asset" />
-            </q-item-section>
-            <q-item-section>Game Lib</q-item-section>
+            <q-icon name="videogame_asset" class="m3-nav-icon" />
+            <span class="m3-nav-label">Games</span>
             <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Game Lib</q-tooltip>
-          </q-item>
-          <q-item
-            clickable
-            v-ripple
-            :active="gameListStore.favoritesMode"
-            active-class="text-primary"
+          </div>
+          <div
+            class="m3-nav-item"
+            :class="{ 'm3-nav-item--active': gameListStore.favoritesMode && $route.path === '/' }"
             @click="navigateTo('/', true)"
           >
-            <q-item-section avatar>
-              <q-icon name="star" />
-            </q-item-section>
-            <q-item-section>Favorites</q-item-section>
+            <q-icon name="star" class="m3-nav-icon" />
+            <span class="m3-nav-label">Favorites</span>
             <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Favorites</q-tooltip>
-          </q-item>
-          <q-item clickable v-ripple to="/settings">
-            <q-item-section avatar>
-              <q-icon name="settings" />
-            </q-item-section>
-            <q-item-section>Setting</q-item-section>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Setting</q-tooltip>
-          </q-item>
-        </q-list>
-        <q-item clickable v-ripple @click="dark = !dark">
-          <q-item-section avatar>
-            <q-icon :name="dark ? 'dark_mode' : 'light_mode'" />
-          </q-item-section>
-          <q-item-section>{{ dark ? 'Dark' : 'Light' }}</q-item-section>
+          </div>
+          <div
+            class="m3-nav-item"
+            :class="{ 'm3-nav-item--active': $route.path === '/settings' }"
+            @click="void router.push('/settings')"
+          >
+            <q-icon name="settings" class="m3-nav-icon" />
+            <span class="m3-nav-label">Settings</span>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Settings</q-tooltip>
+          </div>
+        </div>
+        <div
+          class="m3-nav-item"
+          @click="dark = !dark"
+        >
+          <q-icon :name="dark ? 'dark_mode' : 'light_mode'" class="m3-nav-icon" />
+          <span class="m3-nav-label">{{ dark ? 'Dark' : 'Light' }}</span>
           <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{ dark ? 'Switch to Light' : 'Switch to Dark' }}</q-tooltip>
-        </q-item>
-        <q-item v-if="hasElectronAPI" clickable v-ripple @click="enterLightweightMode">
-          <q-item-section avatar>
-            <q-icon name="power_settings_new" />
-          </q-item-section>
-          <q-item-section>Lightweight</q-item-section>
+        </div>
+        <div
+          v-if="hasElectronAPI"
+          class="m3-nav-item"
+          @click="enterLightweightMode"
+        >
+          <q-icon name="power_settings_new" class="m3-nav-icon" />
+          <span class="m3-nav-label">Exit</span>
           <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Enter Lightweight Mode</q-tooltip>
-        </q-item>
+        </div>
       </div>
     </q-drawer>
 
@@ -111,10 +109,57 @@ const enterLightweightMode = async () => {
 </script>
 
 <style>
-.sidebar-no-scroll {
+.m3-nav-rail {
+  overflow-x: hidden !important;
+  background: var(--m3-surface) !important;
+  border-right: 1px solid var(--m3-outline-variant) !important;
+  box-shadow: none !important;
+}
+.m3-nav-rail .q-drawer__content {
   overflow-x: hidden !important;
 }
-.sidebar-no-scroll .q-drawer__content {
-  overflow-x: hidden !important;
+
+.m3-nav-rail-inner {
+  padding: 8px 0;
+  gap: 4px;
+}
+
+.m3-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  padding: 4px 0;
+  border-radius: var(--m3-shape-corner-lg);
+  cursor: pointer;
+  color: var(--m3-on-surface-variant);
+  transition: background 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.2s cubic-bezier(0.2, 0, 0, 1);
+  user-select: none;
+}
+
+.m3-nav-item:hover {
+  background: rgba(103, 80, 164, 0.08);
+}
+
+.m3-nav-item.m3-nav-item--active {
+  color: var(--m3-on-secondary-container);
+  background: var(--m3-secondary-container);
+}
+
+.m3-nav-icon {
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.m3-nav-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+  margin-top: 4px;
 }
 </style>

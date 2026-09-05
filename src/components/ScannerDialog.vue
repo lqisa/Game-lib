@@ -1,11 +1,14 @@
 <template>
-  <q-dialog v-model="modelValue" persistent maximized transition-show="fade" transition-hide="fade">
-    <q-card class="column">
-      <q-bar class="bg-primary text-white">
-        <div class="text-subtitle1">Scan & Scrape</div>
+  <q-dialog v-model="modelValue" maximized transition-show="fade" transition-hide="fade">
+    <q-card class="column no-shadow full-height scanner-card">
+      <div class="scanner-titlebar row items-center q-px-md" style="height: 56px;">
+        <div class="scanner-titlebar-icon row flex-center q-mr-sm" style="width: 36px; height: 36px; border-radius: 12px; background: var(--m3-primary-container);">
+          <q-icon name="search" size="20px" color="primary" />
+        </div>
+        <div class="text-subtitle1" style="color: var(--m3-on-surface); font-weight: 600;">Scan & Scrape</div>
         <q-space />
-        <q-btn dense flat icon="close" v-close-popup />
-      </q-bar>
+        <q-btn dense flat round icon="close" v-close-popup style="color: var(--m3-on-surface-variant);" />
+      </div>
 
       <q-card-section class="q-pa-md col" style="position: relative; overflow: hidden">
         <q-inner-loading :showing="scanning" label="Scanning..." label-class="text-grey-8" />
@@ -21,39 +24,49 @@
             outlined
             dense
             style="min-width: 200px"
+            class="m3-input"
             @update:model-value="onLibraryChange"
           />
           <q-btn
-            color="primary"
+            unelevated
+            class="m3-btn m3-btn--filled"
             label="Scan"
+            icon="folder_open"
             @click="scanDir"
             :disable="!selectedLibrary"
             :loading="scanning"
           />
           <q-btn
             v-if="!scraping"
-            color="secondary"
+            unelevated
+            class="m3-btn m3-btn--filled-tonal"
             label="Scrape All"
+            icon="auto_fix_high"
             @click="startBatchScrape"
             :disable="!hasPending"
           />
           <q-btn
             v-else
-            :color="scrapePaused ? 'positive' : 'orange'"
+            unelevated
+            class="m3-btn m3-btn--filled-tonal"
             :label="`${scrapeDone} / ${scrapeTotal}`"
             @click="togglePause"
           >
             <q-tooltip>{{ scrapePaused ? 'Click to resume' : 'Click to pause' }}</q-tooltip>
           </q-btn>
           <q-btn
-            color="warning"
+            outline
+            class="m3-btn m3-btn--outlined"
             label="Force Refresh"
+            icon="refresh"
             @click="forceRefresh"
             :disable="totalCount === 0"
           />
           <q-btn
-            color="positive"
+            unelevated
+            class="m3-btn m3-btn--filled"
             label="Submit"
+            icon="check"
             @click="submitAdopted"
             :disable="adoptedCount === 0 && staleCount === 0"
             :loading="submitting"
@@ -77,9 +90,10 @@
             debounce="100"
             placeholder="Search..."
             style="min-width: 180px"
+            class="m3-input"
           >
             <template v-slot:prepend>
-              <q-icon name="search" />
+              <q-icon name="search" color="primary" />
             </template>
           </q-input>
           <q-btn
@@ -93,7 +107,7 @@
           </q-btn>
         </div>
 
-        <div class="scan-header q-px-md" :class="{ 'scan-header--compact': compact }">
+        <div class="scan-header q-px-md" :class="{ 'scan-header--compact': compact }" style="background: var(--m3-surface); border-bottom: 1px solid var(--m3-outline-variant);">
           <div class="scan-header__cover"></div>
           <div class="scan-header__cell scan-header__cell--sortable" @click="toggleSort('name')">
             <span>Name</span>
@@ -128,6 +142,7 @@
         >
           <template v-slot="{ item: row }">
             <div
+              :key="row.subPath"
               class="scan-row q-px-md"
               :class="{
                 'scan-row--stale': row.status === 'stale',
@@ -138,10 +153,10 @@
               <div class="scan-row__cover">
                 <div v-if="row.searchResult?.coverUrl" class="scan-row__cover-wrap">
                   <img
-                    :src="row.searchResult.coverUrl"
+                    :src="resolveCoverUrl(row.searchResult.coverUrl)"
                     class="scan-row__cover-img"
-                    loading="lazy"
-                    @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
+                    @error="(e) => { const img = e.target as HTMLImageElement; img.style.display = 'none'; img.dataset.error = '1'; }"
+                    @load="(e) => { const img = e.target as HTMLImageElement; if (img.dataset.error) { img.style.display = ''; delete img.dataset.error; } }"
                   />
                   <q-icon
                     name="image"
@@ -158,7 +173,7 @@
                     class="tooltip-cover-preview"
                   >
                     <img
-                      :src="row.searchResult.coverUrl"
+                      :src="resolveCoverUrl(row.searchResult.coverUrl)"
                       style="
                         width: 240px;
                         max-height: 320px;
@@ -166,7 +181,6 @@
                         border-radius: 4px;
                         display: block;
                       "
-                      loading="lazy"
                     />
                   </q-tooltip>
                 </div>
@@ -369,8 +383,11 @@
 import { ref, computed, watch } from 'vue';
 import api from '../composables/useApi';
 import { splitKeyword, segmentsCache } from '../composables/useSplitKeyword';
+import { useExpressUrl } from '../composables/useExpressUrl';
 import ScrapeDialog from './ScrapeDialog.vue';
 import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
+
+const { resolveCoverUrl } = useExpressUrl();
 
 interface AdoptCacheEntry {
   game_id: number;
@@ -1400,8 +1417,11 @@ const confirmBlacklist = async () => {
   blacklistRow.value = null;
 };
 
+const initialized = ref(false);
+
 watch(modelValue, (val) => {
-  if (val) {
+  if (val && !initialized.value) {
+    initialized.value = true;
     void fetchSettings()
       .then(() => fetchLibraries())
       .then(() => loadUnscraped());
@@ -1410,6 +1430,56 @@ watch(modelValue, (val) => {
 </script>
 
 <style scoped>
+.scanner-card {
+  background: var(--m3-surface, white);
+}
+
+.scanner-titlebar {
+  border-bottom: 1px solid var(--m3-outline-variant, #e7e0ec);
+}
+
+.m3-btn {
+  border-radius: 20px;
+  padding: 6px 20px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 14px;
+  min-height: 36px;
+}
+
+.m3-btn--filled {
+  background: var(--m3-primary) !important;
+  color: var(--m3-on-primary) !important;
+}
+.m3-btn--filled:hover {
+  filter: brightness(1.08);
+}
+
+.m3-btn--filled-tonal {
+  background: var(--m3-primary-container) !important;
+  color: var(--m3-on-primary-container) !important;
+}
+.m3-btn--filled-tonal:hover {
+  filter: brightness(0.95);
+}
+
+.m3-btn--outlined {
+  color: var(--m3-primary) !important;
+  border-color: var(--m3-outline) !important;
+  border-width: 1px;
+}
+.m3-btn--outlined:hover {
+  background: var(--m3-primary-container) !important;
+}
+
+.m3-input :deep(.q-field__control) {
+  border-radius: 12px;
+}
+
+.m3-input :deep(.q-field--focused .q-field__control) {
+  border-color: var(--m3-primary);
+}
 .scan-header {
   display: grid;
   grid-template-columns: 180px 1fr 70px 200px;
@@ -1417,8 +1487,8 @@ watch(modelValue, (val) => {
   align-items: center;
   height: 36px;
   padding: 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  background: #f5f5f5;
+  border-bottom: 1px solid var(--m3-outline-variant, #e7e0ec);
+  background: var(--m3-surface, #f5f5f5);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -1437,7 +1507,7 @@ watch(modelValue, (val) => {
   gap: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.54);
+  color: var(--m3-on-surface-variant, rgba(0, 0, 0, 0.54));
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -1457,10 +1527,10 @@ watch(modelValue, (val) => {
   align-items: center;
   height: 260px;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid var(--m3-outline-variant, rgba(0, 0, 0, 0.12));
 }
 .scan-row:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--m3-primary-container, rgba(0, 0, 0, 0.04));
 }
 .scan-row__cover {
   flex-shrink: 0;
@@ -1535,19 +1605,6 @@ watch(modelValue, (val) => {
   border: none !important;
 }
 
-body.body--dark .scan-header {
-  background: #1a1a1a;
-  border-bottom-color: rgba(255, 255, 255, 0.12);
-}
-body.body--dark .scan-header__cell {
-  color: rgba(255, 255, 255, 0.54);
-}
-body.body--dark .scan-row {
-  border-bottom-color: rgba(255, 255, 255, 0.12);
-}
-body.body--dark .scan-row:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
 body.body--dark .scan-row__cover-wrap,
 body.body--dark .scan-row__cover-empty {
   background: #2a2a2a;

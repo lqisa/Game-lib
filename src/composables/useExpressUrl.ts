@@ -10,6 +10,16 @@ export function useExpressUrl() {
       if (!remoteUrl) return '';
       return `${baseUrl}/api/proxy/image?url=${encodeURIComponent(remoteUrl)}`;
     },
+    resolveCoverUrl: (coverUrl: string) => {
+      if (!coverUrl) return '';
+      if (coverUrl.startsWith('/covers/')) {
+        return `${baseUrl}${coverUrl}`;
+      }
+      if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
+        return `${baseUrl}/api/proxy/image?url=${encodeURIComponent(coverUrl)}`;
+      }
+      return `${baseUrl}${coverUrl}`;
+    },
     baseUrl,
   };
 }
