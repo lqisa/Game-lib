@@ -3,6 +3,7 @@
 node_modules
 
 .vscode/
+.kilo/
 
 # .env files
 .env*
@@ -28,6 +29,10 @@ yarn-debug.log*
 yarn-error.log*
 
 # Game-lib data
-data/
+e2e/test-data/
 src-electron/Unpackaged/
 .superpowers/
+
+# Playwright test artifacts
+test-results/
+playwright-report/

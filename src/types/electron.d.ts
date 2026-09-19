@@ -11,6 +11,11 @@ interface ElectronAPI {
   setCloseToTray(enabled: boolean): Promise<void>;
   getCloseToTray(): Promise<boolean>;
   openPathForRelocate(): Promise<string | null>;
+  hasRunningMoveTasks(): Promise<boolean>;
+  hasRunningTasks(): Promise<boolean>;
+  onMoveInProgress(callback: () => void): void;
+  forceQuit(): Promise<void>;
+  getSseToken(): Promise<string>;
 }
 
 interface Window {

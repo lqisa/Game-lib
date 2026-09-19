@@ -1,7 +1,8 @@
-import { BrowserWindow, Tray, Menu, nativeImage, app, ipcMain, dialog, shell } from 'electron';
+import { BrowserWindow, Tray, Menu, nativeImage, app, ipcMain, dialog, shell, powerMonitor } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import type http from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerQuasarRuntime, resolveElectronAssetsPath } from '#q-app/electron/main';
@@ -32,6 +33,9 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let lightweightMode = false;
 let closeToTray = false;
+let hasRunningMoveTasksFn: (() => boolean) | null = null;
+let hasRunningTasksFn: (() => boolean) | null = null;
+let sseToken: string;
 
 interface WindowBounds {
   x?: number;
@@ -210,14 +214,18 @@ async function createWindow() {
 void app.whenReady().then(async () => {
   await registerQuasarRuntime();
 
-  const userDataDir = app.getPath('userData');
-  process.env.GAME_LIB_DATA_DIR = userDataDir;
+  if (!import.meta.env.QUASAR_DEV) {
+    process.env.GAME_LIB_PROD = '1';
+  }
 
   const startHidden = app.commandLine.hasSwitch('hidden')
     || (platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden);
   if (startHidden) {
     lightweightMode = true;
   }
+
+  // Generate SSE token for authentication
+  sseToken = crypto.randomBytes(32).toString('hex');
 
   ipcMain.handle('dialog:openDirectory', async (_event, title: string) => {
     const result = await dialog.showOpenDialog({
@@ -289,7 +297,39 @@ void app.whenReady().then(async () => {
     return result.filePaths[0];
   });
 
+  ipcMain.handle('tasks:hasRunningMoveTasks', () => {
+    return hasRunningMoveTasksFn?.() ?? false;
+  });
+
+  ipcMain.handle('tasks:hasRunningTasks', () => {
+    return hasRunningTasksFn?.() ?? false;
+  });
+
+  ipcMain.handle('app:getSseToken', () => {
+    return sseToken;
+  });
+
+  ipcMain.handle('app:forceQuit', () => {
+    isQuitting = true;
+    app.quit();
+  });
+
+  // Pass SSE token to Express server via env
+  process.env.SSE_TOKEN = sseToken;
+
   await startServer();
+
+  // Cache task functions for synchronous shutdown checks
+  try {
+    const tasksModule = await import(
+      pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href
+    );
+    hasRunningMoveTasksFn = tasksModule.hasRunningMoveTasks;
+    hasRunningTasksFn = tasksModule.hasRunningTasks;
+  } catch {
+    hasRunningMoveTasksFn = () => false;
+    hasRunningTasksFn = () => false;
+  }
 
   try {
     const dbModule = await import(
@@ -339,12 +379,27 @@ void app.whenReady().then(async () => {
   });
 });
 
-app.on('before-quit', () => {
-  isQuitting = true;
+app.on('before-quit', (e) => {
+  if (isQuitting) return;
+  if (hasRunningMoveTasksFn?.()) {
+    e.preventDefault();
+    isQuitting = false;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('task:move-in-progress');
+    }
+  } else {
+    isQuitting = true;
+  }
 });
 
 app.on('window-all-closed', () => {
   if (!closeToTray) {
     app.quit();
+  }
+});
+
+(powerMonitor as unknown as NodeJS.EventEmitter).on('shutdown', (e: { preventDefault: () => void }) => {
+  if (hasRunningMoveTasksFn?.()) {
+    e.preventDefault();
   }
 });

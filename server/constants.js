@@ -31,4 +31,26 @@ const VOLUME_PATTERNS = [
   /^(.+)\.rar\.r\d+$/i,
 ];
 
-export { NON_GAME_DIRS, ARCHIVE_EXTENSIONS, VOLUME_PATTERNS };
+const EXTRACT_TOOL_PATHS = {
+  unrar: [
+    'C:\\Program Files\\WinRAR\\UnRAR.exe',
+    'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe',
+  ],
+  sevenzip: [
+    'C:\\Program Files\\7-Zip\\7z.exe',
+    'C:\\Program Files (x86)\\7-Zip\\7z.exe',
+  ],
+  sevenzipZstd: [
+    'C:\\Program Files\\7-Zip-ZStandard\\7z.exe',
+    `${process.env.LOCALAPPDATA || ''}\\Programs\\7-Zip-ZStandard\\7z.exe`,
+  ],
+};
+
+const FORMAT_TOOL_PRIORITY = {
+  '.rar': ['unrar', 'sevenzip'],
+  '.zip': ['unrar', 'sevenzip'],
+  '.7z': ['sevenzip', 'sevenzipZstd'],
+  '.zst': ['sevenzipZstd'],
+};
+
+export { NON_GAME_DIRS, ARCHIVE_EXTENSIONS, VOLUME_PATTERNS, EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY };

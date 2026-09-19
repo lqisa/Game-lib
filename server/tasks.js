@@ -1,0 +1,363 @@
+import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY } from './constants.js';
+
+const tasks = new Map();
+const listeners = new Set();
+
+const notify = (task) => {
+  for (const fn of listeners) fn(task);
+};
+
+const createTask = (type, meta) => {
+  const task = {
+    id: randomUUID(),
+    type,
+    status: 'pending',
+    label: type === 'move' ? `Moving: ${meta.source.split('\\').pop()}` : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
+    progress: 0,
+    detail: 'Waiting...',
+    error: null,
+    createdAt: new Date(),
+    completedAt: null,
+    meta,
+    childProcess: null,
+  };
+  tasks.set(task.id, task);
+  notify(task);
+  return task;
+};
+
+const getTask = (id) => tasks.get(id);
+
+const getAllTasks = () => [...tasks.values()];
+
+const updateTask = (id, patch) => {
+  const task = tasks.get(id);
+  if (!task) return;
+  Object.assign(task, patch);
+  if (patch.status === 'completed' || patch.status === 'failed' || patch.status === 'cancelled') {
+    task.completedAt = new Date();
+  }
+  notify(task);
+};
+
+const cancelTask = (id) => {
+  const task = tasks.get(id);
+  if (!task || task.type === 'move') return false;
+  if (task.childProcess) {
+    task.childProcess.kill();
+  }
+  updateTask(id, { status: 'cancelled', detail: 'Cancelled' });
+  return true;
+};
+
+const removeTask = (id) => {
+  const task = tasks.get(id);
+  if (!task) return;
+  if (task.status === 'running' && task.type === 'move') return;
+  if (task.childProcess && task.status === 'running') {
+    task.childProcess.kill();
+  }
+  tasks.delete(id);
+};
+
+const hasRunningMoveTasks = () => [...tasks.values()].some((t) => t.status === 'running' && t.type === 'move');
+
+const hasRunningTasks = () => [...tasks.values()].some((t) => t.status === 'running');
+
+const onTaskChange = (fn) => {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+};
+
+const attachChildProcess = (id, child) => {
+  const task = tasks.get(id);
+  if (task) task.childProcess = child;
+};
+
+const countFilesWithRobocopy = (source, dest) => {
+  return new Promise((resolve, reject) => {
+    const child = spawn('robocopy', [
+      source, dest,
+      '/L', '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP',
+    ]);
+    let output = '';
+    child.stdout.on('data', (data) => { output += data.toString(); });
+    child.stderr.on('data', (data) => { output += data.toString(); });
+    child.on('close', () => {
+      const match = output.match(/Total\s+Copied\s+Skipped\s+Mismatch\s+FAIL\s+Extras\s+[\r\n]+\s+Files\s*:\s*(\d+)/);
+      if (match) {
+        resolve(parseInt(match[1], 10));
+      } else {
+        const newFileCount = (output.match(/New File/g) || []).length;
+        resolve(newFileCount || 1);
+      }
+    });
+    child.on('error', reject);
+  });
+};
+
+const updateGameAfterMove = async (gameId, newLibraryId, newSubPath, taskId) => {
+  const db = (await import('./database/db.js'));
+  await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
+  updateTask(taskId, { status: 'completed', progress: 100, detail: 'Move completed', completedAt: new Date() });
+};
+
+const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSubPath) => {
+  const sourceDrive = source.substring(0, 1).toLowerCase();
+  const destDrive = dest.substring(0, 1).toLowerCase();
+
+  if (sourceDrive === destDrive) {
+    try {
+      if (fs.existsSync(dest)) {
+        updateTask(taskId, { status: 'failed', error: 'Target already exists', detail: 'Rename failed' });
+        return;
+      }
+      updateTask(taskId, { status: 'running', detail: 'Renaming...', progress: 50 });
+      await fs.promises.rename(source, dest);
+      await updateGameAfterMove(gameId, newLibraryId, newSubPath, taskId);
+    } catch (err) {
+      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Rename failed' });
+    }
+    return;
+  }
+
+  updateTask(taskId, { status: 'running', detail: 'Scanning files...', progress: 0 });
+
+  const destExists = fs.existsSync(dest);
+  if (destExists) {
+    const files = fs.readdirSync(dest);
+    if (files.length > 0) {
+      updateTask(taskId, { status: 'failed', error: 'Target already exists and is not empty', detail: 'Move failed' });
+      return;
+    }
+  }
+
+  try {
+    const totalFiles = await countFilesWithRobocopy(source, dest);
+    updateTask(taskId, { meta: { ...getTask(taskId).meta, totalFiles }, detail: `Found ${totalFiles} files` });
+
+    const logFile = path.join(os.tmpdir(), `robocopy-${taskId}.log`);
+    if (fs.existsSync(logFile)) fs.unlinkSync(logFile);
+
+    const child = spawn('robocopy', [
+      source, dest,
+      '/E', '/COPY:DAT', '/MT:8', '/R:3', '/W:5', '/NP',
+      `/LOG+:${logFile}`,
+    ]);
+
+    attachChildProcess(taskId, child);
+
+    let copiedFiles = 0;
+    let lastSize = 0;
+    const pollInterval = setInterval(() => {
+      try {
+        const stat = fs.statSync(logFile);
+        if (stat.size > lastSize) {
+          lastSize = stat.size;
+          const content = fs.readFileSync(logFile, 'utf-8');
+          const newFileCount = (content.match(/New File/g) || []).length;
+          if (newFileCount > copiedFiles) {
+            copiedFiles = newFileCount;
+            const progress = totalFiles > 0 ? Math.min(99, Math.round((copiedFiles / totalFiles) * 100)) : 0;
+            updateTask(taskId, {
+              progress,
+              detail: `Copying ${copiedFiles}/${totalFiles}`,
+              meta: { ...getTask(taskId).meta, copiedFiles },
+            });
+          }
+        }
+      } catch { /* log file may not exist yet */ }
+    }, 1000);
+
+    child.on('close', (code) => {
+      clearInterval(pollInterval);
+      try { fs.unlinkSync(logFile); } catch { /* ignore cleanup error */ }
+
+      if (code <= 7) {
+        updateTask(taskId, { progress: 99, detail: 'Deleting source...' });
+        fs.promises.rm(source, { recursive: true, force: true })
+          .then(() => updateGameAfterMove(gameId, newLibraryId, newSubPath, taskId))
+          .catch((err) => updateTask(taskId, { status: 'failed', error: `Source deletion failed: ${err.message}`, detail: 'Move completed but source deletion failed' }));
+      } else {
+        updateTask(taskId, { status: 'failed', error: `robocopy exited with code ${code}`, detail: 'Move failed' });
+        if (fs.existsSync(dest)) {
+          try { fs.rmSync(dest, { recursive: true, force: true }); } catch { /* ignore cleanup error */ }
+        }
+      }
+    });
+
+    child.on('error', (err) => {
+      clearInterval(pollInterval);
+      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start robocopy' });
+    });
+  } catch (err) {
+    updateTask(taskId, { status: 'failed', error: err.message, detail: 'Scan failed' });
+  }
+};
+
+const detectExtractTools = () => {
+  const found = {};
+  for (const [tool, paths] of Object.entries(EXTRACT_TOOL_PATHS)) {
+    for (const p of paths) {
+      if (fs.existsSync(p)) {
+        found[tool] = p;
+        break;
+      }
+    }
+  }
+  return found;
+};
+
+const getEffectiveTools = async () => {
+  const db = (await import('./database/db.js'));
+  const savedStr = await db.getSetting('extract_tools');
+  if (savedStr) {
+    try {
+      return JSON.parse(savedStr);
+    } catch { /* invalid JSON, fall through to detect */ }
+  }
+  return detectExtractTools();
+};
+
+const selectTool = (ext, tools) => {
+  const priority = FORMAT_TOOL_PRIORITY[ext];
+  if (!priority) return null;
+  for (const toolName of priority) {
+    if (tools[toolName]) return { name: toolName, path: tools[toolName] };
+  }
+  return null;
+};
+
+const tryExtract = (taskId, tool, archivePath, dest, password) => {
+  return new Promise((resolve) => {
+    let args;
+    if (tool.name === 'unrar') {
+      if (password) {
+        args = ['x', `-p${password}`, '-o+', archivePath, dest + '\\'];
+      } else {
+        args = ['x', '-o+', archivePath, dest + '\\'];
+      }
+    } else {
+      args = ['x', password ? `-p${password}` : '-p0', `-o${dest}`, '-aoa', archivePath];
+    }
+
+    const child = spawn(tool.path, args);
+    attachChildProcess(taskId, child);
+
+    let lastProgress = 0;
+    child.stdout.on('data', (data) => {
+      const text = data.toString();
+      const match = text.match(/(\d+)%/);
+      if (match) {
+        const p = parseInt(match[1], 10);
+        if (p > lastProgress) {
+          lastProgress = p;
+          updateTask(taskId, { progress: p, detail: `Extracting ${p}%` });
+        }
+      }
+    });
+
+    let stderrText = '';
+    child.stderr.on('data', (data) => { stderrText += data.toString(); });
+
+    child.on('close', (code) => {
+      if (code === 0 || (tool.name === 'unrar' && code === 1)) {
+        resolve('success');
+      } else if ((tool.name === 'unrar' && code === 2) || (tool.name !== 'unrar' && code === 2)) {
+        resolve('wrong_password');
+      } else {
+        const task = getTask(taskId);
+        if (task && task.status === 'cancelled') {
+          resolve('error');
+          return;
+        }
+        updateTask(taskId, { status: 'failed', error: `Exit code ${code}: ${stderrText}`, detail: 'Extraction failed' });
+        resolve('error');
+      }
+    });
+
+    child.on('error', (err) => {
+      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start extraction tool' });
+      resolve('error');
+    });
+  });
+};
+
+const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryId, newSubPath) => {
+  const ext = path.extname(archivePath).toLowerCase();
+  const tools = await getEffectiveTools();
+  const tool = selectTool(ext, tools);
+
+  if (!tool) {
+    updateTask(taskId, { status: 'failed', error: `No extraction tool found for ${ext}`, detail: 'No tool available' });
+    return;
+  }
+
+  const db = (await import('./database/db.js'));
+  const passwordsStr = await db.getSetting('archive_passwords');
+  const passwords = passwordsStr ? JSON.parse(passwordsStr) : [];
+  const allPasswords = [null, ...passwords];
+
+  updateTask(taskId, { status: 'running', detail: `Extracting with ${tool.name}...`, progress: 0 });
+
+  const cleanupDest = async () => {
+    try {
+      if (fs.existsSync(dest)) {
+        await fs.promises.rm(dest, { recursive: true, force: true });
+      }
+    } catch { /* ignore cleanup errors */ }
+  };
+
+  for (const pwd of allPasswords) {
+    const task = getTask(taskId);
+    if (task?.status === 'cancelled') {
+      await cleanupDest();
+      return;
+    }
+    const result = await tryExtract(taskId, tool, archivePath, dest, pwd);
+    if (result === 'success') {
+      const archiveSubPath = getTask(taskId).meta.archiveSubPath;
+      if (archiveSubPath) {
+        const archivedStr = await db.getSetting('archived_archives');
+        const archived = archivedStr ? JSON.parse(archivedStr) : [];
+        if (!archived.includes(archiveSubPath)) {
+          archived.push(archiveSubPath);
+          await db.setSetting('archived_archives', JSON.stringify(archived));
+        }
+      }
+      await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
+      updateTask(taskId, { status: 'completed', progress: 100, detail: 'Extraction completed', completedAt: new Date() });
+      return;
+    }
+    if (result === 'error') {
+      await cleanupDest();
+      return;
+    }
+  }
+
+  await cleanupDest();
+  updateTask(taskId, { status: 'failed', error: 'All passwords failed', detail: 'No matching password found' });
+};
+
+export {
+  createTask,
+  getTask,
+  getAllTasks,
+  updateTask,
+  cancelTask,
+  removeTask,
+  hasRunningMoveTasks,
+  hasRunningTasks,
+  onTaskChange,
+  attachChildProcess,
+  executeMoveTask,
+  executeExtractTask,
+  detectExtractTools,
+  getEffectiveTools,
+  selectTool,
+};

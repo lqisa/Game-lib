@@ -1,10 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { knex } from './db.js';
-import { createSchema } from './schema.js';
 import { getDataDir } from '../config.js';
 
-const DB_PATH = path.join(getDataDir(), 'db.sqlite3');
+const DB_DIR = getDataDir();
+const DB_PATH = path.join(DB_DIR, 'db.sqlite3');
+
+const isTestEnv = process.env.VITE_API_PORT?.startsWith('1970') || 
+                  process.env.PLAYWRIGHT_TEST === 'true' ||
+                  process.env.NODE_ENV === 'test';
 
 const ALL_TABLES = [
   'library',
@@ -53,7 +57,7 @@ const TABLE_DDL = {
       table.string('name').notNullable();
       table.text('cover_path');
       table.text('description');
-      table.integer('library_id').notNullable();
+      table.integer('library_id').nullable();
       table.string('sub_path').notNullable();
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
@@ -137,34 +141,35 @@ const TABLE_DDL = {
 };
 
 const initDatabase = async () => {
-  const dbExists = fs.existsSync(DB_PATH);
-
-  if (!dbExists) {
-    console.log(' * Database not found, creating...');
-    await createSchema();
-    console.log(' * Database created.');
-    await knex('setting')
-      .insert({ key: 'scrape_concurrency', value: '4' })
-      .onConflict('key')
-      .ignore();
-    return;
-  }
-
-  console.log(' * Database exists, checking missing tables...');
-
   const existingTables = await knex
     .raw("SELECT name FROM sqlite_master WHERE type='table'")
     .then((r) => r.map((row) => row.name));
+  
   const missingTables = ALL_TABLES.filter((t) => !existingTables.includes(t));
 
   if (missingTables.length === 0) {
     console.log(' * All tables exist.');
+    return;
+  }
+
+  if (isTestEnv) {
+    console.log(' * Test environment: creating schema...');
   } else {
-    for (const tableName of missingTables) {
-      console.log(` * Creating missing table: ${tableName}`);
-      await TABLE_DDL[tableName](knex);
+    const dbExists = fs.existsSync(DB_PATH);
+    if (!dbExists) {
+      console.log(' * Database not found, creating...');
+    } else {
+      console.log(' * Database exists, checking missing tables...');
     }
-    console.log(' * Missing tables created.');
+  }
+
+  for (const tableName of missingTables) {
+    console.log(` * Creating table: ${tableName}`);
+    await TABLE_DDL[tableName](knex);
+  }
+  
+  if (missingTables.length > 0) {
+    console.log(' * Tables created.');
   }
 
   await knex('setting')
@@ -205,6 +210,9 @@ const initDatabase = async () => {
   if (!v4) {
     console.log(' * Running migration v4: make library_id nullable in game...');
     await knex.raw('PRAGMA foreign_keys = OFF');
+    await knex.raw('DROP TABLE IF EXISTS game_new');
+    const gameCols = await knex.raw('PRAGMA table_info("game")').then((r) => r.map((c) => c.name));
+    const dirCreatedAtCol = gameCols.includes('dir_created_at') ? 'dir_created_at DATETIME,' : '';
     await knex.raw(`
       CREATE TABLE game_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,6 +223,7 @@ const initDatabase = async () => {
         sub_path TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ${dirCreatedAtCol}
         FOREIGN KEY (library_id) REFERENCES library(id) ON DELETE CASCADE
       )
     `);
@@ -230,6 +239,7 @@ const initDatabase = async () => {
   if (!v5) {
     console.log(' * Running migration v5: rebuild adopt_cache with library_id + sub_path...');
     await knex.raw('PRAGMA foreign_keys = OFF');
+    await knex.raw('DROP TABLE IF EXISTS adopt_cache_new');
     await knex.raw(`
       CREATE TABLE adopt_cache_new (
         game_id INTEGER NOT NULL DEFAULT 0,
@@ -260,7 +270,10 @@ const initDatabase = async () => {
   const v6 = await knex('setting').where({ key: 'migration_v6' }).first();
   if (!v6) {
     console.log(' * Running migration v6: add dir_created_at to game...');
-    await knex.raw('ALTER TABLE game ADD COLUMN dir_created_at DATETIME');
+    const cols6 = await knex.raw('PRAGMA table_info("game")').then((r) => r.map((c) => c.name));
+    if (!cols6.includes('dir_created_at')) {
+      await knex.raw('ALTER TABLE game ADD COLUMN dir_created_at DATETIME');
+    }
     await knex('setting').insert({ key: 'migration_v6', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v6 done.');
   }

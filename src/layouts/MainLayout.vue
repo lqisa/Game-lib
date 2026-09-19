@@ -64,20 +64,38 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <q-page-sticky position="bottom-right" :offset="[16, 16]">
+      <q-btn
+        fab
+        icon="assignment"
+        color="primary"
+        @click="showTaskPanel = true"
+      >
+        <q-badge v-if="taskStore.runningCount > 0" color="red" floating>{{ taskStore.runningCount }}</q-badge>
+        <q-tooltip>Tasks</q-tooltip>
+      </q-btn>
+    </q-page-sticky>
+
+    <TaskPanel v-model="showTaskPanel" />
   </q-layout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useGameListStore } from '../stores/gameListStore';
+import { useTaskStore } from '../stores/taskStore';
+import TaskPanel from '../components/TaskPanel.vue';
 
 const $q = useQuasar();
 const router = useRouter();
 const drawer = ref(true);
 
 const gameListStore = useGameListStore();
+const taskStore = useTaskStore();
+const showTaskPanel = ref(false);
 const filteredCount = computed(() => gameListStore.filteredCount);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
@@ -106,6 +124,23 @@ const enterLightweightMode = async () => {
   if (!window.electronAPI) return;
   await window.electronAPI.enterLightweightMode();
 };
+
+onMounted(() => {
+  void taskStore.connectSSE();
+
+  if (window.electronAPI) {
+    window.electronAPI.onMoveInProgress?.(() => {
+      $q.dialog({
+        title: 'Move In Progress',
+        message: 'A file move is currently running. Closing now may cause data loss. Force quit?',
+        cancel: true,
+        persistent: true,
+      }).onOk(() => {
+        void window.electronAPI?.forceQuit?.();
+      });
+    });
+  }
+});
 </script>
 
 <style>

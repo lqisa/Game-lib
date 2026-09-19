@@ -260,7 +260,7 @@ const DEFAULT_FILTER: FilterState = {
   makerIds: [],
   genreIds: [],
   tagIds: [],
-  scraped: 'yes',
+  scraped: 'all',
   duplicate: 'all',
 };
 
@@ -550,7 +550,6 @@ const loadGames = async () => {
     if (f.duplicate === 'yes') params.duplicate = 'yes';
     else if (f.duplicate === 'no') params.duplicate = 'no';
     if (favoritesMode.value) params.favoritesOnly = 'true';
-    console.log('[loadGames] favoritesMode:', favoritesMode.value, 'params:', params);
     params.sortBy = sortBy.value;
     params.sortOrder = sortOrder.value;
 

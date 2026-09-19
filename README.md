@@ -109,4 +109,4 @@ pnpm typecheck
 
 See [quasar.config.ts](quasar.config.ts) for full build/dev/electron configuration.
 
-Data is stored in the `data/` directory by default (overridable via `GAME_LIB_DATA_DIR` env var).
+Data is stored in the `data/` directory by default.

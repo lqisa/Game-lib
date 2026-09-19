@@ -48,4 +48,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCloseToTray: (): Promise<boolean> => ipcRenderer.invoke('app:getCloseToTray'),
   openPathForRelocate: (): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openPathForRelocate'),
+  hasRunningMoveTasks: (): Promise<boolean> => ipcRenderer.invoke('tasks:hasRunningMoveTasks'),
+  hasRunningTasks: (): Promise<boolean> => ipcRenderer.invoke('tasks:hasRunningTasks'),
+  onMoveInProgress: (callback: () => void) => {
+    ipcRenderer.on('task:move-in-progress', callback);
+  },
+  forceQuit: (): Promise<void> => ipcRenderer.invoke('app:forceQuit'),
+  getSseToken: (): Promise<string> => ipcRenderer.invoke('app:getSseToken'),
 });

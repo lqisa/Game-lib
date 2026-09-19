@@ -8,11 +8,13 @@
   "scripts": {
     "lint": "prettier --write \"**/*.{js,ts,vue,css,html,md,json}\" --ignore-path .gitignore && eslint --fix -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
     "lint:check": "prettier \"**/*.{js,ts,vue,css,html,md,json}\" --ignore-path .gitignore && eslint -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
-    "dev": "quasar dev -m electron",
-    "dev:server": "node --watch server/dev.js",
-    "dev:frontend": "quasar dev",
+    "dev": "cross-env VITE_API_PORT=19700 VITE_FRONTEND_PORT=9000 quasar dev -m electron",
+    "dev:prod": "cross-env GAME_LIB_PROD=1 quasar dev -m electron",
+    "dev:server": "cross-env VITE_API_PORT=19700 node --watch server/dev.js",
+    "dev:frontend": "cross-env VITE_API_PORT=19700 VITE_FRONTEND_PORT=9000 quasar dev",
     "build": "quasar build -m electron",
     "typecheck": "vue-tsc --noEmit",
+    "test": "node --test server/__tests__/*.test.js",
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {
@@ -20,6 +22,7 @@
     "axios": "^1.18.0",
     "cheerio": "^1.2.0",
     "express": "^5.2.1",
+    "https-proxy-agent": "^7.0.0",
     "knex": "^3.2.10",
     "pinia": "^3.0.1",
     "quasar": "^2.20.0",
@@ -34,6 +37,7 @@
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.7.0",
     "autoprefixer": "^10.4.27",
+    "cross-env": "^10.1.0",
     "eslint": "^9.39.4",
     "eslint-plugin-vue": "^10.8.0",
     "globals": "^17.4.0",

@@ -4,9 +4,20 @@ import fs from 'node:fs';
 import * as db from '../database/db.js';
 import { scanDirectory, expandDirectory } from '../scanner.js';
 import { ARCHIVE_EXTENSIONS } from '../constants.js';
+import { createTask, executeMoveTask, executeExtractTask } from '../tasks.js';
 
 const getBlacklist = async () => {
   const row = await db.knex('setting').where({ key: 'blacklist' }).first();
+  if (!row) return [];
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return [];
+  }
+};
+
+const getArchivedArchives = async () => {
+  const row = await db.knex('setting').where({ key: 'archived_archives' }).first();
   if (!row) return [];
   try {
     return JSON.parse(row.value);
@@ -50,8 +61,10 @@ router.get('/', async (req, res, next) => {
       sortOrder: sortOrder || 'desc',
     });
     const blacklist = await getBlacklist();
-    if (blacklist.length > 0) {
-      const set = new Set(blacklist);
+    const archived = await getArchivedArchives();
+    const excludeList = [...blacklist, ...archived];
+    if (excludeList.length > 0) {
+      const set = new Set(excludeList);
       result.games = result.games.filter((g) => !set.has(g.sub_path));
       result.total = result.games.length;
     }
@@ -96,8 +109,10 @@ router.get('/unscraped', async (req, res, next) => {
     }
     const games = await db.getUnscrapedGames(Number(libraryId));
     const blacklist = await getBlacklist();
-    if (blacklist.length > 0) {
-      const set = new Set(blacklist);
+    const archived = await getArchivedArchives();
+    const excludeList = [...blacklist, ...archived];
+    if (excludeList.length > 0) {
+      const set = new Set(excludeList);
       const filtered = games.filter((g) => !set.has(g.sub_path));
       return res.send(filtered);
     }
@@ -333,12 +348,14 @@ router.post('/scan', async (req, res, next) => {
 
     const { dirs, archives } = scanDirectory(library.path);
     const blacklist = await getBlacklist();
-    const blacklistSet = new Set(blacklist);
-    const filteredDirs = blacklist.length > 0
-      ? dirs.filter((d) => !blacklistSet.has(d))
+    const archived = await getArchivedArchives();
+    const excludeList = [...blacklist, ...archived];
+    const excludeSet = new Set(excludeList);
+    const filteredDirs = excludeList.length > 0
+      ? dirs.filter((d) => !excludeSet.has(d))
       : dirs;
-    const filteredArchives = blacklist.length > 0
-      ? archives.filter((a) => !blacklistSet.has(a))
+    const filteredArchives = excludeList.length > 0
+      ? archives.filter((a) => !excludeSet.has(a))
       : archives;
 
     const existingGames = await db
@@ -448,7 +465,7 @@ router.post('/scan/expand', async (req, res, next) => {
 router.put('/:id/relocate', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { newPath, moveFiles } = req.body;
+    const { newPath, moveFiles, force } = req.body;
     if (!newPath || typeof newPath !== 'string') {
       return res.status(400).send({ error: 'newPath is required' });
     }
@@ -460,6 +477,11 @@ router.put('/:id/relocate', async (req, res, next) => {
 
     const normalizePath = (p) => p.replace(/\//g, '\\').replace(/\\+$/, '');
     const normalizedNew = normalizePath(newPath);
+
+    // Path traversal validation
+    if (!path.isAbsolute(normalizedNew) || normalizedNew.includes('..')) {
+      return res.status(400).send({ error: 'Invalid path: must be absolute and cannot contain ..' });
+    }
 
     const currentFullPath = game.library_id
       ? normalizePath((await db.knex('library').where({ id: game.library_id }).first())?.path || '') + '\\' + normalizePath(game.sub_path)
@@ -485,66 +507,88 @@ router.put('/:id/relocate', async (req, res, next) => {
       }
     }
 
-    let operation = 'update_only';
-    let moveSource = null;
-    let moveDest = null;
+    if (!moveFiles) {
+      await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
+      const updated = await db.getGameDetail(Number(id));
+      return res.send({ ...updated, operation: 'update_only', taskId: null });
+    }
 
-    if (moveFiles && !isArchive) {
-      const sourceExists = fs.existsSync(currentFullPath);
+    if (isArchive) {
       const destExists = fs.existsSync(normalizedNew);
-
       if (destExists) {
-        return res.status(409).send({ error: 'Target path already exists, cannot move' });
+        const stat = fs.statSync(normalizedNew);
+        if (!stat.isDirectory()) {
+          return res.status(400).send({ error: 'Target path exists but is not a directory' });
+        }
+        const files = fs.readdirSync(normalizedNew);
+        if (files.length > 0 && !force) {
+          return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
+        }
+      } else {
+        fs.mkdirSync(normalizedNew, { recursive: true });
       }
 
-      if (sourceExists) {
-        operation = 'move';
-        moveSource = currentFullPath;
-        moveDest = normalizedNew;
-      }
-    } else if (!fs.existsSync(normalizedNew)) {
-      fs.mkdirSync(normalizedNew, { recursive: true });
+      const task = createTask('extract', {
+        source: currentFullPath,
+        dest: normalizedNew,
+        gameId: Number(id),
+        archivePath: currentFullPath,
+        archiveSubPath: game.sub_path,
+      });
+
+      void executeExtractTask(task.id, currentFullPath, normalizedNew, Number(id), newLibraryId, newSubPath);
+
+      return res.send({ operation: 'extract', taskId: task.id });
     }
 
-    if (operation === 'move') {
-      const sourceDrive = moveSource.substring(0, 1).toLowerCase();
-      const destDrive = moveDest.substring(0, 1).toLowerCase();
-      const ts = () => new Date().toISOString();
+    const sourceExists = fs.existsSync(currentFullPath);
+    if (!sourceExists) {
+      await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
+      const updated = await db.getGameDetail(Number(id));
+      return res.send({ ...updated, operation: 'update_only', taskId: null });
+    }
 
+    const destExists = fs.existsSync(normalizedNew);
+    if (destExists) {
+      const files = fs.readdirSync(normalizedNew);
+      if (files.length > 0 && !force) {
+        return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
+      }
+    }
+
+    const sourceDrive = currentFullPath.substring(0, 1).toLowerCase();
+    const destDrive = normalizedNew.substring(0, 1).toLowerCase();
+    const sourceDir = path.dirname(currentFullPath).toLowerCase();
+    const destDir = path.dirname(normalizedNew).toLowerCase();
+    const sameDirectory = sourceDrive === destDrive && sourceDir === destDir;
+
+    if (sameDirectory) {
+      const destExists = fs.existsSync(normalizedNew);
+      if (destExists) {
+        const files = fs.readdirSync(normalizedNew);
+        if (files.length > 0 && !force) {
+          return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
+        }
+      }
       try {
-        if (sourceDrive === destDrive) {
-          console.log(`\n[${ts()}] [relocate] rename: ${moveSource} -> ${moveDest}`);
-          await fs.promises.rename(moveSource, moveDest);
-          console.log(`[${ts()}] [relocate] rename success\n`);
-        } else {
-          console.log(`\n[${ts()}] [relocate] copy start: ${moveSource} -> ${moveDest}`);
-          await fs.promises.cp(moveSource, moveDest, { recursive: true });
-          console.log(`[${ts()}] [relocate] copy success, deleting source: ${moveSource}`);
-          await fs.promises.rm(moveSource, { recursive: true, force: true });
-          console.log(`[${ts()}] [relocate] delete source success\n`);
-        }
-      } catch (moveErr) {
-        console.error(`\n[${ts()}] [relocate] move failed:`, moveErr);
-        if (sourceDrive !== destDrive && fs.existsSync(moveDest)) {
-          console.log(`[${ts()}] [relocate] cleaning up partial target: ${moveDest}`);
-          try {
-            await fs.promises.rm(moveDest, { recursive: true, force: true });
-            console.log(`[${ts()}] [relocate] cleanup success\n`);
-          } catch (cleanupErr) {
-            console.error(`[${ts()}] [relocate] cleanup failed:`, cleanupErr);
-          }
-        }
-        return res.status(500).send({ error: `Failed to move files: ${moveErr.message}` });
+        await fs.promises.rename(currentFullPath, normalizedNew);
+        await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
+        const updated = await db.getGameDetail(Number(id));
+        return res.send({ ...updated, operation: 'move', taskId: null });
+      } catch (err) {
+        return res.status(500).send({ error: `Rename failed: ${err.message}` });
       }
     }
 
-    await db.updateGame(Number(id), {
-      library_id: newLibraryId,
-      sub_path: newSubPath,
+    const task = createTask('move', {
+      source: currentFullPath,
+      dest: normalizedNew,
+      gameId: Number(id),
     });
 
-    const updated = await db.getGameDetail(Number(id));
-    res.send({ ...updated, operation });
+    void executeMoveTask(task.id, currentFullPath, normalizedNew, Number(id), newLibraryId, newSubPath);
+
+    res.send({ operation: 'move', taskId: task.id });
   } catch (err) {
     next(err);
   }

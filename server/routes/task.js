@@ -1,0 +1,67 @@
+import express from 'express';
+import { getAllTasks, cancelTask, removeTask, onTaskChange } from '../tasks.js';
+
+const router = express.Router();
+
+// SSE token validation middleware
+const validateSseToken = (req, res, next) => {
+  const token = req.query.token;
+  if (!token || token !== process.env.SSE_TOKEN) {
+    return res.status(401).send({ error: 'Invalid SSE token' });
+  }
+  next();
+};
+
+router.get('/', (_req, res) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  res.send(getAllTasks().map(({ childProcess, ...rest }) => rest));
+});
+
+router.delete('/:id', (req, res) => {
+  const { id } = req.params;
+  const task = getAllTasks().find((t) => t.id === id);
+  if (!task) {
+    return res.status(404).send({ error: 'Task not found' });
+  }
+  if (task.status === 'running' && task.type === 'move') {
+    return res.status(403).send({ error: 'Move tasks cannot be cancelled' });
+  }
+  if (task.status === 'running') {
+    cancelTask(id);
+  } else {
+    removeTask(id);
+  }
+  res.status(204).end();
+});
+
+router.get('/events', validateSseToken, (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const snapshot = getAllTasks().map(({ childProcess, ...rest }) => rest);
+  res.write(`data: ${JSON.stringify({ type: 'snapshot', tasks: snapshot })}\n\n`);
+
+  const onChange = (task) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { childProcess, ...rest } = task;
+    res.write(`data: ${JSON.stringify({ type: 'update', task: rest })}\n\n`);
+  };
+
+  const unsubscribe = onTaskChange(onChange);
+
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
+});
+
+export default router;

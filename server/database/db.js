@@ -6,27 +6,57 @@ import { getDataDir } from '../config.js';
 const DB_DIR = getDataDir();
 const DB_PATH = path.join(DB_DIR, 'db.sqlite3');
 
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
-}
+const isTestEnv = process.env.VITE_API_PORT?.startsWith('1970') || 
+                  process.env.PLAYWRIGHT_TEST === 'true' ||
+                  process.env.NODE_ENV === 'test';
 
-const db = knex({
-  client: 'sqlite3',
-  connection: { filename: DB_PATH },
-  useNullAsDefault: true,
-  pool: {
-    min: 1,
-    max: 2,
-    acquireTimeoutMillis: 10000,
-    idleTimeoutMillis: 30000,
-    afterCreate: (conn, done) => {
-      conn.run('PRAGMA foreign_keys = ON');
-      conn.run('PRAGMA journal_mode = WAL');
-      conn.run('PRAGMA cache_size = -2000', done);
+let db;
+
+if (isTestEnv) {
+  db = knex({
+    client: 'sqlite3',
+    connection: { filename: ':memory:' },
+    useNullAsDefault: true,
+    pool: {
+      min: 1,
+      max: 1,
+      afterCreate: (conn, done) => {
+        conn.run('PRAGMA foreign_keys = ON');
+        done();
+      },
     },
-  },
-});
-
+  });
+} else {
+  if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+  }
+  db = knex({
+    client: 'sqlite3',
+    connection: { filename: DB_PATH },
+    useNullAsDefault: true,
+    pool: {
+      min: 1,
+      max: 2,
+      acquireTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+      afterCreate: (conn, done) => {
+        conn.run('PRAGMA foreign_keys = ON');
+        conn.run('PRAGMA journal_mode = WAL');
+        conn.run('PRAGMA cache_size = -2000', done);
+      },
+    },
+  });
+}
+ 
+const closePool = async () => {
+  if (db) {
+    await db.destroy();
+    db = null;
+  }
+};
+ 
+const getKnex = () => db;
+ 
 const getGameDetail = async (id) => {
   const game = await db('game').where({ id }).first();
   if (!game) return null;
@@ -530,8 +560,8 @@ const getDuplicateSources = async () => {
   return Object.values(groups);
 };
 
-export { db as knex };
 export {
+  db as knex,
   getGameDetail,
   getGames,
   getUnscrapedGames,
@@ -576,4 +606,5 @@ export {
   deleteAdoptCacheMixed,
   migrateAdoptCacheGameId,
   getDuplicateSources,
+  closePool,
 };

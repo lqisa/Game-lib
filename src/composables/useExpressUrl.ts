@@ -1,6 +1,7 @@
 export function useExpressUrl() {
   const isDev = import.meta.env.DEV;
-  const expressPort = 19700;
+  const rawPort = import.meta.env.VITE_API_PORT;
+  const expressPort = rawPort ? parseInt(String(rawPort), 10) : 19700;
   const baseUrl = isDev ? `http://127.0.0.1:${expressPort}` : '';
 
   return {

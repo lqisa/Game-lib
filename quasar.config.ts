@@ -80,13 +80,14 @@ export default defineConfig((/* ctx */) => {
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
       open: false,
+      port: parseInt(process.env.VITE_FRONTEND_PORT || '9000', 10),
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:19700',
+          target: `http://127.0.0.1:${process.env.VITE_API_PORT || 19700}`,
           changeOrigin: true,
         },
         '/covers': {
-          target: 'http://127.0.0.1:19700',
+          target: `http://127.0.0.1:${process.env.VITE_API_PORT || 19700}`,
           changeOrigin: true,
         },
       },

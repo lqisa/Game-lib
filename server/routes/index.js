@@ -6,6 +6,7 @@ import settingRoutes from './setting.js';
 import coverRoutes from './cover.js';
 import cacheRoutes from './cache.js';
 import proxyRoutes from './proxy.js';
+import taskRoutes from './task.js';
 
 const router = express.Router();
 
@@ -16,6 +17,7 @@ router.use('/settings', settingRoutes);
 router.use('/cover', coverRoutes);
 router.use('/cache', cacheRoutes);
 router.use('/proxy', proxyRoutes);
+router.use('/tasks', taskRoutes);
 
 router.get('/health', (req, res) => {
   res.send({ status: 'ok' });

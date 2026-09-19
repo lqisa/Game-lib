@@ -238,15 +238,6 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-
-    <q-dialog :model-value="relocating" persistent>
-      <q-card class="q-pa-lg" style="min-width: 200px">
-        <div class="column items-center">
-          <q-spinner size="40px" color="primary" />
-          <div class="q-mt-sm text-body2">Moving files...</div>
-        </div>
-      </q-card>
-    </q-dialog>
   </q-page>
 </template>
 
@@ -432,35 +423,109 @@ const doRelocate = async () => {
   confirmRelocate.value = false;
   relocating.value = true;
   try {
-    await api.put(`/games/${game.value.id}/relocate`, {
+    const res = await api.put(`/games/${game.value.id}/relocate`, {
       newPath: targetPath,
       moveFiles: relocateMoveFiles.value,
-    }, {
-      timeout: 600000,
     });
+
+    const { taskId, operation } = res.data;
+
     editingPath.value = false;
     relocating.value = false;
-    await loadGame();
-    if (isArchiveRelocate) {
-      try {
-        await navigator.clipboard.writeText(targetPath);
-      } catch {
-        // clipboard not available
+
+    if (!taskId) {
+      await loadGame();
+      if (isArchiveRelocate) {
+        try {
+          await navigator.clipboard.writeText(targetPath);
+        } catch { /* clipboard may not be available */ }
+        $q.dialog({
+          title: 'Archive Relocated',
+          message: 'Target path copied to clipboard. Open the archive for extraction?',
+          cancel: true,
+          persistent: false,
+        }).onOk(() => {
+          if (sourcePath) {
+            void window.electronAPI?.openPath(sourcePath);
+          }
+        });
       }
+      return;
+    }
+
+    $q.notify({
+      type: 'info',
+      message: operation === 'move' ? 'File move started in background' : 'Extraction started in background',
+      icon: operation === 'move' ? 'drive_file_move' : 'archive',
+    });
+
+    const taskStore = (await import('../stores/taskStore')).useTaskStore();
+    const unwatch = taskStore.$subscribe((_mutation, state) => {
+      const task = state.tasks.get(taskId);
+      if (!task) return;
+      if (task.status === 'completed') {
+        unwatch();
+        $q.notify({ type: 'positive', message: task.type === 'move' ? 'Move completed' : 'Extraction completed' });
+        void loadGame();
+      } else if (task.status === 'failed') {
+        unwatch();
+        $q.notify({ type: 'negative', message: task.error || 'Task failed' });
+      }
+    });
+  } catch (err: unknown) {
+    relocating.value = false;
+    const e = err as { response?: { status?: number; data?: { conflict?: string; destExists?: boolean } } };
+    if (e.response?.status === 409 && e.response.data?.conflict) {
       $q.dialog({
-        title: 'Archive Relocated',
-        message: `Target path copied to clipboard. Open the archive for extraction?`,
+        title: 'Target Conflict',
+        message: 'Target path already exists and is not empty. Continue anyway?',
         cancel: true,
-        persistent: false,
+        persistent: true,
       }).onOk(() => {
-        if (sourcePath) {
-          void window.electronAPI?.openPath(sourcePath);
-        }
+        void doRelocateWithForce(targetPath);
       });
     }
+  }
+};
+
+const doRelocateWithForce = async (targetPath: string) => {
+  if (!game.value) return;
+  relocating.value = true;
+  try {
+    const res = await api.put(`/games/${game.value.id}/relocate`, {
+      newPath: targetPath,
+      moveFiles: relocateMoveFiles.value,
+      force: true,
+    });
+    const { taskId, operation } = res.data;
+    editingPath.value = false;
+    relocating.value = false;
+
+    if (!taskId) {
+      await loadGame();
+      return;
+    }
+
+    $q.notify({
+      type: 'info',
+      message: operation === 'move' ? 'File move started in background' : 'Extraction started in background',
+    });
+
+    const taskStore = (await import('../stores/taskStore')).useTaskStore();
+    const unwatch = taskStore.$subscribe((_mutation, state) => {
+      const task = state.tasks.get(taskId);
+      if (!task) return;
+      if (task.status === 'completed') {
+        unwatch();
+        $q.notify({ type: 'positive', message: 'Task completed' });
+        void loadGame();
+      } else if (task.status === 'failed') {
+        unwatch();
+        $q.notify({ type: 'negative', message: task.error || 'Task failed' });
+      }
+    });
   } catch {
     relocating.value = false;
-    confirmRelocate.value = false;
   }
 };
 

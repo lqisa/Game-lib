@@ -112,6 +112,105 @@
         </q-card-section>
       </q-card>
 
+      <q-card class="m3-card q-mb-md">
+        <q-card-section>
+          <div class="m3-label-large q-mb-sm">Archive Passwords</div>
+          <div class="m3-label-medium q-mb-sm">Passwords to try when extracting encrypted archives. Tried in order, no password first.</div>
+        </q-card-section>
+        <q-card-section>
+          <q-markup-table flat bordered dense>
+            <thead>
+              <tr>
+                <th class="text-left">Password</th>
+                <th class="text-right" style="width: 80px">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(pwd, idx) in archivePasswords" :key="idx">
+                <td>
+                  <span v-if="!passwordVisible[idx]">••••••••</span>
+                  <span v-else>{{ pwd }}</span>
+                  <q-btn flat round dense size="xs" :icon="passwordVisible[idx] ? 'visibility_off' : 'visibility'" color="grey-7" class="q-ml-xs" @click="passwordVisible[idx] = !passwordVisible[idx]" />
+                </td>
+                <td class="text-right">
+                  <q-btn flat round size="sm" icon="delete" style="color: var(--m3-error);" @click="removePassword(idx)" />
+                </td>
+              </tr>
+              <tr v-if="archivePasswords.length === 0">
+                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">No passwords</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+        </q-card-section>
+        <q-card-section>
+          <div class="row q-gutter-sm items-center">
+            <q-input v-model="newPassword" label="Password" type="password" outlined dense class="m3-input" style="max-width: 300px" @keyup.enter="addPassword" />
+            <q-btn unelevated class="m3-btn--tonal" label="Add" dense @click="addPassword" />
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <q-card class="m3-card q-mb-md">
+        <q-card-section>
+          <div class="m3-label-large q-mb-sm">Extraction Tools</div>
+          <div class="m3-label-medium q-mb-sm">Auto-detected paths. Override manually if needed.</div>
+        </q-card-section>
+        <q-card-section>
+          <div class="q-gutter-sm">
+            <div class="row items-center q-gutter-sm">
+              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">UnRAR.exe</div>
+              <q-input v-model="extractTools.unrar" outlined dense class="m3-input" style="flex: 1" />
+              <q-icon :name="extractTools.unrar ? 'check_circle' : 'cancel'" :color="extractTools.unrar ? 'positive' : 'negative'" size="sm" />
+            </div>
+            <div class="row items-center q-gutter-sm">
+              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z.exe</div>
+              <q-input v-model="extractTools.sevenzip" outlined dense class="m3-input" style="flex: 1" />
+              <q-icon :name="extractTools.sevenzip ? 'check_circle' : 'cancel'" :color="extractTools.sevenzip ? 'positive' : 'negative'" size="sm" />
+            </div>
+            <div class="row items-center q-gutter-sm">
+              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z-zstd</div>
+              <q-input v-model="extractTools.sevenzipZstd" outlined dense class="m3-input" style="flex: 1" />
+              <q-icon :name="extractTools.sevenzipZstd ? 'check_circle' : 'cancel'" :color="extractTools.sevenzipZstd ? 'positive' : 'negative'" size="sm" />
+            </div>
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <q-btn unelevated class="m3-btn--filled" label="Save Tools" @click="saveExtractTools" />
+          <q-btn flat class="m3-btn--text q-ml-sm" label="Re-detect" @click="redetectTools" />
+        </q-card-section>
+      </q-card>
+
+      <q-card class="m3-card q-mb-md">
+        <q-card-section>
+          <div class="m3-label-large q-mb-sm">Archived Archives</div>
+          <div class="m3-label-medium q-mb-sm">Archives that have been extracted. Excluded from scans. Copy path to manually delete the archive file.</div>
+        </q-card-section>
+        <q-card-section>
+          <q-markup-table flat bordered dense>
+            <thead>
+              <tr>
+                <th class="text-left">Archive Path</th>
+                <th class="text-right" style="width: 120px">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, idx) in archivedArchives" :key="idx">
+                <td style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item }}</td>
+                <td class="text-right">
+                  <q-btn flat round size="sm" icon="content_copy" style="color: var(--m3-primary);" @click="copyPath(item)">
+                    <q-tooltip>Copy Path</q-tooltip>
+                  </q-btn>
+                  <q-btn flat round size="sm" icon="delete" style="color: var(--m3-error);" @click="removeArchivedArchive(idx)" />
+                </td>
+              </tr>
+              <tr v-if="archivedArchives.length === 0">
+                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">No archived archives</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+        </q-card-section>
+      </q-card>
+
       <q-card v-if="hasElectronAPI" class="m3-card q-mb-md">
         <q-card-section>
           <div class="m3-label-large q-mb-sm">Application</div>
@@ -210,6 +309,18 @@ const proxyPort = ref(7890);
 
 const blacklist = ref<string[]>([]);
 const newBlacklistItem = ref('');
+
+const archivePasswords = ref<string[]>([]);
+const newPassword = ref('');
+const passwordVisible = ref<boolean[]>([]);
+
+const extractTools = ref<{ unrar: string; sevenzip: string; sevenzipZstd: string }>({
+  unrar: '',
+  sevenzip: '',
+  sevenzipZstd: '',
+});
+
+const archivedArchives = ref<string[]>([]);
 
 const autoStart = ref(false);
 const closeToTray = ref(false);
@@ -404,6 +515,85 @@ const fetchCloseToTray = async () => {
   }
 };
 
+const fetchArchivePasswords = async () => {
+  try {
+    const res = await api.get('/settings/archive-passwords/list');
+    archivePasswords.value = res.data;
+    passwordVisible.value = res.data.map(() => false);
+  } catch {
+    archivePasswords.value = [];
+  }
+};
+
+const addPassword = async () => {
+  const pwd = newPassword.value;
+  if (!pwd) return;
+  archivePasswords.value.push(pwd);
+  passwordVisible.value.push(false);
+  newPassword.value = '';
+  await api.put('/settings/archive-passwords/save', { passwords: archivePasswords.value });
+};
+
+const removePassword = async (idx: number) => {
+  archivePasswords.value.splice(idx, 1);
+  passwordVisible.value.splice(idx, 1);
+  await api.put('/settings/archive-passwords/save', { passwords: archivePasswords.value });
+};
+
+const fetchExtractTools = async () => {
+  try {
+    const res = await api.get('/settings/extract-tools/list');
+    extractTools.value = {
+      unrar: res.data.unrar || '',
+      sevenzip: res.data.sevenzip || '',
+      sevenzipZstd: res.data.sevenzipZstd || '',
+    };
+  } catch {
+    extractTools.value = { unrar: '', sevenzip: '', sevenzipZstd: '' };
+  }
+};
+
+const saveExtractTools = async () => {
+  await api.put('/settings/extract-tools/save', { tools: extractTools.value });
+  $q.notify({ type: 'positive', message: 'Tools saved' });
+};
+
+const redetectTools = async () => {
+  try {
+    const res = await api.get('/settings/detect-tools');
+    extractTools.value = {
+      unrar: res.data.unrar || '',
+      sevenzip: res.data.sevenzip || '',
+      sevenzipZstd: res.data.sevenzipZstd || '',
+    };
+    await api.put('/settings/extract-tools/save', { tools: extractTools.value });
+    $q.notify({ type: 'positive', message: 'Tools re-detected' });
+  } catch {
+    $q.notify({ type: 'negative', message: 'Detection failed' });
+  }
+};
+
+const fetchArchivedArchives = async () => {
+  try {
+    const res = await api.get('/settings/archived-archives/list');
+    archivedArchives.value = res.data;
+  } catch {
+    archivedArchives.value = [];
+  }
+};
+
+const copyPath = async (item: string) => {
+  try {
+    await navigator.clipboard.writeText(item);
+    $q.notify({ type: 'positive', message: 'Path copied' });
+  } catch { /* clipboard may not be available */ }
+};
+
+const removeArchivedArchive = async (idx: number) => {
+  await api.delete(`/settings/archived-archives/remove/${idx}`);
+  await fetchArchivedArchives();
+};
+
 onMounted(() => {
   void fetchLibraries();
   void fetchToken();
@@ -412,6 +602,9 @@ onMounted(() => {
   void fetchProxy();
   void fetchAutoStart();
   void fetchCloseToTray();
+  void fetchArchivePasswords();
+  void fetchExtractTools();
+  void fetchArchivedArchives();
 });
 </script>
 
