@@ -3,8 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import * as db from '../database/db.js';
 import { scanDirectory, expandDirectory } from '../scanner.js';
-import { ARCHIVE_EXTENSIONS } from '../constants.js';
-import { createTask, executeMoveTask, executeExtractTask } from '../tasks.js';
+import { ARCHIVE_EXTENSIONS, VOLUME_PATTERNS } from '../constants.js';
+import { createTask, executeMoveTask, executeExtractTask, executeCompressTask } from '../tasks.js';
 
 const getBlacklist = async () => {
   const row = await db.knex('setting').where({ key: 'blacklist' }).first();
@@ -24,6 +24,41 @@ const getArchivedArchives = async () => {
   } catch {
     return [];
   }
+};
+
+const getArchivedFolders = async () => {
+  const row = await db.knex('setting').where({ key: 'archived_folders' }).first();
+  if (!row) return [];
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return [];
+  }
+};
+
+const isArchiveFile = (name) => {
+  const ext = path.extname(name).toLowerCase();
+  if (ARCHIVE_EXTENSIONS.has(ext)) return true;
+  return VOLUME_PATTERNS.some((p) => p.test(name));
+};
+
+const shouldCompress = (sourcePath) => {
+  if (!fs.existsSync(sourcePath)) {
+    return { compress: false, reason: 'not_exists' };
+  }
+  const stat = fs.statSync(sourcePath);
+  if (!stat.isDirectory()) {
+    if (isArchiveFile(sourcePath)) {
+      return { compress: false, reason: 'already_archive' };
+    }
+    return { compress: false, reason: 'not_directory' };
+  }
+  const children = fs.readdirSync(sourcePath, { withFileTypes: true });
+  const hasArchiveChild = children.some((c) => c.isFile() && isArchiveFile(c.name));
+  if (hasArchiveChild) {
+    return { compress: false, reason: 'contains_archives' };
+  }
+  return { compress: true, reason: 'needs_compression' };
 };
 
 const router = express.Router();
@@ -62,7 +97,8 @@ router.get('/', async (req, res, next) => {
     });
     const blacklist = await getBlacklist();
     const archived = await getArchivedArchives();
-    const excludeList = [...blacklist, ...archived];
+    const archivedFolders = await getArchivedFolders();
+    const excludeList = [...blacklist, ...archived, ...archivedFolders];
     if (excludeList.length > 0) {
       const set = new Set(excludeList);
       result.games = result.games.filter((g) => !set.has(g.sub_path));
@@ -110,7 +146,8 @@ router.get('/unscraped', async (req, res, next) => {
     const games = await db.getUnscrapedGames(Number(libraryId));
     const blacklist = await getBlacklist();
     const archived = await getArchivedArchives();
-    const excludeList = [...blacklist, ...archived];
+    const archivedFolders = await getArchivedFolders();
+    const excludeList = [...blacklist, ...archived, ...archivedFolders];
     if (excludeList.length > 0) {
       const set = new Set(excludeList);
       const filtered = games.filter((g) => !set.has(g.sub_path));
@@ -349,7 +386,8 @@ router.post('/scan', async (req, res, next) => {
     const { dirs, archives } = scanDirectory(library.path);
     const blacklist = await getBlacklist();
     const archived = await getArchivedArchives();
-    const excludeList = [...blacklist, ...archived];
+    const archivedFolders = await getArchivedFolders();
+    const excludeList = [...blacklist, ...archived, ...archivedFolders];
     const excludeSet = new Set(excludeList);
     const filteredDirs = excludeList.length > 0
       ? dirs.filter((d) => !excludeSet.has(d))
@@ -465,7 +503,7 @@ router.post('/scan/expand', async (req, res, next) => {
 router.put('/:id/relocate', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { newPath, moveFiles, force } = req.body;
+    const { newPath, moveFiles, force, compressFiles } = req.body;
     if (!newPath || typeof newPath !== 'string') {
       return res.status(400).send({ error: 'newPath is required' });
     }
@@ -491,9 +529,6 @@ router.put('/:id/relocate', async (req, res, next) => {
       return res.status(400).send({ error: 'New path is the same as current path' });
     }
 
-    const ext = path.extname(currentFullPath).toLowerCase();
-    const isArchive = ARCHIVE_EXTENSIONS.has(ext);
-
     let newLibraryId = null;
     let newSubPath = normalizedNew;
 
@@ -512,6 +547,39 @@ router.put('/:id/relocate', async (req, res, next) => {
       const updated = await db.getGameDetail(Number(id));
       return res.send({ ...updated, operation: 'update_only', taskId: null });
     }
+
+    // Handle compression if requested - check rules BEFORE isArchive check
+    if (compressFiles) {
+      const compressCheck = shouldCompress(currentFullPath);
+      if (!compressCheck.compress) {
+        return res.status(400).send({ error: `Compression not needed: ${compressCheck.reason}`, compressSkipped: true, reason: compressCheck.reason });
+      }
+
+      // Ensure target has .rar extension
+      const destArchive = normalizedNew.toLowerCase().endsWith('.rar') ? normalizedNew : normalizedNew + '.rar';
+      
+      // Check if target archive already exists
+      const destExists = fs.existsSync(destArchive);
+      if (destExists && !force) {
+        return res.status(409).send({ error: 'Target archive already exists', conflict: true });
+      }
+
+      const task = createTask('compress', {
+        source: currentFullPath,
+        dest: destArchive,
+        gameId: Number(id),
+        sourceDir: currentFullPath,
+        destArchive,
+        sourceSubPath: game.sub_path,
+      });
+
+      void executeCompressTask(task.id, currentFullPath, destArchive, Number(id), newLibraryId, path.basename(destArchive), game.sub_path);
+
+      return res.send({ operation: 'compress', taskId: task.id });
+    }
+
+    const ext = path.extname(currentFullPath).toLowerCase();
+    const isArchive = ARCHIVE_EXTENSIONS.has(ext);
 
     if (isArchive) {
       const destExists = fs.existsSync(normalizedNew);

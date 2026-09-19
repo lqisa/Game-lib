@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY } from './constants.js';
+import { EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY, COMPRESS_TOOL_PATHS } from './constants.js';
 
 const tasks = new Map();
 const listeners = new Set();
@@ -344,6 +344,147 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
   updateTask(taskId, { status: 'failed', error: 'All passwords failed', detail: 'No matching password found' });
 };
 
+const detectCompressTools = () => {
+  const found = {};
+  for (const [tool, paths] of Object.entries(COMPRESS_TOOL_PATHS)) {
+    for (const p of paths) {
+      if (fs.existsSync(p)) {
+        found[tool] = p;
+        break;
+      }
+    }
+  }
+  return found;
+};
+
+const getEffectiveCompressTools = async () => {
+  const db = (await import('./database/db.js'));
+  const savedStr = await db.getSetting('compress_tools');
+  if (savedStr) {
+    try {
+      return JSON.parse(savedStr);
+    } catch { /* invalid JSON, fall through to detect */ }
+  }
+  return detectCompressTools();
+};
+
+const selectCompressTool = (tools) => {
+  if (tools.winrar) return { name: 'winrar', path: tools.winrar };
+  return null;
+};
+
+const tryCompress = (taskId, tool, sourceDir, destArchive) => {
+  return new Promise((resolve) => {
+    const args = ['a', '-r', '-ep1', '-idq', destArchive, `${sourceDir}\\*`];
+    
+    const child = spawn(tool.path, args);
+    attachChildProcess(taskId, child);
+
+    let stderrText = '';
+    child.stderr.on('data', (data) => { stderrText += data.toString(); });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve('success');
+      } else {
+        const task = getTask(taskId);
+        if (task && task.status === 'cancelled') {
+          resolve('error');
+          return;
+        }
+        updateTask(taskId, { status: 'failed', error: `Exit code ${code}: ${stderrText}`, detail: 'Compression failed' });
+        resolve('error');
+      }
+    });
+
+    child.on('error', (err) => {
+      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start compression tool' });
+      resolve('error');
+    });
+  });
+};
+
+const tryTestArchive = (taskId, tool, archivePath) => {
+  return new Promise((resolve) => {
+    const args = ['t', '-idq', archivePath];
+    
+    const child = spawn(tool.path, args);
+    attachChildProcess(taskId, child);
+
+    let stderrText = '';
+    child.stderr.on('data', (data) => { stderrText += data.toString(); });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve('success');
+      } else {
+        updateTask(taskId, { status: 'failed', error: `Archive test failed (exit ${code}): ${stderrText}`, detail: 'Archive integrity test failed' });
+        resolve('error');
+      }
+    });
+
+    child.on('error', (err) => {
+      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start archive test' });
+      resolve('error');
+    });
+  });
+};
+
+const executeCompressTask = async (taskId, sourceDir, destArchive, gameId, newLibraryId, newSubPath, sourceSubPath) => {
+  const tools = await getEffectiveCompressTools();
+  const tool = selectCompressTool(tools);
+
+  if (!tool) {
+    updateTask(taskId, { status: 'failed', error: 'No compression tool found (WinRAR rar.exe required)', detail: 'No tool available' });
+    return;
+  }
+
+  const db = (await import('./database/db.js'));
+
+  updateTask(taskId, { status: 'running', detail: `Compressing with ${tool.name}...`, progress: 0 });
+
+  // Delete existing destination file if it exists (route handles conflict check when force=false)
+  try {
+    if (fs.existsSync(destArchive)) {
+      await fs.promises.rm(destArchive, { force: true });
+    }
+  } catch { /* ignore cleanup errors */ }
+
+  const cleanupDest = async () => {
+    try {
+      if (fs.existsSync(destArchive)) {
+        await fs.promises.rm(destArchive, { force: true });
+      }
+    } catch { /* ignore cleanup errors */ }
+  };
+
+  const compressResult = await tryCompress(taskId, tool, sourceDir, destArchive);
+  if (compressResult !== 'success') {
+    await cleanupDest();
+    return;
+  }
+
+  updateTask(taskId, { progress: 50, detail: 'Testing archive integrity...' });
+
+  const testResult = await tryTestArchive(taskId, tool, destArchive);
+  if (testResult !== 'success') {
+    await cleanupDest();
+    return;
+  }
+
+  if (sourceSubPath) {
+    const archivedStr = await db.getSetting('archived_folders');
+    const archived = archivedStr ? JSON.parse(archivedStr) : [];
+    if (!archived.includes(sourceSubPath)) {
+      archived.push(sourceSubPath);
+      await db.setSetting('archived_folders', JSON.stringify(archived));
+    }
+  }
+
+  await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
+  updateTask(taskId, { status: 'completed', progress: 100, detail: 'Compression completed', completedAt: new Date() });
+};
+
 export {
   createTask,
   getTask,
@@ -357,7 +498,11 @@ export {
   attachChildProcess,
   executeMoveTask,
   executeExtractTask,
+  executeCompressTask,
   detectExtractTools,
   getEffectiveTools,
   selectTool,
+  detectCompressTools,
+  getEffectiveCompressTools,
+  selectCompressTool,
 };

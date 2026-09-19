@@ -219,7 +219,20 @@
             color="primary"
             :disable="relocateInfo?.moveDisabled"
           />
-          <q-banner v-if="relocateMoveFiles" dense class="bg-blue-1 text-blue-9 rounded-borders q-mt-sm">
+          <q-toggle
+            v-if="!relocateInfo?.compressDisabled"
+            v-model="relocateCompressFiles"
+            label="Compress to .rar (archive folder)"
+            color="primary"
+            :disable="!relocateMoveFiles"
+          />
+          <q-banner v-if="relocateMoveFiles && relocateCompressFiles" dense class="bg-purple-1 text-purple-9 rounded-borders q-mt-sm">
+            <template v-slot:avatar>
+              <q-icon name="archive" color="purple" />
+            </template>
+            Will compress folder to .rar and move archive to new location
+          </q-banner>
+          <q-banner v-else-if="relocateMoveFiles" dense class="bg-blue-1 text-blue-9 rounded-borders q-mt-sm">
             <template v-slot:avatar>
               <q-icon name="drive_file_move" color="blue" />
             </template>
@@ -295,7 +308,8 @@ const relocating = ref(false);
 const $q = useQuasar();
 const confirmRelocate = ref(false);
 const relocateMoveFiles = ref(false);
-const relocateInfo = ref<{ source: string; target: string; moveDisabled: boolean } | null>(null);
+const relocateCompressFiles = ref(false);
+const relocateInfo = ref<{ source: string; target: string; moveDisabled: boolean; compressDisabled: boolean } | null>(null);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
@@ -405,12 +419,16 @@ const showRelocateConfirm = (newPath: string) => {
   const archiveExts = ['zip', '7z', 'rar', '001', '002', '003', '004', '005', '006', '007', '008', '009'];
   const isArchive = archiveExts.includes(ext);
   const moveDisabled = isArchive;
+  // Compress is only available for directories (not archives) and when moveFiles is enabled
+  const compressDisabled = isArchive;
 
   relocateMoveFiles.value = !isArchive;
+  relocateCompressFiles.value = !isArchive;
   relocateInfo.value = {
     source: currentFullPath.value,
     target: newPath,
     moveDisabled,
+    compressDisabled,
   };
   confirmRelocate.value = true;
 };
@@ -418,6 +436,7 @@ const showRelocateConfirm = (newPath: string) => {
 const doRelocate = async () => {
   if (!game.value || !editPathValue.value.trim()) return;
   const isArchiveRelocate = relocateInfo.value?.moveDisabled;
+  const isCompressRelocate = relocateCompressFiles.value;
   const targetPath = editPathValue.value.trim();
   const sourcePath = relocateInfo.value?.source || '';
   confirmRelocate.value = false;
@@ -426,6 +445,7 @@ const doRelocate = async () => {
     const res = await api.put(`/games/${game.value.id}/relocate`, {
       newPath: targetPath,
       moveFiles: relocateMoveFiles.value,
+      compressFiles: relocateCompressFiles.value,
     });
 
     const { taskId, operation } = res.data;
@@ -450,13 +470,19 @@ const doRelocate = async () => {
           }
         });
       }
+      if (isCompressRelocate && res.data.compressSkipped) {
+        $q.notify({
+          type: 'warning',
+          message: `Compression skipped: ${res.data.reason}`,
+        });
+      }
       return;
     }
 
     $q.notify({
       type: 'info',
-      message: operation === 'move' ? 'File move started in background' : 'Extraction started in background',
-      icon: operation === 'move' ? 'drive_file_move' : 'archive',
+      message: operation === 'move' ? 'File move started in background' : operation === 'extract' ? 'Extraction started in background' : 'Compression started in background',
+      icon: operation === 'move' ? 'drive_file_move' : operation === 'extract' ? 'archive' : 'compress',
     });
 
     const taskStore = (await import('../stores/taskStore')).useTaskStore();
@@ -465,7 +491,7 @@ const doRelocate = async () => {
       if (!task) return;
       if (task.status === 'completed') {
         unwatch();
-        $q.notify({ type: 'positive', message: task.type === 'move' ? 'Move completed' : 'Extraction completed' });
+        $q.notify({ type: 'positive', message: task.type === 'move' ? 'Move completed' : task.type === 'extract' ? 'Extraction completed' : 'Compression completed' });
         void loadGame();
       } else if (task.status === 'failed') {
         unwatch();
@@ -495,6 +521,7 @@ const doRelocateWithForce = async (targetPath: string) => {
     const res = await api.put(`/games/${game.value.id}/relocate`, {
       newPath: targetPath,
       moveFiles: relocateMoveFiles.value,
+      compressFiles: relocateCompressFiles.value,
       force: true,
     });
     const { taskId, operation } = res.data;
@@ -508,7 +535,7 @@ const doRelocateWithForce = async (targetPath: string) => {
 
     $q.notify({
       type: 'info',
-      message: operation === 'move' ? 'File move started in background' : 'Extraction started in background',
+      message: operation === 'move' ? 'File move started in background' : operation === 'extract' ? 'Extraction started in background' : 'Compression started in background',
     });
 
     const taskStore = (await import('../stores/taskStore')).useTaskStore();

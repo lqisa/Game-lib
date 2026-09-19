@@ -53,4 +53,11 @@ const FORMAT_TOOL_PRIORITY = {
   '.zst': ['sevenzipZstd'],
 };
 
-export { NON_GAME_DIRS, ARCHIVE_EXTENSIONS, VOLUME_PATTERNS, EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY };
+const COMPRESS_TOOL_PATHS = {
+  winrar: [
+    'C:\\Program Files\\WinRAR\\rar.exe',
+    'C:\\Program Files (x86)\\WinRAR\\rar.exe',
+  ],
+};
+
+export { NON_GAME_DIRS, ARCHIVE_EXTENSIONS, VOLUME_PATTERNS, EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY, COMPRESS_TOOL_PATHS };
