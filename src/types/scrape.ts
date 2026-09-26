@@ -1,4 +1,4 @@
-export type SourceType = 'dlsite' | 'bangumi' | 'vndb' | 'steam';
+export type SourceType = 'dlsite' | 'dmm' | 'bangumi' | 'vndb' | 'steam';
 
 export interface SearchResult {
   id: string;

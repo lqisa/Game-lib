@@ -4,6 +4,7 @@ node_modules
 
 .vscode/
 .kilo/
+.workbuddy-ai/
 
 # .env files
 .env*
@@ -38,3 +39,4 @@ test-results/
 playwright-report/
 
 graphify-out/
+test-data/

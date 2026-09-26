@@ -9,6 +9,8 @@ import {
   removeTask,
   hasRunningMoveTasks,
   hasRunningTasks,
+  hasActiveTasks,
+  activeTaskForGame,
   onTaskChange,
   detectExtractTools,
   selectTool,
@@ -151,7 +153,6 @@ describe('hasRunningMoveTasks / hasRunningTasks', () => {
     updateTask(task.id, { status: 'running' });
     assert.equal(hasRunningMoveTasks(), true);
   });
-
   it('hasRunningMoveTasks should be false when no move is running', () => {
     createTask('move', { source: 'A', dest: 'B' });
     assert.equal(hasRunningMoveTasks(), false);
@@ -274,5 +275,55 @@ describe('selectTool', () => {
   it('should respect FORMAT_TOOL_PRIORITY for .zip', () => {
     const tool = selectTool('.zip', { unrar: '/bin/unrar', sevenzip: '/bin/7z' });
     assert.equal(tool.name, 'unrar');
+  });
+});
+
+// The exit guards must not let an extract/compress be killed by quitting, so they use
+// hasActiveTasks rather than the move-only check.
+describe('hasActiveTasks', () => {
+  beforeEach(() => cleanup());
+  afterEach(() => cleanup());
+
+  it('is true for a queued (pending) task, not only a running one', () => {
+    createTask('extract', { archivePath: 'C.rar' });
+    assert.equal(hasActiveTasks(), true);
+  });
+
+  it('is true for a running extract', () => {
+    const task = createTask('extract', { archivePath: 'C.rar' });
+    updateTask(task.id, { status: 'running' });
+    assert.equal(hasActiveTasks(), true);
+  });
+
+  it('is false once the task reaches a terminal state', () => {
+    const task = createTask('compress', { sourceDir: 'D', destArchive: 'D.rar' });
+    updateTask(task.id, { status: 'running' });
+    updateTask(task.id, { status: 'completed' });
+    assert.equal(hasActiveTasks(), false);
+  });
+
+  it('is false when there are no tasks at all', () => {
+    assert.equal(hasActiveTasks(), false);
+  });
+});
+
+describe('activeTaskForGame', () => {
+  beforeEach(() => cleanup());
+  afterEach(() => cleanup());
+
+  it('finds the active task of the given game only', () => {
+    const mine = createTask('extract', { archivePath: 'C.rar', gameId: 7 });
+    createTask('extract', { archivePath: 'D.rar', gameId: 8 });
+    updateTask(mine.id, { status: 'running' });
+
+    assert.equal(activeTaskForGame(7)?.id, mine.id);
+    assert.equal(activeTaskForGame(8)?.id !== mine.id, true);
+    assert.equal(activeTaskForGame(999), null);
+  });
+
+  it('ignores finished tasks so the game is relocatable again', () => {
+    const task = createTask('extract', { archivePath: 'C.rar', gameId: 7 });
+    updateTask(task.id, { status: 'failed' });
+    assert.equal(activeTaskForGame(7), null);
   });
 });

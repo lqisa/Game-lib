@@ -1,18 +1,15 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import knex from 'knex';
-import { getDataDir } from '../config.js';
+import { getDataDir, isTestEnv } from '../config.js';
 
 const DB_DIR = getDataDir();
 const DB_PATH = path.join(DB_DIR, 'db.sqlite3');
 
-const isTestEnv = process.env.VITE_API_PORT?.startsWith('1970') || 
-                  process.env.PLAYWRIGHT_TEST === 'true' ||
-                  process.env.NODE_ENV === 'test';
-
 let db;
 
-if (isTestEnv) {
+if (isTestEnv()) {
+  console.log(' * Using in-memory sqlite db (test environment).');
   db = knex({
     client: 'sqlite3',
     connection: { filename: ':memory:' },
@@ -30,6 +27,7 @@ if (isTestEnv) {
   if (!fs.existsSync(DB_DIR)) {
     fs.mkdirSync(DB_DIR, { recursive: true });
   }
+  console.log(` * Using sqlite db file: ${DB_PATH}`);
   db = knex({
     client: 'sqlite3',
     connection: { filename: DB_PATH },
@@ -54,8 +52,6 @@ const closePool = async () => {
     db = null;
   }
 };
- 
-const getKnex = () => db;
  
 const getGameDetail = async (id) => {
   const game = await db('game').where({ id }).first();
@@ -119,6 +115,7 @@ const getGames = async ({
   scraped,
   duplicate,
   favoritesOnly,
+  excludeSubPaths,
   sortBy = 'updated_at',
   sortOrder = 'desc',
 } = {}) => {
@@ -211,6 +208,12 @@ const getGames = async ({
     });
   }
 
+  // Blacklisted / archived sub_paths are excluded here (before counting and paginating)
+  // so that `total` reflects the real number of visible games.
+  if (excludeSubPaths && excludeSubPaths.length > 0) {
+    query = query.whereNotIn('game.sub_path', excludeSubPaths);
+  }
+
   const total = await query.clone().countDistinct('game.id as count').first();
   let games;
   if (pageSize > 0) {
@@ -280,10 +283,51 @@ const batchRemoveFavorites = async (ids) => {
   await db('favorite').whereIn('game_id', ids).del();
 };
 
-const getFavoriteGameIds = async () => {
-  const rows = await db('favorite').select('game_id');
-  return rows.map((r) => r.game_id);
+// The Recently list is capped: only the 100 most recently opened games are kept, and the
+// oldest rows are dropped as new ones come in. The cap lives here (not in the route) so every
+// write path stays bounded, no matter who calls it.
+const MAX_RECENT = 100;
+
+const getRecently = async (limit = MAX_RECENT) =>
+  db('recently')
+    .join('game', 'recently.game_id', 'game.id')
+    .leftJoin('library', 'game.library_id', 'library.id')
+    .select(
+      'game.*',
+      'recently.opened_at',
+      'library.name as library_name',
+      'library.path as library_path',
+    )
+    .orderBy('recently.opened_at', 'desc')
+    .limit(limit);
+
+const touchRecently = async (gameId) => {
+  const exists = await db('game').where({ id: gameId }).first('id');
+  if (!exists) return false;
+  // One row per game: re-opening refreshes the timestamp instead of inserting a duplicate.
+  await db('recently')
+    .insert({ game_id: gameId, opened_at: db.fn.now() })
+    .onConflict('game_id')
+    .merge(['opened_at']);
+  await pruneRecently();
+  return true;
 };
+
+// Delete everything beyond the newest MAX_RECENT rows.
+const pruneRecently = async () => {
+  const keep = await db('recently')
+    .select('game_id')
+    .orderBy('opened_at', 'desc')
+    .orderBy('game_id', 'desc')
+    .limit(MAX_RECENT);
+  if (keep.length < MAX_RECENT) return 0;
+  const keepIds = keep.map((row) => row.game_id);
+  return db('recently').whereNotIn('game_id', keepIds).del();
+};
+
+const clearRecently = async () => db('recently').del();
+
+const removeRecently = async (gameId) => db('recently').where({ game_id: gameId }).del();
 
 const insertLibrary = async (data) => db('library').insert(data);
 const getLibraries = async () => db('library').select('*');
@@ -306,79 +350,6 @@ const getAllSettings = async () => {
     settings[row.key] = row.value;
   }
   return settings;
-};
-
-const insertGameSource = async (data) => {
-  return db('game_source')
-    .insert(data)
-    .onConflict(['game_id', 'source_type', 'source_id'])
-    .merge(['source_url', 'raw_data']);
-};
-
-const insertMakers = async (names) => {
-  if (names.length === 0) return [];
-  const existing = await db('maker').whereIn('name', names).select('id', 'name');
-  const existingMap = new Map(existing.map((r) => [r.name, r.id]));
-  const newNames = names.filter((n) => !existingMap.has(n));
-  if (newNames.length > 0) {
-    const rows = await db('maker').insert(
-      newNames.map((name) => ({ name })),
-      ['id', 'name'],
-    );
-    for (const row of rows) existingMap.set(row.name, row.id);
-  }
-  return names.map((n) => existingMap.get(n));
-};
-
-const insertGenres = async (names) => {
-  if (names.length === 0) return [];
-  const existing = await db('genre').whereIn('name', names).select('id', 'name');
-  const existingMap = new Map(existing.map((r) => [r.name, r.id]));
-  const newNames = names.filter((n) => !existingMap.has(n));
-  if (newNames.length > 0) {
-    const rows = await db('genre').insert(
-      newNames.map((name) => ({ name })),
-      ['id', 'name'],
-    );
-    for (const row of rows) existingMap.set(row.name, row.id);
-  }
-  return names.map((n) => existingMap.get(n));
-};
-
-const insertTags = async (names) => {
-  if (names.length === 0) return [];
-  const existing = await db('tag').whereIn('name', names).select('id', 'name');
-  const existingMap = new Map(existing.map((r) => [r.name, r.id]));
-  const newNames = names.filter((n) => !existingMap.has(n));
-  if (newNames.length > 0) {
-    const rows = await db('tag').insert(
-      newNames.map((name) => ({ name })),
-      ['id', 'name'],
-    );
-    for (const row of rows) existingMap.set(row.name, row.id);
-  }
-  return names.map((n) => existingMap.get(n));
-};
-
-const syncGameMakers = async (gameId, makerIds) => {
-  await db('game_maker').where({ game_id: gameId }).del();
-  if (makerIds.length > 0) {
-    await db('game_maker').insert(makerIds.map((m) => ({ game_id: gameId, maker_id: m })));
-  }
-};
-
-const syncGameGenres = async (gameId, genreIds) => {
-  await db('game_genre').where({ game_id: gameId }).del();
-  if (genreIds.length > 0) {
-    await db('game_genre').insert(genreIds.map((g) => ({ game_id: gameId, genre_id: g })));
-  }
-};
-
-const syncGameTags = async (gameId, tagIds) => {
-  await db('game_tag').where({ game_id: gameId }).del();
-  if (tagIds.length > 0) {
-    await db('game_tag').insert(tagIds.map((t) => ({ game_id: gameId, tag_id: t })));
-  }
 };
 
 const getMakers = async () => {
@@ -573,7 +544,12 @@ export {
   removeFavorite,
   batchAddFavorites,
   batchRemoveFavorites,
-  getFavoriteGameIds,
+  MAX_RECENT,
+  getRecently,
+  touchRecently,
+  pruneRecently,
+  clearRecently,
+  removeRecently,
   insertLibrary,
   getLibraries,
   updateLibrary,
@@ -581,13 +557,6 @@ export {
   getSetting,
   setSetting,
   getAllSettings,
-  insertGameSource,
-  insertMakers,
-  insertGenres,
-  insertTags,
-  syncGameMakers,
-  syncGameGenres,
-  syncGameTags,
   getMakers,
   getGenres,
   getTags,

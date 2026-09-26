@@ -1,9 +1,10 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import settingRouter from '../routes/setting.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
+import { closePool } from '../database/db.js';
 
 let app;
 let baseUrl;
@@ -191,4 +192,8 @@ describe('Setting Routes', () => {
       assert.equal(res.body.sevenzip, 'C:\\7z.exe');
     });
   });
+});
+
+after(async () => {
+  await closePool();
 });

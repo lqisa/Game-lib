@@ -21,6 +21,7 @@
       <q-card-section class="q-pb-none">
         <q-tabs v-model="activeSource" dense narrow-indicator align="left" class="q-mb-sm">
           <q-tab name="dlsite" label="DLSite" />
+          <q-tab name="dmm" label="DMM" />
           <q-tab name="bangumi" label="Bangumi" />
           <q-tab name="vndb" label="VNDB" />
           <q-tab name="steam" label="Steam" />
@@ -198,6 +199,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
+import { useQuasar } from 'quasar';
 import api from '../composables/useApi';
 import { getCleanedName } from '../composables/useSplitKeyword';
 import { useExpressUrl } from '../composables/useExpressUrl';
@@ -237,6 +239,39 @@ const searched = ref(false);
 const detail = ref<DetailResult | null>(null);
 const detailLoading = ref(false);
 const manualFetching = ref(false);
+
+const $q = useQuasar();
+
+// Scrape failures used to be swallowed (there is no global axios error interceptor), so a
+// source that was blocked or unreachable looked exactly like "no results". Surface them.
+// DMM's region gate gets a distinct, actionable message because the fix is on the user's
+// side (a Japanese proxy exit), not in the code.
+const reportScrapeError = (err: unknown, action: string) => {
+  const e = err as {
+    code?: string;
+    response?: { data?: { error?: string; code?: string } };
+  };
+  if (e?.code === 'ERR_CANCELED') return;
+  const data = e?.response?.data;
+  const isRegion = data?.code === 'DMM_REGION_BLOCKED';
+  const isSelector = data?.code === 'DMM_SELECTOR_MISSING';
+  $q.notify({
+    type: isRegion || isSelector ? 'warning' : 'negative',
+    message: data?.error || `Scrape ${action} failed`,
+    timeout: isRegion || isSelector ? 12000 : 6000,
+    multiLine: true,
+  });
+};
+
+/**
+ * A search can succeed and still be incomplete: DLsite/DMM filter some works by IP and
+ * report nothing. The server hands back a `region` notice when it can tell, and this is
+ * the user's only chance to find out they forgot to switch proxy.
+ */
+const reportRegionNotice = (region: { isJapan?: boolean | null; message?: string } | null | undefined) => {
+  if (!region || region.isJapan !== false || !region.message) return;
+  $q.notify({ type: 'warning', message: region.message, timeout: 12000, multiLine: true });
+};
 const searchAbort = ref<AbortController | null>(null);
 const fetchAbort = ref<AbortController | null>(null);
 const manualFetchAbort = ref<AbortController | null>(null);
@@ -244,6 +279,7 @@ const manualFetchAbort = ref<AbortController | null>(null);
 const idInputLabel = computed(() => {
   const labels: Record<SourceType, string> = {
     dlsite: 'RJ Code (e.g. RJ123456)',
+    dmm: 'DMM ID (e.g. d_216826)',
     bangumi: 'Subject ID (e.g. 123456)',
     vndb: 'VNDB ID (e.g. v12345)',
     steam: 'App ID (e.g. 123456)',
@@ -287,10 +323,11 @@ const doSearch = async () => {
     });
     const data = res.data;
     results.value = data.results ?? data;
+    reportRegionNotice(data.region);
     emit('searched', activeSource.value, keyword.value.trim(), results.value);
     searched.value = true;
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
+    reportScrapeError(err, 'search');
   } finally {
     if (searchAbort.value === currentAbort) {
       searching.value = false;
@@ -329,7 +366,7 @@ const selectResult = async (idx: number) => {
     }
     detail.value = fetched;
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
+    reportScrapeError(err, 'fetch');
     detail.value = null;
   } finally {
     if (fetchAbort.value === currentFetch) {
@@ -402,7 +439,7 @@ const fetchById = async () => {
     }];
     selectedIdx.value = 0;
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ERR_CANCELED') return;
+    reportScrapeError(err, 'fetch');
     detail.value = null;
   } finally {
     if (manualFetchAbort.value === currentAbort) {
@@ -439,9 +476,11 @@ watch(activeSource, () => {
 
 const resolveAutoSource = (name: string): SourceType => {
   const hasRJ = /RJ\d+/.test(name);
+  const hasDmm = /\bd_\d{3,}\b/i.test(name);
   const letterCount = (name.match(/[a-zA-Z]/g) || []).length;
   const isMostlyEnglish = name.length > 0 && letterCount / name.length >= 0.9;
   if (hasRJ) return 'dlsite';
+  if (hasDmm) return 'dmm';
   if (isMostlyEnglish) return 'steam';
   return 'bangumi';
 };
@@ -466,7 +505,7 @@ const onDialogShow = async () => {
     props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
   keyword.value = getCleanedName(rawKeyword);
 
-  const validSources: SourceType[] = ['dlsite', 'bangumi', 'vndb', 'steam'];
+  const validSources: SourceType[] = ['dlsite', 'dmm', 'bangumi', 'vndb', 'steam'];
   const source = props.defaultSource;
   const tab: SourceType = source && validSources.includes(source)
     ? source

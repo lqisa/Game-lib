@@ -1,14 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { knex } from './db.js';
-import { getDataDir } from '../config.js';
+import { getDataDir, ensureDir, isTestEnv } from '../config.js';
+import { DEFAULT_MATCH_PRIORITY, DEFAULT_MATCH_THRESHOLD } from '../scraper/match.js';
 
 const DB_DIR = getDataDir();
 const DB_PATH = path.join(DB_DIR, 'db.sqlite3');
-
-const isTestEnv = process.env.VITE_API_PORT?.startsWith('1970') || 
-                  process.env.PLAYWRIGHT_TEST === 'true' ||
-                  process.env.NODE_ENV === 'test';
 
 const ALL_TABLES = [
   'library',
@@ -138,9 +135,18 @@ const TABLE_DDL = {
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
     }),
+  recently: (knex) =>
+    knex.schema.createTable('recently', (table) => {
+      table.integer('game_id').primary();
+      table.dateTime('opened_at').defaultTo(knex.fn.now());
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+    }),
 };
 
 const initDatabase = async () => {
+  // Ensure data directory exists before any DB operations
+  ensureDir(DB_DIR);
+  
   const existingTables = await knex
     .raw("SELECT name FROM sqlite_master WHERE type='table'")
     .then((r) => r.map((row) => row.name));
@@ -149,29 +155,29 @@ const initDatabase = async () => {
 
   if (missingTables.length === 0) {
     console.log(' * All tables exist.');
-    return;
-  }
-
-  if (isTestEnv) {
-    console.log(' * Test environment: creating schema...');
   } else {
-    const dbExists = fs.existsSync(DB_PATH);
-    if (!dbExists) {
-      console.log(' * Database not found, creating...');
+    if (isTestEnv()) {
+      console.log(' * Test environment: creating schema...');
     } else {
-      console.log(' * Database exists, checking missing tables...');
+      const dbExists = fs.existsSync(DB_PATH);
+      if (!dbExists) {
+        console.log(' * Database not found, creating...');
+      } else {
+        console.log(' * Database exists, checking missing tables...');
+      }
+    }
+
+    for (const tableName of missingTables) {
+      console.log(` * Creating table: ${tableName}`);
+      await TABLE_DDL[tableName](knex);
+    }
+    
+    if (missingTables.length > 0) {
+      console.log(' * Tables created.');
     }
   }
 
-  for (const tableName of missingTables) {
-    console.log(` * Creating table: ${tableName}`);
-    await TABLE_DDL[tableName](knex);
-  }
-  
-  if (missingTables.length > 0) {
-    console.log(' * Tables created.');
-  }
-
+  // Always run migrations regardless of whether tables were created
   await knex('setting')
     .insert({ key: 'scrape_concurrency', value: '4' })
     .onConflict('key')
@@ -292,6 +298,106 @@ const initDatabase = async () => {
     await knex.raw('PRAGMA foreign_keys = ON');
     await knex('setting').insert({ key: 'migration_v7', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v7 done.');
+  }
+
+  // Migration v8: seed default settings for archive passwords and archived lists
+  const v8 = await knex('setting').where({ key: 'migration_v8' }).first();
+  if (!v8) {
+    console.log(' * Running migration v8: seed default archive settings...');
+    await knex('setting')
+      .insert({ key: 'archive_passwords', value: JSON.stringify([]) })
+      .onConflict('key')
+      .ignore();
+    await knex('setting')
+      .insert({ key: 'archived_archives', value: JSON.stringify([]) })
+      .onConflict('key')
+      .ignore();
+    await knex('setting')
+      .insert({ key: 'archived_folders', value: JSON.stringify([]) })
+      .onConflict('key')
+      .ignore();
+    await knex('setting')
+      .insert({ key: 'extract_tools', value: JSON.stringify({}) })
+      .onConflict('key')
+      .ignore();
+    await knex('setting')
+      .insert({ key: 'compress_tools', value: JSON.stringify({}) })
+      .onConflict('key')
+      .ignore();
+    await knex('setting').insert({ key: 'migration_v8', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v8 done.');
+  }
+
+  // Migration v9: per-language source match priority + similarity threshold
+  const v9 = await knex('setting').where({ key: 'migration_v9' }).first();
+  if (!v9) {
+    console.log(' * Running migration v9: seed scrape match settings...');
+    const matchDefaults = {
+      match_priority_en: DEFAULT_MATCH_PRIORITY.en,
+      match_priority_ja: DEFAULT_MATCH_PRIORITY.ja,
+      match_priority_zh: DEFAULT_MATCH_PRIORITY.zh,
+      match_threshold: DEFAULT_MATCH_THRESHOLD,
+    };
+    for (const [key, value] of Object.entries(matchDefaults)) {
+      await knex('setting')
+        .insert({ key, value: JSON.stringify(value) })
+        .onConflict('key')
+        .ignore();
+    }
+    await knex('setting').insert({ key: 'migration_v9', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v9 done.');
+  }
+
+  // Migration v10: add recently table (recently opened paths, capped at 100 rows)
+  const v10 = await knex('setting').where({ key: 'migration_v10' }).first();
+  if (!v10) {
+    console.log(' * Running migration v10: add recently table...');
+    await knex.raw('PRAGMA foreign_keys = OFF');
+    await knex.raw(`
+      CREATE TABLE IF NOT EXISTS recently (
+        game_id INTEGER PRIMARY KEY,
+        opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (game_id) REFERENCES game(id) ON DELETE CASCADE
+      )
+    `);
+    await knex.raw('PRAGMA foreign_keys = ON');
+    await knex('setting').insert({ key: 'migration_v10', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v10 done.');
+  }
+
+  // Migration v11: add the DMM source to the stored match priorities.
+  // `getMatchConfig()` uses a stored priority array as-is whenever it is non-empty, so
+  // changing DEFAULT_MATCH_PRIORITY alone would never reach existing databases - DMM
+  // would be skipped silently. Existing databases therefore have to be edited here.
+  const v11 = await knex('setting').where({ key: 'migration_v11' }).first();
+  if (!v11) {
+    console.log(' * Running migration v11: append dmm to match priorities...');
+    // The priorities that shipped before DMM existed. A stored value still equal to one of
+    // these was never customised, so it is safe to replace with the new default (which puts
+    // DMM where it belongs). Anything else is a deliberate user choice - only append there.
+    const PREVIOUS_DEFAULTS = {
+      en: ['steam', 'vndb', 'bangumi', 'dlsite'],
+      ja: ['dlsite', 'bangumi', 'steam', 'vndb'],
+      zh: ['steam', 'bangumi', 'dlsite', 'vndb'],
+    };
+    for (const lang of ['en', 'ja', 'zh']) {
+      const key = `match_priority_${lang}`;
+      const row = await knex('setting').where({ key }).first();
+      if (!row) continue;
+      try {
+        const parsed = JSON.parse(row.value);
+        if (!Array.isArray(parsed) || parsed.includes('dmm')) continue;
+        const previous = PREVIOUS_DEFAULTS[lang];
+        const untouched = previous.length === parsed.length && previous.every((s, i) => s === parsed[i]);
+        const next = untouched ? DEFAULT_MATCH_PRIORITY[lang] : [...parsed, 'dmm'];
+        await knex('setting').where({ key }).update({ value: JSON.stringify(next) });
+        console.log(` *   ${key}: ${JSON.stringify(next)}${untouched ? '' : ' (customised - dmm appended)'}`);
+      } catch {
+        // Malformed value: leave it alone, getMatchConfig() falls back to the default.
+      }
+    }
+    await knex('setting').insert({ key: 'migration_v11', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v11 done.');
   }
 };
 

@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import fs from 'node:fs';
@@ -7,11 +7,13 @@ import os from 'node:os';
 import gameRouter from '../routes/game.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
+import { closePool } from '../database/db.js';
 import {
   getTask,
   getAllTasks,
   updateTask,
   removeTask,
+  createTask,
 } from '../tasks.js';
 
 const request = async (method, url, body) => {
@@ -307,4 +309,94 @@ describe('Game Relocate Route', () => {
     await teardownGame(tmpDir, libId, gameId);
     server.close();
   });
+});
+
+describe('Relocate is a per-game singleton', () => {
+  const withServer = async (fn) => {
+    await initDatabase();
+    const app = express();
+    app.use(express.json());
+    app.use('/api/games', gameRouter);
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    try {
+      await fn(base);
+    } finally {
+      server.close();
+    }
+  };
+
+  it('refuses a second relocate while a task is running for that game', async () => {
+    await withServer(async (base) => {
+      const { tmpDir, libId, gameId } = await setupGame(base);
+      const task = createTask('extract', {
+        source: 'C:\\fake.rar',
+        dest: 'C:\\fake-out',
+        gameId,
+        archivePath: 'C:\\fake.rar',
+      });
+
+      const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+        newPath: 'C:\\somewhere-else',
+        moveFiles: false,
+      });
+
+      assert.equal(res.status, 409);
+      assert.equal(res.body.busy, true);
+      assert.equal(res.body.busyTaskId, task.id);
+
+      await teardownGame(tmpDir, libId, gameId);
+    });
+  });
+
+  it('still allows relocating a different game (per-game, not global)', async () => {
+    await withServer(async (base) => {
+      const first = await setupGame(base);
+      const second = await setupGame(base);
+      createTask('extract', {
+        source: 'C:\\fake.rar',
+        dest: 'C:\\fake-out',
+        gameId: first.gameId,
+        archivePath: 'C:\\fake.rar',
+      });
+
+      const res = await request('PUT', `${base}/api/games/${second.gameId}/relocate`, {
+        newPath: 'C:\\elsewhere',
+        moveFiles: false,
+      });
+
+      assert.notEqual(res.status, 409);
+
+      await teardownGame(first.tmpDir, first.libId, first.gameId);
+      await teardownGame(second.tmpDir, second.libId, second.gameId);
+    });
+  });
+
+  it('allows the next relocate once the previous task has finished', async () => {
+    await withServer(async (base) => {
+      const { tmpDir, libId, gameId } = await setupGame(base);
+      const task = createTask('extract', {
+        source: 'C:\\fake.rar',
+        dest: 'C:\\fake-out',
+        gameId,
+        archivePath: 'C:\\fake.rar',
+      });
+      updateTask(task.id, { status: 'completed' });
+
+      const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+        newPath: 'C:\\elsewhere',
+        moveFiles: false,
+      });
+
+      assert.notEqual(res.status, 409);
+
+      await teardownGame(tmpDir, libId, gameId);
+    });
+  });
+});
+
+after(async () => {
+  await closePool();
 });

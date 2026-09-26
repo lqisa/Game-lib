@@ -1,10 +1,11 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import taskRouter from '../routes/task.js';
 import settingRouter from '../routes/setting.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
+import { closePool } from '../database/db.js';
 import {
   createTask,
   getAllTasks,
@@ -164,4 +165,8 @@ describe('Snapshot: API Response Structure', () => {
       assert.ok('sevenzipZstd' in res.body);
     });
   });
+});
+
+after(async () => {
+  await closePool();
 });

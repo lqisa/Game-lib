@@ -5,25 +5,30 @@
     @click="handleClick"
   >
     <div class="game-cover">
+      <!-- A cover can be missing for two different reasons: the game was never scraped
+           (or its source has no cover art), or cover_path is set but the file is not a
+           decodable image. Both fall back to the same placeholder instead of leaving the
+           tile blank - the second case used to just hide the <img> and show nothing. -->
       <img
-        v-if="game.cover_path"
+        v-if="game.cover_path && !coverFailed"
         v-lazy-img="coverSrc"
         class="game-cover__img"
         draggable="false"
-        @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
+        @error="coverFailed = true"
       />
-      <div
-        v-if="!game.cover_path"
-        class="game-cover__placeholder flex flex-center bg-grey-4 text-grey-6"
-      >
-        <q-icon name="videogame_asset" size="48px" />
-      </div>
+      <img
+        v-else
+        src="placeholder-cover.jpg"
+        class="game-cover__img game-cover__placeholder"
+        draggable="false"
+        alt=""
+      />
       <div v-if="selectable && selected" class="absolute-top-left q-pa-xs">
         <q-icon name="check_circle" color="primary" size="24px" />
       </div>
       <div v-if="duplicate" class="absolute-top-right q-pa-xs" style="z-index: 1">
         <q-icon name="content_copy" color="warning" size="18px">
-          <q-tooltip>与其他游戏共享来源</q-tooltip>
+          <q-tooltip>Shares a source with another game</q-tooltip>
         </q-icon>
       </div>
       <div class="game-cover__title">
@@ -43,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useExpressUrl } from '../composables/useExpressUrl';
 
 interface Game {
@@ -83,6 +88,13 @@ const coverSrc = computed(() => {
   }
   return '';
 });
+
+// Set when a cover file exists but is not a decodable image, so the tile falls back to the
+// placeholder rather than going blank. No reset-on-change is needed: both lists key their
+// items by game id (`item-key` on VirtualGrid), so an instance is never rebound to another
+// game - scrolling creates fresh instances instead (measured: 32 cards -> 40 after scroll,
+// with the bound game id never changing on an existing instance).
+const coverFailed = ref(false);
 
 const handleClick = (e: MouseEvent) => {
   if (props.selectable) {
@@ -126,11 +138,13 @@ const handleClick = (e: MouseEvent) => {
   object-fit: contain;
 }
 
+/* `cover` rather than `contain`: the placeholder is decorative, so filling the tile looks
+   better than letterboxing it against the surface colour. */
 .game-cover__placeholder {
   width: 100%;
   height: 100%;
+  object-fit: cover;
   background: var(--m3-surface-container-highest);
-  color: var(--m3-on-surface-variant);
 }
 
 .game-cover__name {
@@ -154,6 +168,5 @@ body.body--dark .game-cover {
 }
 body.body--dark .game-cover__placeholder {
   background: var(--m3-surface-container-highest) !important;
-  color: var(--m3-on-surface-variant) !important;
 }
 </style>

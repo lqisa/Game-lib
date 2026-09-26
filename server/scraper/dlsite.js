@@ -1,5 +1,6 @@
 import { load } from 'cheerio';
 import { scraperAxios, retryGet } from './axios.js';
+import { readGeoCountry, buildRegionNotice, buildEmptyResultNotice } from './region.js';
 
 const buildDlsiteCoverUrl = (rjcode, isAnnounce) => {
   const match = rjcode.match(/^(RJ|VJ|BG|RE)(\d+)$/i);
@@ -13,15 +14,28 @@ const buildDlsiteCoverUrl = (rjcode, isAnnounce) => {
   return `https://img.dlsite.jp/modpub/images2/work/doujin/${prefix}${folder}/${rjcode.toUpperCase()}_img_main.jpg`;
 };
 
-const searchDLSite = async (keyword) => {
+/**
+ * Search DLsite and report the network exit alongside the results.
+ *
+ * DLsite filters some works by IP without saying so - they are simply absent - and it
+ * reports the exit country on every response, so the region check costs no extra
+ * request. Callers that only want the list should use searchDLSite().
+ *
+ * @returns {Promise<{results: Array, region: {country: string|null, isJapan: boolean, message: string}|null}>}
+ */
+const searchDLSiteDetailed = async (keyword) => {
+  // Captured from whichever request actually went through.
+  let country = null;
+
   const url = `https://www.dlsite.com/maniax/api/=/product.json?work_category%5B0%5D=%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0&keyword=${encodeURIComponent(keyword)}&order%5B%5D=trend&_locale=zh-cn`;
   const response = await retryGet(url, {
     headers: { cookie: 'locale=zh-cn' },
   });
+  country = readGeoCountry(response) || country;
 
   const items = response.data;
   if (Array.isArray(items) && items.length > 0) {
-    return items
+    const results = items
       .map((item) => {
         const workno = item.workno || '';
         const rjcode = workno;
@@ -44,6 +58,7 @@ const searchDLSite = async (keyword) => {
         };
       })
       .filter((r) => r.rjcode && /^(RJ|VJ|BG|RE)\d+$/i.test(r.rjcode));
+    return { results, region: buildRegionNotice(country) };
   }
 
   try {
@@ -51,6 +66,7 @@ const searchDLSite = async (keyword) => {
     const suggestResp = await retryGet(suggestUrl, {
       headers: { cookie: 'locale=zh-cn' },
     });
+    country = readGeoCountry(suggestResp) || country;
     let suggestData = suggestResp.data;
     if (typeof suggestData === 'string') {
       const jsonpMatch = suggestData.match(/^[^(]*\((.+)\)$/s);
@@ -58,7 +74,7 @@ const searchDLSite = async (keyword) => {
     }
     const works = suggestData?.work || [];
     if (works.length > 0) {
-      return works
+      const results = works
         .map((w) => {
           const rjcode = w.workno || '';
           return {
@@ -70,34 +86,53 @@ const searchDLSite = async (keyword) => {
           };
         })
         .filter((r) => r.rjcode && /^(RJ|VJ|BG|RE)\d+$/i.test(r.rjcode));
+      return { results, region: buildRegionNotice(country) };
     }
-  } catch {}
+  } catch {
+    /* fall through to the next strategy */
+  }
 
   const codeMatch = keyword.match(/(RJ\d+)/i);
   if (codeMatch) {
     const rjcode = codeMatch[1].toUpperCase();
     const workUrl = `https://www.dlsite.com/maniax/work/=/product_id/${rjcode}.html`;
     try {
-      await scraperAxios.get(workUrl, {
+      const r = await scraperAxios.get(workUrl, {
         timeout: 10000,
         headers: { cookie: 'locale=zh-cn' },
         validateStatus: (s) => s === 200,
       });
-      return [{ id: rjcode, rjcode, name: rjcode, makerName: '', coverUrl: '' }];
-    } catch {}
+      country = readGeoCountry(r) || country;
+      return {
+        results: [{ id: rjcode, rjcode, name: rjcode, makerName: '', coverUrl: '' }],
+        region: buildRegionNotice(country),
+      };
+    } catch {
+      /* fall through to the next strategy */
+    }
     const announceUrl = `https://www.dlsite.com/maniax/announce/=/product_id/${rjcode}.html`;
     try {
-      await scraperAxios.get(announceUrl, {
+      const r = await scraperAxios.get(announceUrl, {
         timeout: 10000,
         headers: { cookie: 'locale=zh-cn' },
         validateStatus: (s) => s === 200,
       });
-      return [{ id: rjcode, rjcode, name: rjcode, makerName: '', coverUrl: '' }];
-    } catch {}
+      country = readGeoCountry(r) || country;
+      return {
+        results: [{ id: rjcode, rjcode, name: rjcode, makerName: '', coverUrl: '' }],
+        region: buildRegionNotice(country),
+      };
+    } catch {
+      /* fall through to the next strategy */
+    }
   }
 
-  return [];
+  // Nothing found. Say why it might be, instead of just returning an empty list.
+  return { results: [], region: buildEmptyResultNotice(keyword, country) };
 };
+
+/** List-only view of searchDLSiteDetailed(), for callers that do not need the region. */
+const searchDLSite = async (keyword) => (await searchDLSiteDetailed(keyword)).results;
 
 const normalizeDlsiteCode = (code) => {
   const match = code.match(/^(RJ|VJ|BG|RE)(\d+)$/i);
@@ -109,6 +144,7 @@ const fetchDLSiteDetail = async (rjcode) => {
   const { prefix, num } = normalizeDlsiteCode(rjcode);
   let response;
   let isAnnounce = false;
+  let country = null;
 
   try {
     response = await retryGet(
@@ -116,7 +152,10 @@ const fetchDLSiteDetail = async (rjcode) => {
       { headers: { cookie: 'locale=zh-cn' }, validateStatus: (s) => s === 200 },
       1,
     );
-  } catch {}
+  } catch {
+    /* fall through to the next strategy */
+  }
+  country = readGeoCountry(response) || country;
 
   if (!response) {
     try {
@@ -126,11 +165,25 @@ const fetchDLSiteDetail = async (rjcode) => {
         1,
       );
       isAnnounce = true;
-    } catch {}
+    } catch {
+      /* fall through to the next strategy */
+    }
+    country = readGeoCountry(response) || country;
   }
 
   if (!response) {
-    throw new Error(`Product ${prefix}${num} not found`);
+    // A missing product page is ambiguous: the work may not exist, or the network exit
+    // may not be Japan (region-restricted works 404 rather than say why). Carry both
+    // so the caller can tell the user which one to check.
+    const err = new Error(
+      country && country !== 'JP'
+        ? `${prefix}${num} not found on DLsite, and the network exit is ${country} ` +
+            `(not Japan) - most likely a region restriction.`
+        : `Product ${prefix}${num} not found`,
+    );
+    err.code = 'DLSITE_NOT_FOUND';
+    err.region = buildRegionNotice(country);
+    throw err;
   }
 
   const $ = load(response.data);
@@ -153,7 +206,8 @@ const fetchDLSiteDetail = async (rjcode) => {
       }
     } catch {
       imgList = candidateStr
-        .replace(/[\[\]'\\]/g, '')
+        // strips [ ] ' \ from the JSON-ish attribute value
+        .replace(/[\]'\\[]/g, '')
         .split(',')
         .filter(Boolean);
     }
@@ -225,4 +279,4 @@ const fetchDLSiteDetail = async (rjcode) => {
   return work;
 };
 
-export { searchDLSite, fetchDLSiteDetail };
+export { searchDLSite, searchDLSiteDetailed, fetchDLSiteDetail, buildDlsiteCoverUrl };

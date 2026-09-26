@@ -1,11 +1,19 @@
+// Archive suffix, including split volumes: game.7z.001, game.part1.rar, game.rar.r00,
+// game.rar.001, or a plain game.rar / game.zip / game.7z.
+// Single source of truth - ScannerDialog used to keep its own (slightly different) copies.
+const ARCHIVE_EXT_RE = /\.(?:7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(?:\.(?:r\d+|\d+))?$|\.(?:zip|7z)$/i;
+
 const getCleanedName = (name: string) =>
   name
+    .replace(ARCHIVE_EXT_RE, '')
+    .replace(/_+/g, ' ')
     .replace(/【.*?】/g, '')
     .replace(/（.*?）/g, '')
     .replace(/\s*\((?<!RJ)\s*[\d.]+\s*\)/g, '')
     .replace(/\s*[Vv](?:er)?\d+(\.\d+)*$/gi, '')
     .replace(/\s+\d+(\.\d+)+/g, '')
-    .trim();
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.\-_]+|[\s.\-_]+$/g, '');
 
 const splitKeyword = (name: string): { keyword: string; segments: string[] } => {
   const cleaned = getCleanedName(name);
@@ -19,4 +27,4 @@ const splitKeyword = (name: string): { keyword: string; segments: string[] } => 
 
 const segmentsCache = new Map<string, string[]>();
 
-export { splitKeyword, segmentsCache, getCleanedName };
+export { splitKeyword, segmentsCache, getCleanedName, ARCHIVE_EXT_RE };

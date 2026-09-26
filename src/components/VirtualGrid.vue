@@ -23,6 +23,7 @@
 
 <script setup lang="ts" generic="T">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { getGridCols } from '../composables/useGridLayout';
 
 const props = withDefaults(
   defineProps<{
@@ -50,13 +51,7 @@ let resizeObserver: ResizeObserver | null = null;
 
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 0);
 
-const cols = computed(() => {
-  const w = viewportWidth.value;
-  if (w >= 1440) return 6;
-  if (w >= 1024) return 4;
-  if (w >= 600) return 3;
-  return 2;
-});
+const cols = computed(() => getGridCols(viewportWidth.value));
 
 const rowStride = computed(() => props.rowHeight + props.gutter);
 

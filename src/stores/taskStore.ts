@@ -23,6 +23,10 @@ export interface Task {
   };
 }
 
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+export const isTerminalStatus = (status: Task['status']) => TERMINAL_STATUSES.has(status);
+
 export const useTaskStore = defineStore('task', () => {
   const tasks = ref<Map<string, Task>>(new Map());
   let eventSource: EventSource | null = null;
@@ -39,6 +43,33 @@ export const useTaskStore = defineStore('task', () => {
   const hasRunningTasks = computed(() =>
     [...tasks.value.values()].some((t) => t.status === 'running')
   );
+
+  // Games that currently have a relocate-style task in flight. Derived from the task list
+  // rather than tracked separately, so it needs no persistence and cannot drift: the SSE
+  // completion update flips the game back to idle by itself.
+  const busyGameIds = computed(() => {
+    const ids = new Set<number>();
+    for (const task of tasks.value.values()) {
+      if (task.status === 'pending' || task.status === 'running') {
+        const gameId = task.meta?.gameId;
+        if (typeof gameId === 'number') ids.add(gameId);
+      }
+    }
+    return ids;
+  });
+
+  const isGameBusy = (gameId: number | undefined | null) =>
+    typeof gameId === 'number' && busyGameIds.value.has(gameId);
+
+  const taskFor = (gameId: number | undefined | null): Task | undefined => {
+    if (typeof gameId !== 'number') return undefined;
+    for (const task of tasks.value.values()) {
+      if (task.meta?.gameId === gameId && (task.status === 'pending' || task.status === 'running')) {
+        return task;
+      }
+    }
+    return undefined;
+  };
 
   const connectSSE = async () => {
     if (eventSource) return;
@@ -87,6 +118,9 @@ export const useTaskStore = defineStore('task', () => {
     runningCount,
     hasRunningMoveTasks,
     hasRunningTasks,
+    busyGameIds,
+    isGameBusy,
+    taskFor,
     connectSSE,
     disconnectSSE,
   };

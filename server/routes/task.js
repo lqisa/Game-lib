@@ -1,12 +1,14 @@
 import express from 'express';
 import { getAllTasks, cancelTask, removeTask, onTaskChange } from '../tasks.js';
+import { getSseToken } from '../config.js';
 
 const router = express.Router();
 
 // SSE token validation middleware
 const validateSseToken = (req, res, next) => {
   const token = req.query.token;
-  if (!token || token !== process.env.SSE_TOKEN) {
+  const expectedToken = getSseToken();
+  if (!expectedToken || token !== expectedToken) {
     return res.status(401).send({ error: 'Invalid SSE token' });
   }
   next();
@@ -27,9 +29,9 @@ router.delete('/:id', (req, res) => {
     return res.status(403).send({ error: 'Move tasks cannot be cancelled' });
   }
   if (task.status === 'running') {
-    cancelTask(id);
+    cancelTask(id); // Schedules removeTask after delay
   } else {
-    removeTask(id);
+    removeTask(id); // Immediate removal for non-running
   }
   res.status(204).end();
 });

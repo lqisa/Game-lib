@@ -6,7 +6,7 @@ interface ElectronAPI {
   enterLightweightMode(): Promise<void>;
   exitLightweightMode(): Promise<void>;
   isLightweightMode(): Promise<boolean>;
-  setAutoStart(enabled: boolean): Promise<void>;
+  setAutoStart(enabled: boolean): Promise<{ ok: boolean; reason?: string }>;
   getAutoStart(): Promise<boolean>;
   setCloseToTray(enabled: boolean): Promise<void>;
   getCloseToTray(): Promise<boolean>;

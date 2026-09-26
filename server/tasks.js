@@ -52,6 +52,8 @@ const cancelTask = (id) => {
     task.childProcess.kill();
   }
   updateTask(id, { status: 'cancelled', detail: 'Cancelled' });
+  // Auto-remove cancelled task after brief delay to allow SSE to send final status
+  setTimeout(() => removeTask(id), 1000);
   return true;
 };
 
@@ -66,8 +68,17 @@ const removeTask = (id) => {
 };
 
 const hasRunningMoveTasks = () => [...tasks.values()].some((t) => t.status === 'running' && t.type === 'move');
-
 const hasRunningTasks = () => [...tasks.values()].some((t) => t.status === 'running');
+
+// Anything that is queued or in flight. Quitting during an extract/compress loses just as much
+// work as during a move, so the exit guards must use this rather than the move-only check.
+const hasActiveTasks = () =>
+  [...tasks.values()].some((t) => t.status === 'running' || t.status === 'pending');
+
+const activeTaskForGame = (gameId) =>
+  [...tasks.values()].find(
+    (t) => t.meta?.gameId === gameId && (t.status === 'running' || t.status === 'pending'),
+  ) || null;
 
 const onTaskChange = (fn) => {
   listeners.add(fn);
@@ -102,8 +113,19 @@ const countFilesWithRobocopy = (source, dest) => {
 };
 
 const updateGameAfterMove = async (gameId, newLibraryId, newSubPath, taskId) => {
-  const db = (await import('./database/db.js'));
-  await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
+  try {
+    const db = (await import('./database/db.js'));
+    await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
+  } catch (err) {
+    // The files are already at their new location, so this is not a failed move.
+    // Report it as a record-update problem and make sure the task leaves "running".
+    updateTask(taskId, {
+      status: 'failed',
+      error: `Files moved, but the game record could not be updated: ${err.message}`,
+      detail: 'Move completed, record not updated',
+    });
+    return;
+  }
   updateTask(taskId, { status: 'completed', progress: 100, detail: 'Move completed', completedAt: new Date() });
 };
 
@@ -112,17 +134,19 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
   const destDrive = dest.substring(0, 1).toLowerCase();
 
   if (sourceDrive === destDrive) {
+    if (fs.existsSync(dest)) {
+      updateTask(taskId, { status: 'failed', error: 'Target already exists', detail: 'Rename failed' });
+      return;
+    }
+    updateTask(taskId, { status: 'running', detail: 'Renaming...', progress: 50 });
     try {
-      if (fs.existsSync(dest)) {
-        updateTask(taskId, { status: 'failed', error: 'Target already exists', detail: 'Rename failed' });
-        return;
-      }
-      updateTask(taskId, { status: 'running', detail: 'Renaming...', progress: 50 });
       await fs.promises.rename(source, dest);
-      await updateGameAfterMove(gameId, newLibraryId, newSubPath, taskId);
     } catch (err) {
       updateTask(taskId, { status: 'failed', error: err.message, detail: 'Rename failed' });
+      return;
     }
+    // Only reached once the files really are at the new path - see updateGameAfterMove().
+    await updateGameAfterMove(gameId, newLibraryId, newSubPath, taskId);
     return;
   }
 
@@ -218,7 +242,11 @@ const getEffectiveTools = async () => {
   const savedStr = await db.getSetting('extract_tools');
   if (savedStr) {
     try {
-      return JSON.parse(savedStr);
+      const saved = JSON.parse(savedStr);
+      // Only use saved tools if at least one tool is configured
+      if (saved && Object.keys(saved).length > 0) {
+        return saved;
+      }
     } catch { /* invalid JSON, fall through to detect */ }
   }
   return detectExtractTools();
@@ -238,16 +266,26 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
     let args;
     if (tool.name === 'unrar') {
       if (password) {
-        args = ['x', `-p${password}`, '-o+', archivePath, dest + '\\'];
+        args = ['x', `-p${password}`, '-o+', '-y', archivePath, dest + '\\'];
       } else {
-        args = ['x', '-o+', archivePath, dest + '\\'];
+        args = ['x', '-o+', '-y', archivePath, dest + '\\'];
       }
     } else {
       args = ['x', password ? `-p${password}` : '-p0', `-o${dest}`, '-aoa', archivePath];
     }
 
-    const child = spawn(tool.path, args);
+    const child = spawn(tool.path, args, {
+      // Windows: prevent blocking on stdin when password needed
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     attachChildProcess(taskId, child);
+
+    // Timeout: 10 minutes max per password attempt
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+      updateTask(taskId, { status: 'failed', error: 'Extraction timeout', detail: 'Extraction timed out' });
+      resolve('error');
+    }, 10 * 60 * 1000);
 
     let lastProgress = 0;
     child.stdout.on('data', (data) => {
@@ -263,12 +301,20 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
     });
 
     let stderrText = '';
-    child.stderr.on('data', (data) => { stderrText += data.toString(); });
+    child.stderr.on('data', (data) => {
+      const text = data.toString();
+      stderrText += text;
+      // Log stderr for debugging
+      console.log(`[extract:${taskId}] stderr: ${text.trim()}`);
+    });
 
     child.on('close', (code) => {
+      clearTimeout(timeout);
+      console.log(`[extract:${taskId}] exit code: ${code}, stderr: ${stderrText.trim()}`);
       if (code === 0 || (tool.name === 'unrar' && code === 1)) {
         resolve('success');
-      } else if ((tool.name === 'unrar' && code === 2) || (tool.name !== 'unrar' && code === 2)) {
+      } else if ((tool.name === 'unrar' && (code === 2 || code === 12)) || (tool.name !== 'unrar' && code === 2)) {
+        // unrar: 2=wrong password/CRC, 12=password required (no password provided)
         resolve('wrong_password');
       } else {
         const task = getTask(taskId);
@@ -282,6 +328,7 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
     });
 
     child.on('error', (err) => {
+      clearTimeout(timeout);
       updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start extraction tool' });
       resolve('error');
     });
@@ -289,59 +336,63 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
 };
 
 const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryId, newSubPath) => {
-  const ext = path.extname(archivePath).toLowerCase();
-  const tools = await getEffectiveTools();
-  const tool = selectTool(ext, tools);
+  try {
+    const ext = path.extname(archivePath).toLowerCase();
+    const tools = await getEffectiveTools();
+    const tool = selectTool(ext, tools);
 
-  if (!tool) {
-    updateTask(taskId, { status: 'failed', error: `No extraction tool found for ${ext}`, detail: 'No tool available' });
-    return;
-  }
-
-  const db = (await import('./database/db.js'));
-  const passwordsStr = await db.getSetting('archive_passwords');
-  const passwords = passwordsStr ? JSON.parse(passwordsStr) : [];
-  const allPasswords = [null, ...passwords];
-
-  updateTask(taskId, { status: 'running', detail: `Extracting with ${tool.name}...`, progress: 0 });
-
-  const cleanupDest = async () => {
-    try {
-      if (fs.existsSync(dest)) {
-        await fs.promises.rm(dest, { recursive: true, force: true });
-      }
-    } catch { /* ignore cleanup errors */ }
-  };
-
-  for (const pwd of allPasswords) {
-    const task = getTask(taskId);
-    if (task?.status === 'cancelled') {
-      await cleanupDest();
+    if (!tool) {
+      updateTask(taskId, { status: 'failed', error: `No extraction tool found for ${ext}`, detail: 'No tool available' });
       return;
     }
-    const result = await tryExtract(taskId, tool, archivePath, dest, pwd);
-    if (result === 'success') {
-      const archiveSubPath = getTask(taskId).meta.archiveSubPath;
-      if (archiveSubPath) {
-        const archivedStr = await db.getSetting('archived_archives');
-        const archived = archivedStr ? JSON.parse(archivedStr) : [];
-        if (!archived.includes(archiveSubPath)) {
-          archived.push(archiveSubPath);
-          await db.setSetting('archived_archives', JSON.stringify(archived));
+
+    const db = (await import('./database/db.js'));
+    const passwordsStr = await db.getSetting('archive_passwords');
+    const passwords = passwordsStr ? JSON.parse(passwordsStr) : [];
+    const allPasswords = [null, ...passwords];
+
+    updateTask(taskId, { status: 'running', detail: `Extracting with ${tool.name}...`, progress: 0 });
+
+    const cleanupDest = async () => {
+      try {
+        if (fs.existsSync(dest)) {
+          await fs.promises.rm(dest, { recursive: true, force: true });
         }
-      }
-      await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
-      updateTask(taskId, { status: 'completed', progress: 100, detail: 'Extraction completed', completedAt: new Date() });
-      return;
-    }
-    if (result === 'error') {
-      await cleanupDest();
-      return;
-    }
-  }
+      } catch { /* ignore cleanup errors */ }
+    };
 
-  await cleanupDest();
-  updateTask(taskId, { status: 'failed', error: 'All passwords failed', detail: 'No matching password found' });
+    for (const pwd of allPasswords) {
+      const task = getTask(taskId);
+      if (task?.status === 'cancelled') {
+        await cleanupDest();
+        return;
+      }
+      const result = await tryExtract(taskId, tool, archivePath, dest, pwd);
+      if (result === 'success') {
+        const archiveSubPath = getTask(taskId).meta.archiveSubPath;
+        if (archiveSubPath) {
+          const archivedStr = await db.getSetting('archived_archives');
+          const archived = archivedStr ? JSON.parse(archivedStr) : [];
+          if (!archived.includes(archiveSubPath)) {
+            archived.push(archiveSubPath);
+            await db.setSetting('archived_archives', JSON.stringify(archived));
+          }
+        }
+        await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
+        updateTask(taskId, { status: 'completed', progress: 100, detail: 'Extraction completed', completedAt: new Date() });
+        return;
+      }
+      if (result === 'error') {
+        await cleanupDest();
+        return;
+      }
+    }
+
+    await cleanupDest();
+    updateTask(taskId, { status: 'failed', error: 'All passwords failed', detail: 'No matching password found' });
+  } catch (err) {
+    updateTask(taskId, { status: 'failed', error: err.message, detail: 'Extraction task crashed' });
+  }
 };
 
 const detectCompressTools = () => {
@@ -362,7 +413,11 @@ const getEffectiveCompressTools = async () => {
   const savedStr = await db.getSetting('compress_tools');
   if (savedStr) {
     try {
-      return JSON.parse(savedStr);
+      const saved = JSON.parse(savedStr);
+      // Only use saved tools if at least one tool is configured
+      if (saved && Object.keys(saved).length > 0) {
+        return saved;
+      }
     } catch { /* invalid JSON, fall through to detect */ }
   }
   return detectCompressTools();
@@ -431,58 +486,62 @@ const tryTestArchive = (taskId, tool, archivePath) => {
 };
 
 const executeCompressTask = async (taskId, sourceDir, destArchive, gameId, newLibraryId, newSubPath, sourceSubPath) => {
-  const tools = await getEffectiveCompressTools();
-  const tool = selectCompressTool(tools);
-
-  if (!tool) {
-    updateTask(taskId, { status: 'failed', error: 'No compression tool found (WinRAR rar.exe required)', detail: 'No tool available' });
-    return;
-  }
-
-  const db = (await import('./database/db.js'));
-
-  updateTask(taskId, { status: 'running', detail: `Compressing with ${tool.name}...`, progress: 0 });
-
-  // Delete existing destination file if it exists (route handles conflict check when force=false)
   try {
-    if (fs.existsSync(destArchive)) {
-      await fs.promises.rm(destArchive, { force: true });
-    }
-  } catch { /* ignore cleanup errors */ }
+    const tools = await getEffectiveCompressTools();
+    const tool = selectCompressTool(tools);
 
-  const cleanupDest = async () => {
+    if (!tool) {
+      updateTask(taskId, { status: 'failed', error: 'No compression tool found (WinRAR rar.exe required)', detail: 'No tool available' });
+      return;
+    }
+
+    const db = (await import('./database/db.js'));
+
+    updateTask(taskId, { status: 'running', detail: `Compressing with ${tool.name}...`, progress: 0 });
+
+    // Delete existing destination file if it exists (route handles conflict check when force=false)
     try {
       if (fs.existsSync(destArchive)) {
         await fs.promises.rm(destArchive, { force: true });
       }
     } catch { /* ignore cleanup errors */ }
-  };
 
-  const compressResult = await tryCompress(taskId, tool, sourceDir, destArchive);
-  if (compressResult !== 'success') {
-    await cleanupDest();
-    return;
-  }
+    const cleanupDest = async () => {
+      try {
+        if (fs.existsSync(destArchive)) {
+          await fs.promises.rm(destArchive, { force: true });
+        }
+      } catch { /* ignore cleanup errors */ }
+    };
 
-  updateTask(taskId, { progress: 50, detail: 'Testing archive integrity...' });
-
-  const testResult = await tryTestArchive(taskId, tool, destArchive);
-  if (testResult !== 'success') {
-    await cleanupDest();
-    return;
-  }
-
-  if (sourceSubPath) {
-    const archivedStr = await db.getSetting('archived_folders');
-    const archived = archivedStr ? JSON.parse(archivedStr) : [];
-    if (!archived.includes(sourceSubPath)) {
-      archived.push(sourceSubPath);
-      await db.setSetting('archived_folders', JSON.stringify(archived));
+    const compressResult = await tryCompress(taskId, tool, sourceDir, destArchive);
+    if (compressResult !== 'success') {
+      await cleanupDest();
+      return;
     }
-  }
 
-  await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
-  updateTask(taskId, { status: 'completed', progress: 100, detail: 'Compression completed', completedAt: new Date() });
+    updateTask(taskId, { progress: 50, detail: 'Testing archive integrity...' });
+
+    const testResult = await tryTestArchive(taskId, tool, destArchive);
+    if (testResult !== 'success') {
+      await cleanupDest();
+      return;
+    }
+
+    if (sourceSubPath) {
+      const archivedStr = await db.getSetting('archived_folders');
+      const archived = archivedStr ? JSON.parse(archivedStr) : [];
+      if (!archived.includes(sourceSubPath)) {
+        archived.push(sourceSubPath);
+        await db.setSetting('archived_folders', JSON.stringify(archived));
+      }
+    }
+
+    await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
+    updateTask(taskId, { status: 'completed', progress: 100, detail: 'Compression completed', completedAt: new Date() });
+  } catch (err) {
+    updateTask(taskId, { status: 'failed', error: err.message, detail: 'Compression task crashed' });
+  }
 };
 
 export {
@@ -494,6 +553,8 @@ export {
   removeTask,
   hasRunningMoveTasks,
   hasRunningTasks,
+  hasActiveTasks,
+  activeTaskForGame,
   onTaskChange,
   attachChildProcess,
   executeMoveTask,

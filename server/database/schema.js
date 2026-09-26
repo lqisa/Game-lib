@@ -99,6 +99,11 @@ const createSchema = () =>
       table.integer('game_id').primary();
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+    })
+    .createTable('recently', (table) => {
+      table.integer('game_id').primary();
+      table.dateTime('opened_at').defaultTo(knex.fn.now());
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
     });
 
 export { createSchema };

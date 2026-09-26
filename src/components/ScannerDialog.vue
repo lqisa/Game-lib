@@ -382,7 +382,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import api from '../composables/useApi';
-import { splitKeyword, segmentsCache } from '../composables/useSplitKeyword';
+import { splitKeyword, segmentsCache, ARCHIVE_EXT_RE } from '../composables/useSplitKeyword';
+// Shared with the server (plain ESM, no node deps) so both sides decide matches the
+// same way - the server uses it for /scraper/auto/search, the client for cached results.
+import { bestMatch } from '../../server/scraper/match.js';
 import { useExpressUrl } from '../composables/useExpressUrl';
 import ScrapeDialog from './ScrapeDialog.vue';
 import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
@@ -467,6 +470,7 @@ const cacheKey = (row: ScanRow) => `${row.source || 'auto'}:${row.searchKeyword}
 
 const sourceColor = (source: SourceType) => {
   if (source === 'dlsite') return 'deep-purple';
+  if (source === 'dmm') return 'pink';
   if (source === 'bangumi') return 'orange';
   if (source === 'vndb') return 'cyan';
   if (source === 'steam') return 'blue-grey';
@@ -476,6 +480,7 @@ const sourceColor = (source: SourceType) => {
 const getSourceUrl = (source: SourceType, sourceId: string): string => {
   if (source === 'dlsite')
     return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
+  if (source === 'dmm') return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${sourceId}/`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
   if (source === 'steam') return `https://store.steampowered.com/app/${sourceId}`;
@@ -487,8 +492,6 @@ const sortOrder = ref<'asc' | 'desc'>('asc');
 const searchKeyword = ref('');
 const compact = ref(false);
 const rowHeight = computed(() => (compact.value ? 48 : 260));
-
-const normalizeName = (name: string) => name.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3400-\u4DBF\u3005-\u3006\u30FC]/g, '').replace(/\s+/g, ' ').trim();
 
 const toggleSort = (field: 'name' | 'status' | 'action') => {
   if (sortBy.value === field) {
@@ -589,6 +592,7 @@ const staleCount = computed(() => flattenAllRows(scanResults.value).filter((r) =
 const totalCount = computed(() => flattenAllRows(scanResults.value).length);
 
 let scrapeConcurrency = 4;
+let matchThreshold = 0.8;
 
 const fetchSettings = async () => {
   try {
@@ -596,6 +600,13 @@ const fetchSettings = async () => {
     scrapeConcurrency = parseInt(res.data.value, 10) || 4;
   } catch {
     scrapeConcurrency = 4;
+  }
+  try {
+    const res = await api.get('/settings/match_threshold');
+    const parsed = Number(res.data.value);
+    if (Number.isFinite(parsed) && parsed > 0 && parsed <= 1) matchThreshold = parsed;
+  } catch {
+    matchThreshold = 0.8;
   }
 };
 
@@ -613,10 +624,9 @@ const loadUnscraped = async () => {
     return;
   }
   const res = await api.get('/games/unscraped', { params: { libraryId: selectedLibrary.value } });
-  const archiveExtRe = /\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.\d+)?$|\.(zip|7z|rar)$/i;
   scanResults.value = res.data.map((g: { id: number; name: string; sub_path: string }) => {
-    const isArchive = archiveExtRe.test(g.name);
-    const cleanName = isArchive ? g.name.replace(archiveExtRe, '') : g.name;
+    const isArchive = ARCHIVE_EXT_RE.test(g.name);
+    const cleanName = isArchive ? g.name.replace(ARCHIVE_EXT_RE, '') : g.name;
     return { name: cleanName, subPath: g.sub_path, status: 'pending' as const, searchResult: null, adoptData: null, searchKeyword: cleanName, source: null as SourceType | null, loading: false, gameId: g.id, children: [], expanded: false, isArchive, depth: 0, hasChildren: null };
   });
 
@@ -760,7 +770,7 @@ const scanDir = async () => {
             status: 'pending',
             searchResult: null,
             adoptData: null,
-            searchKeyword: isArchive ? g.name.replace(/\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.r\d+)?$|\.(zip|7z|rar)$/i, '') : g.name,
+            searchKeyword: isArchive ? g.name.replace(ARCHIVE_EXT_RE, '') : g.name,
             source: null,
             loading: false,
             children: [],
@@ -1110,14 +1120,38 @@ const batchScrape = async () => {
   scraping.value = true;
   const limit = scrapeConcurrency;
 
+  // A game that already has a source must not be scraped again: the user may have
+  // scraped it by hand (or a previous run did) while this batch was still going.
+  const scrapedIds = new Set<number>();
+  const refreshScrapedIds = async () => {
+    try {
+      const res = await api.get('/games/scraped-ids');
+      for (const id of res.data) scrapedIds.add(id);
+    } catch {
+      // non-critical - keep whatever we already know
+    }
+  };
+  await refreshScrapedIds();
+  let processedSinceRefresh = 0;
+  const REFRESH_EVERY = 20;
+
   for (let i = 0; i < rows.length; i += limit) {
     if (!scraping.value) break;
     while (scrapePaused.value) {
       await new Promise((r) => setTimeout(r, 200));
     }
+    if (processedSinceRefresh >= REFRESH_EVERY) {
+      processedSinceRefresh = 0;
+      await refreshScrapedIds();
+    }
     const chunk = rows.slice(i, i + limit);
     await Promise.all(
       chunk.map(async (row) => {
+        if (row.gameId > 0 && scrapedIds.has(row.gameId)) {
+          row.status = 'adopted';
+          scrapeDone.value++;
+          return;
+        }
         row.status = 'searching';
         row.loading = true;
         try {
@@ -1139,13 +1173,10 @@ const batchScrape = async () => {
             row.source = (cachedEntry.source as SourceType | null) || null;
             const cached = cachedEntry.results;
             if (cached.length > 0) {
-              row.searchResult = cached[0] ?? null;
-              if (row.searchResult && normalizeName(row.searchResult.name) === normalizeName(row.name)) {
-                row.status = 'searched';
-                await quickAdopt(row);
-              } else {
-                row.status = 'searched';
-              }
+              const match = bestMatch(row.name, cached, matchThreshold);
+              row.searchResult = match ? match.result : (cached[0] ?? null);
+              row.status = 'searched';
+              if (match) await quickAdopt(row);
             } else {
               row.status = 'error';
             }
@@ -1185,13 +1216,14 @@ const batchScrape = async () => {
               searchCache.set(autoKey, { source: hitSource, results });
             }
             if (results.length > 0) {
-              row.searchResult = results[0] ?? null;
-              if (row.searchResult && normalizeName(row.searchResult.name) === normalizeName(row.name)) {
-                row.status = 'searched';
-                await quickAdopt(row);
-              } else {
-                row.status = 'searched';
-              }
+              // The server already picked a match; fall back to deciding locally if an
+              // older/other server response has no decision attached.
+              const match = data.matched
+                ? { result: data.matched as SearchResult }
+                : bestMatch(row.name, results, matchThreshold);
+              row.searchResult = match ? match.result : (results[0] ?? null);
+              row.status = 'searched';
+              if (match) await quickAdopt(row);
             } else {
               row.status = 'error';
             }
@@ -1201,6 +1233,7 @@ const batchScrape = async () => {
         } finally {
           row.loading = false;
           scrapeDone.value++;
+          processedSinceRefresh++;
         }
       }),
     );

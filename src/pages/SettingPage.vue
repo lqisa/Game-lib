@@ -65,6 +65,74 @@
 
       <q-card class="m3-card q-mb-md">
         <q-card-section>
+          <div class="m3-label-large q-mb-sm">Scrape Match Priority</div>
+          <div class="m3-label-medium q-mb-sm">
+            Sources are tried in this order for each game until one matches. A result matches when
+            its name is the same, nearly the same, or contains your game name at the start or end.
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <div v-for="lang in MATCH_LANGS" :key="lang.key" class="q-mb-md">
+            <div class="text-body2 q-mb-xs" style="color: var(--m3-on-surface)">
+              {{ lang.label }}
+            </div>
+            <div class="row items-center q-gutter-xs">
+              <div
+                v-for="(source, idx) in matchPriority[lang.key]"
+                :key="source"
+                class="row items-center q-px-sm q-py-xs"
+                style="border: 1px solid var(--m3-outline-variant); border-radius: 8px"
+              >
+                <span
+                  class="text-caption q-mr-sm"
+                  style="min-width: 14px; color: var(--m3-on-surface-variant)"
+                  >{{ idx + 1 }}</span
+                >
+                <span class="text-body2 q-mr-xs" style="color: var(--m3-on-surface)">{{
+                  source
+                }}</span>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  size="xs"
+                  icon="arrow_upward"
+                  :disable="idx === 0"
+                  @click="moveSource(lang.key, idx, -1)"
+                />
+                <q-btn
+                  flat
+                  dense
+                  round
+                  size="xs"
+                  icon="arrow_downward"
+                  :disable="idx === matchPriority[lang.key].length - 1"
+                  @click="moveSource(lang.key, idx, 1)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <q-input
+            v-model.number="matchThreshold"
+            label="Match threshold (0.5 - 1.0)"
+            type="number"
+            outlined
+            class="m3-input"
+            :min="0.5"
+            :max="1"
+            :step="0.05"
+            style="max-width: 240px"
+          />
+        </q-card-section>
+        <q-card-section>
+          <q-btn unelevated class="m3-btn--filled" label="Save" @click="saveMatchSettings" />
+          <q-btn flat class="m3-btn--text q-ml-sm" label="Reset" @click="resetMatchSettings" />
+        </q-card-section>
+      </q-card>
+
+      <q-card class="m3-card q-mb-md">
+        <q-card-section>
           <div class="m3-label-large q-mb-sm">Proxy</div>
           <div class="m3-label-medium q-mb-sm">HTTP proxy for scraper (e.g. Clash, v2ray). Restart required after change.</div>
         </q-card-section>
@@ -74,6 +142,40 @@
             <q-input v-model="proxyHost" label="Host" outlined dense class="m3-input" style="max-width: 180px" />
             <q-input v-model.number="proxyPort" label="Port" type="number" outlined dense class="m3-input" style="max-width: 120px" :min="1" :max="65535" />
             <q-btn unelevated class="m3-btn--filled" label="Save" @click="saveProxy" />
+            <q-btn
+              flat
+              class="m3-btn--outlined"
+              label="Check Exit"
+              :loading="checkingExit"
+              @click="checkRegion"
+            />
+          </div>
+          <!-- DLsite/DMM filter some works by IP and never say so, so the exit country is
+               the difference between "no results" and "results you cannot see". -->
+          <div v-if="regionResult" class="q-mt-md">
+            <q-banner
+              dense
+              rounded
+              :class="
+                regionResult.isJapan ? 'bg-green-1 text-green-9' : 'bg-orange-1 text-orange-9'
+              "
+            >
+              <template v-slot:avatar>
+                <q-icon :name="regionResult.isJapan ? 'check_circle' : 'warning'" />
+              </template>
+              <div class="text-caption">
+                <template v-if="regionResult.isJapan">
+                  Exit is Japan{{ regionResult.country ? ' (' + regionResult.country + ')' : '' }} —
+                  DLsite/DMM content is fully visible.
+                </template>
+                <template v-else>
+                  {{
+                    regionResult.region?.message ||
+                    'Exit is not Japan — some DLsite/DMM works will be missing from search results.'
+                  }}
+                </template>
+              </div>
+            </q-banner>
           </div>
         </q-card-section>
       </q-card>
@@ -283,6 +385,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useQuasar } from 'quasar';
+import {
+  SOURCE_TYPES,
+  DEFAULT_MATCH_PRIORITY,
+  DEFAULT_MATCH_THRESHOLD,
+} from '../../server/scraper/match.js';
 import api from '../composables/useApi';
 
 interface Library {
@@ -306,6 +413,30 @@ const concurrency = ref(4);
 const proxyEnabled = ref(false);
 const proxyHost = ref('127.0.0.1');
 const proxyPort = ref(7890);
+
+// Region check: DLsite/DMM filter some works by IP without reporting anything, so the
+// exit country is worth surfacing here - this is where the user decides whether to
+// switch proxy before searching.
+interface RegionCheckResult {
+  isJapan: boolean | null;
+  country: string | null;
+  region: { message?: string } | null;
+}
+const checkingExit = ref(false);
+const regionResult = ref<RegionCheckResult | null>(null);
+
+const checkRegion = async () => {
+  checkingExit.value = true;
+  try {
+    const res = await api.get('/scraper/region');
+    regionResult.value = res.data;
+  } catch {
+    regionResult.value = null;
+    $q.notify({ type: 'negative', message: 'Could not check the network exit' });
+  } finally {
+    checkingExit.value = false;
+  }
+};
 
 const blacklist = ref<string[]>([]);
 const newBlacklistItem = ref('');
@@ -439,6 +570,90 @@ const saveConcurrency = async () => {
   await api.put('/settings/scrape_concurrency', { value: String(val) });
 };
 
+type MatchLang = 'en' | 'ja' | 'zh';
+
+const MATCH_LANGS: { key: MatchLang; label: string }[] = [
+  { key: 'en', label: 'English game names' },
+  { key: 'ja', label: 'Japanese game names' },
+  { key: 'zh', label: 'Chinese game names' },
+];
+
+const matchPriority = ref<Record<MatchLang, string[]>>({
+  en: [...DEFAULT_MATCH_PRIORITY.en],
+  ja: [...DEFAULT_MATCH_PRIORITY.ja],
+  zh: [...DEFAULT_MATCH_PRIORITY.zh],
+});
+const matchThreshold = ref<number>(DEFAULT_MATCH_THRESHOLD);
+
+// Keep every known source in the list, so a partial stored value can still be reordered
+// and a source can never become unreachable from the UI.
+const normalizePriority = (raw: unknown, fallback: string[]): string[] => {
+  const stored = Array.isArray(raw) ? raw.filter((s) => SOURCE_TYPES.includes(String(s))) : [];
+  const missing = fallback.filter((s) => !stored.includes(s));
+  const merged = [...stored, ...missing];
+  return merged.length > 0 ? merged.map(String) : [...fallback];
+};
+
+const parsePriority = (value: string | undefined, fallback: string[]): string[] => {
+  if (!value) return [...fallback];
+  try {
+    return normalizePriority(JSON.parse(value), fallback);
+  } catch {
+    return [...fallback];
+  }
+};
+
+const fetchMatchSettings = async () => {
+  try {
+    const [en, ja, zh, threshold] = await Promise.all([
+      api.get('/settings/match_priority_en'),
+      api.get('/settings/match_priority_ja'),
+      api.get('/settings/match_priority_zh'),
+      api.get('/settings/match_threshold'),
+    ]);
+    matchPriority.value = {
+      en: parsePriority(en.data.value, DEFAULT_MATCH_PRIORITY.en),
+      ja: parsePriority(ja.data.value, DEFAULT_MATCH_PRIORITY.ja),
+      zh: parsePriority(zh.data.value, DEFAULT_MATCH_PRIORITY.zh),
+    };
+    const parsed = Number(threshold.data.value);
+    matchThreshold.value =
+      Number.isFinite(parsed) && parsed > 0 && parsed <= 1 ? parsed : DEFAULT_MATCH_THRESHOLD;
+  } catch {
+    // keep the defaults already in the refs
+  }
+};
+
+const moveSource = (lang: MatchLang, index: number, delta: number) => {
+  const list = matchPriority.value[lang];
+  const target = index + delta;
+  if (target < 0 || target >= list.length) return;
+  const [moved] = list.splice(index, 1);
+  if (moved !== undefined) list.splice(target, 0, moved);
+};
+
+const saveMatchSettings = async () => {
+  const val = Math.min(1, Math.max(0.5, Number(matchThreshold.value) || DEFAULT_MATCH_THRESHOLD));
+  matchThreshold.value = val;
+  await Promise.all([
+    api.put('/settings/match_priority_en', { value: JSON.stringify(matchPriority.value.en) }),
+    api.put('/settings/match_priority_ja', { value: JSON.stringify(matchPriority.value.ja) }),
+    api.put('/settings/match_priority_zh', { value: JSON.stringify(matchPriority.value.zh) }),
+    api.put('/settings/match_threshold', { value: String(val) }),
+  ]);
+  $q.notify({ type: 'positive', message: 'Match settings saved' });
+};
+
+const resetMatchSettings = async () => {
+  matchPriority.value = {
+    en: [...DEFAULT_MATCH_PRIORITY.en],
+    ja: [...DEFAULT_MATCH_PRIORITY.ja],
+    zh: [...DEFAULT_MATCH_PRIORITY.zh],
+  };
+  matchThreshold.value = DEFAULT_MATCH_THRESHOLD;
+  await saveMatchSettings();
+};
+
 const fetchBlacklist = async () => {
   try {
     const res = await api.get('/settings/blacklist');
@@ -488,7 +703,16 @@ const saveProxy = async () => {
 
 const saveAutoStart = async (val: boolean) => {
   if (!window.electronAPI) return;
-  await window.electronAPI.setAutoStart(val);
+  const res = await window.electronAPI.setAutoStart(val);
+  if (!res.ok) {
+    // Dev builds cannot register a working auto-start entry, so put the toggle back
+    // instead of showing a state the app cannot honour.
+    autoStart.value = false;
+    $q.notify({
+      type: 'info',
+      message: 'Launch at startup is only available in the installed build.',
+    });
+  }
 };
 
 const fetchAutoStart = async () => {
@@ -598,6 +822,7 @@ onMounted(() => {
   void fetchLibraries();
   void fetchToken();
   void fetchConcurrency();
+  void fetchMatchSettings();
   void fetchBlacklist();
   void fetchProxy();
   void fetchAutoStart();

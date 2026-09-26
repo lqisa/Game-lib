@@ -4,8 +4,8 @@
       <q-toolbar>
         <q-btn flat dense round icon="menu" @click="drawer = !drawer" style="color: var(--m3-on-surface-variant);" />
         <q-toolbar-title>
-          Game Lib<template v-if="gameListStore.favoritesMode"> - Favorites</template>
-          <span class="q-ml-sm text-caption" style="color: var(--m3-on-surface-variant);">({{ filteredCount }})</span>
+          Game Lib<template v-if="$route.path === '/' && gameListStore.favoritesMode"> - Favorites</template>
+          <span v-if="showGameCount" class="q-ml-sm" style="color: var(--m3-on-surface-variant);">({{ filteredCount }})</span>
         </q-toolbar-title>
       </q-toolbar>
     </q-header>
@@ -30,6 +30,15 @@
             <q-icon name="star" class="m3-nav-icon" />
             <span class="m3-nav-label">Favorites</span>
             <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Favorites</q-tooltip>
+          </div>
+          <div
+            class="m3-nav-item"
+            :class="{ 'm3-nav-item--active': $route.path === '/recently' }"
+            @click="void router.push('/recently')"
+          >
+            <q-icon name="history" class="m3-nav-icon" />
+            <span class="m3-nav-label">Recently</span>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Recently Opened</q-tooltip>
           </div>
           <div
             class="m3-nav-item"
@@ -83,7 +92,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useGameListStore } from '../stores/gameListStore';
 import { useTaskStore } from '../stores/taskStore';
@@ -91,6 +100,7 @@ import TaskPanel from '../components/TaskPanel.vue';
 
 const $q = useQuasar();
 const router = useRouter();
+const route = useRoute();
 const drawer = ref(true);
 
 const gameListStore = useGameListStore();
@@ -98,10 +108,17 @@ const taskStore = useTaskStore();
 const showTaskPanel = ref(false);
 const filteredCount = computed(() => gameListStore.filteredCount);
 
+// The count describes the game list, so it is only shown on the list route
+// (both the normal and the favorites view) - not on the detail or settings pages.
+const showGameCount = computed(() => route.path === '/');
+
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
 const navigateTo = (path: string, favorites: boolean) => {
   gameListStore.favoritesMode = favorites;
+  // Record which rail entry owns the list page, so the list can reset view-only state
+  // (selection mode in particular) instead of leaking it across Games and Favorites.
+  gameListStore.mode = favorites ? 'favorites' : 'games';
   void router.push(path);
 };
 
@@ -131,8 +148,9 @@ onMounted(() => {
   if (window.electronAPI) {
     window.electronAPI.onMoveInProgress?.(() => {
       $q.dialog({
-        title: 'Move In Progress',
-        message: 'A file move is currently running. Closing now may cause data loss. Force quit?',
+        title: 'Task In Progress',
+        message:
+          'A file task (move / extract / compress) is still running. Closing now may leave it half-finished. Force quit?',
         cancel: true,
         persistent: true,
       }).onOk(() => {

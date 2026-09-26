@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 import type http from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerQuasarRuntime, resolveElectronAssetsPath } from '#q-app/electron/main';
+import { getDataDir, ensureDir } from '../server/config.js';
+import { decideListenRetry, portInUseMessage } from '../server/port-policy.js';
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -27,6 +29,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const platform = process.platform || os.platform();
 
 const EXPRESS_PORT = 19700;
+// The port the Express server actually bound to. In production it can differ from
+// EXPRESS_PORT (see the EADDRINUSE retry in startServer), so the window must always be
+// loaded from this value rather than the constant.
+let expressPort = EXPRESS_PORT;
 let currentServer: http.Server | null = null;
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -35,6 +41,8 @@ let lightweightMode = false;
 let closeToTray = false;
 let hasRunningMoveTasksFn: (() => boolean) | null = null;
 let hasRunningTasksFn: (() => boolean) | null = null;
+// Queued or in-flight tasks of any type - the exit guards use this one.
+let hasActiveTasksFn: (() => boolean) | null = null;
 let sseToken: string;
 
 interface WindowBounds {
@@ -75,16 +83,29 @@ async function startServer(): Promise<number> {
     const tryListen = (port: number) => {
       const server = expressApp.listen(port, '127.0.0.1', () => {
         currentServer = server;
+        expressPort = port;
         console.log(` * Express server running on http://127.0.0.1:${port}`);
         resolve(port);
       });
       server.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE' && port === EXPRESS_PORT) {
-          console.log(` * Port ${port} in use, trying ${port + 1}...`);
-          tryListen(port + 1);
-        } else {
-          reject(err);
+        const decision = decideListenRetry({
+          errorCode: err.code,
+          port,
+          startPort: EXPRESS_PORT,
+          isDev: Boolean(import.meta.env.QUASAR_DEV),
+        });
+        if (decision.action === 'retry') {
+          console.log(` * Port ${port} in use, trying ${decision.port}...`);
+          tryListen(decision.port);
+          return;
         }
+        // Dev cannot move ports (the renderer's API base url is baked from
+        // VITE_API_PORT), so surface an actionable error instead of a bind failure.
+        if (decision.reason === 'dev-port-fixed') {
+          reject(new Error(portInUseMessage(port)));
+          return;
+        }
+        reject(err);
       });
     };
     tryListen(EXPRESS_PORT);
@@ -199,7 +220,7 @@ async function createWindow() {
   if (import.meta.env.QUASAR_DEV) {
     await mainWindow.loadURL(import.meta.env.QUASAR_APP_URL);
   } else {
-    await mainWindow.loadURL(`http://127.0.0.1:${EXPRESS_PORT}`);
+    await mainWindow.loadURL(`http://127.0.0.1:${expressPort}`);
   }
 
   if (import.meta.env.QUASAR_DEBUG) {
@@ -216,6 +237,19 @@ void app.whenReady().then(async () => {
 
   if (!import.meta.env.QUASAR_DEV) {
     process.env.GAME_LIB_PROD = '1';
+  } else {
+    // A dev run can leave an auto-start entry pointing at the shared electron.exe, which
+    // launches a bare Electron (its own welcome page) at login. Dev cannot auto-start, so
+    // remove the dev-named entry. Do NOT gate this on getLoginItemSettings(): the stored
+    // entry carries `--hidden`, and Electron reports openAtLogin === false for it because
+    // the args do not match, so that check silently misses exactly this case.
+    // The packaged build's entry has a different name, so this cannot remove it.
+    try {
+      app.setLoginItemSettings({ openAtLogin: false });
+      console.log(' * Cleared any dev auto-start entry (dev builds cannot auto-start).');
+    } catch {
+      /* not critical */
+    }
   }
 
   const startHidden = app.commandLine.hasSwitch('hidden')
@@ -259,6 +293,15 @@ void app.whenReady().then(async () => {
   });
 
   ipcMain.handle('app:setAutoStart', (_event, enabled: boolean) => {
+    // Auto-start can only work for the installed build. In dev process.execPath is the
+    // shared electron.exe and the app is passed as a script argument, so a login entry
+    // would launch a bare Electron (its default welcome page) instead of this app.
+    if (!app.isPackaged) {
+      // Remove unconditionally - see the note in whenReady(): getLoginItemSettings()
+      // cannot detect the entry because its stored args include `--hidden`.
+      app.setLoginItemSettings({ openAtLogin: false });
+      return { ok: false, reason: 'not-packaged' };
+    }
     if (platform === 'win32') {
       app.setLoginItemSettings({
         openAtLogin: enabled,
@@ -270,9 +313,12 @@ void app.whenReady().then(async () => {
         openAsHidden: enabled,
       });
     }
+    return { ok: true };
   });
 
   ipcMain.handle('app:getAutoStart', () => {
+    // Report "off" in dev, where the setting cannot be honoured.
+    if (!app.isPackaged) return false;
     return app.getLoginItemSettings().openAtLogin;
   });
 
@@ -317,6 +363,13 @@ void app.whenReady().then(async () => {
   // Pass SSE token to Express server via env
   process.env.SSE_TOKEN = sseToken;
 
+  // Also write token to file for dev mode (separate Node process)
+  try {
+    const dataDir = getDataDir();
+    ensureDir(dataDir);
+    fs.writeFileSync(path.join(dataDir, '.sse-token'), sseToken);
+  } catch { /* ignore */ }
+
   await startServer();
 
   // Cache task functions for synchronous shutdown checks
@@ -326,9 +379,11 @@ void app.whenReady().then(async () => {
     );
     hasRunningMoveTasksFn = tasksModule.hasRunningMoveTasks;
     hasRunningTasksFn = tasksModule.hasRunningTasks;
+    hasActiveTasksFn = tasksModule.hasActiveTasks;
   } catch {
     hasRunningMoveTasksFn = () => false;
     hasRunningTasksFn = () => false;
+    hasActiveTasksFn = () => false;
   }
 
   try {
@@ -381,7 +436,9 @@ void app.whenReady().then(async () => {
 
 app.on('before-quit', (e) => {
   if (isQuitting) return;
-  if (hasRunningMoveTasksFn?.()) {
+  // Any active task blocks the quit, not just moves: quitting during an extraction leaves a
+  // half-extracted target directory and the game row still pointing at the archive.
+  if (hasActiveTasksFn?.()) {
     e.preventDefault();
     isQuitting = false;
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -399,7 +456,8 @@ app.on('window-all-closed', () => {
 });
 
 (powerMonitor as unknown as NodeJS.EventEmitter).on('shutdown', (e: { preventDefault: () => void }) => {
-  if (hasRunningMoveTasksFn?.()) {
+  // Same rule on OS shutdown, otherwise the task is killed with the machine.
+  if (hasActiveTasksFn?.()) {
     e.preventDefault();
   }
 });

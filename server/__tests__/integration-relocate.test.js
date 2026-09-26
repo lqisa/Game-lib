@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import fs from 'node:fs';
@@ -8,6 +8,7 @@ import gameRouter from '../routes/game.js';
 import taskRouter from '../routes/task.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
+import { closePool } from '../database/db.js';
 import {
   getTask,
   getAllTasks,
@@ -157,4 +158,8 @@ describe('Integration: Relocate Full Chain', () => {
     await db.knex('game').where({ id: gameId }).del().catch(() => {});
     await db.knex('library').where({ id: libId }).del().catch(() => {});
   });
+});
+
+after(async () => {
+  await closePool();
 });

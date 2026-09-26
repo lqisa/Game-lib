@@ -37,6 +37,9 @@
         style="color: var(--m3-on-surface-variant);"
         @click="toggleSortOrder"
       />
+
+      <q-space />
+
       <q-btn v-if="!favoritesMode" unelevated class="m3-btn--filled" label="Scan &amp; Scrape" icon="search" @click="showScanner = true" />
       <q-btn v-if="!selectMode" flat icon="checklist" label="Select" class="m3-btn--outlined" @click="enterSelectMode" />
       <template v-else>
@@ -63,6 +66,11 @@
         </template>
         <span class="text-caption" style="color: var(--m3-on-surface-variant);">{{ selectedIds.size }} selected</span>
       </template>
+
+      <q-separator vertical inset class="q-mx-xs" />
+      <q-btn flat round icon="casino" style="color: var(--m3-primary);" :disable="games.length === 0" @click="openRandomGame">
+        <q-tooltip>Open a random game</q-tooltip>
+      </q-btn>
     </div>
 
     <div
@@ -100,11 +108,11 @@ class="q-pa-md"
         @mouseup="onGridMouseUp"
       >
         <template #default="{ item: game }">
-          <div :data-game-id="game.id" @contextmenu.prevent="onContextMenu(game, $event)">
+          <div :data-game-id="game.id" :data-select-mode="selectMode ? '1' : '0'" @contextmenu.prevent="onContextMenu(game, $event)">
             <GameCard
               :game="game"
               :selectable="selectMode"
-              :selected="selectedIds.has(game.id)"
+              :selected="selectMode && selectedIds.has(game.id)"
               :duplicate="duplicateGameIds.has(game.id)"
               @click="goDetail(game.id)"
               @select="toggleSelect(game.id, $event)"
@@ -192,6 +200,7 @@ import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 
 import api from '../composables/useApi';
+import { getGridCols, useViewportWidth } from '../composables/useGridLayout';
 import { useGameListStore } from '../stores/gameListStore';
 import GameCard from '../components/GameCard.vue';
 import VirtualGrid from '../components/VirtualGrid.vue';
@@ -228,7 +237,6 @@ const games = ref<GameItem[]>([]);
 const loading = ref(false);
 const restoringScroll = ref(false);
 const keyword = ref('');
-const total = ref(0);
 const showScanner = ref(false);
 const showDropScrape = ref(false);
 const dropFolderName = ref('');
@@ -341,16 +349,15 @@ const showSingleDeleteDialog = ref(false);
 
 const gridContainer = ref<HTMLElement | null>(null);
 const virtualGrid = ref<{ scrollTo: (top: number) => void; getScrollTop: () => number } | null>(null);
+const viewportWidth = useViewportWidth();
 
 const CARD_ASPECT = 2.8 / 4;
+// viewportWidth is reactive, so the row height follows the column count when the window
+// is resized. Reading window.innerWidth directly here made this computed go stale while
+// VirtualGrid re-flowed to the new column count, which left gaps between the rows.
 const rowHeight = computed(() => {
   const containerW = (gridContainer.value?.clientWidth ?? 1200) - 32;
-  const vw = window.innerWidth;
-  let c: number;
-  if (vw >= 1440) c = 6;
-  else if (vw >= 1024) c = 4;
-  else if (vw >= 600) c = 3;
-  else c = 2;
+  const c = getGridCols(viewportWidth.value);
   const gutter = 16;
   const colW = (containerW - gutter * (c - 1)) / c;
   return Math.ceil(colW / CARD_ASPECT);
@@ -382,9 +389,16 @@ const exitSelectMode = () => {
   selectedIds.value = new Set();
   lastSelectedId.value = null;
 };
-
 const goDetail = (id: number) => {
   void router.push(`/game/${id}`);
+};
+
+// Picks from the games currently in the grid, so "random" stays inside whatever the user has
+// filtered down to instead of jumping to a game they cannot see.
+const openRandomGame = () => {
+  if (games.value.length === 0) return;
+  const pick = games.value[Math.floor(Math.random() * games.value.length)];
+  if (pick) goDetail(pick.id);
 };
 
 const toggleSelect = (id: number, event?: MouseEvent) => {
@@ -556,11 +570,44 @@ const loadGames = async () => {
     const res = await api.get('/games', { params });
     if (seq !== loadGamesSeq) return;
     games.value = res.data.games;
-    total.value = res.data.total;
     gameListStore.filteredCount = res.data.games.length;
+    coverRepairRounds = 0;
+    void repairMissingCovers(seq);
   } finally {
     if (seq === loadGamesSeq) loading.value = false;
     void loadDuplicates();
+  }
+};
+
+// A cover can be missing because the download failed (network) or because the app was closed
+// while it was still running. Ask the server to re-fetch the ones for the games on screen and
+// patch them in place, so the placeholder turns into the real image without a manual re-scrape.
+let coverRepairRounds = 0;
+const COVER_REPAIR_ROUNDS = 3;
+
+const repairMissingCovers = async (seq: number) => {
+  const ids = games.value.map((g) => g.id);
+  if (ids.length === 0) return;
+  try {
+    const res = await api.post('/cover/repair', { gameIds: ids, limit: 8 });
+    if (seq !== loadGamesSeq) return;
+    const repaired: { gameId: number; coverPath: string }[] = res.data?.repaired ?? [];
+    if (repaired.length > 0) {
+      const byId = new Map(repaired.map((r) => [r.gameId, r.coverPath]));
+      for (const game of games.value) {
+        const coverPath = byId.get(game.id);
+        if (coverPath && game.cover_path !== coverPath) game.cover_path = coverPath;
+      }
+    }
+    // More are still missing - check again shortly, a few times per visit.
+    if ((res.data?.missing ?? 0) > 0 && coverRepairRounds < COVER_REPAIR_ROUNDS) {
+      coverRepairRounds++;
+      window.setTimeout(() => {
+        void repairMissingCovers(seq);
+      }, 4000);
+    }
+  } catch {
+    // non-critical: the covers simply stay as they are
   }
 };
 
@@ -596,8 +643,11 @@ const FILTER_KEY_FAV = '__game_lib_filter_fav__';
 
 const getFilterKey = () => favoritesMode.value ? FILTER_KEY_FAV : FILTER_KEY;
 
+// Filter selections are stored in localStorage (like the sort prefs) so they survive an
+// app restart. sessionStorage is cleared when the window closes, which silently reset
+// every filter - including Scraped - back to its default on the next launch.
 const saveFilterState = () => {
-  sessionStorage.setItem(getFilterKey(), JSON.stringify({
+  localStorage.setItem(getFilterKey(), JSON.stringify({
     keyword: keyword.value,
     filter: currentFilter.value,
   }));
@@ -606,7 +656,7 @@ const saveFilterState = () => {
 const restoreFilterState = () => {
   restoringFilter.value = true;
   try {
-    const saved = sessionStorage.getItem(getFilterKey());
+    const saved = localStorage.getItem(getFilterKey());
     if (saved) {
       const { keyword: kw, filter } = JSON.parse(saved);
       keyword.value = kw ?? '';
@@ -637,11 +687,15 @@ const onGridScroll = () => {
 };
 
 watch(favoritesMode, (isFav) => {
+  // Games and Favorites are separate views of the same grid, so nothing view-local may carry
+  // over: a selection made in one list means nothing in the other (and the batch actions would
+  // otherwise fire on ids the user cannot even see).
+  exitSelectMode();
   const leaveKey = isFav ? SCROLL_KEY : SCROLL_KEY_FAV;
   const scrollTop = virtualGrid.value?.getScrollTop() ?? 0;
   sessionStorage.setItem(leaveKey, String(scrollTop));
   const leaveFilterKey = isFav ? FILTER_KEY : FILTER_KEY_FAV;
-  sessionStorage.setItem(leaveFilterKey, JSON.stringify({
+  localStorage.setItem(leaveFilterKey, JSON.stringify({
     keyword: keyword.value,
     filter: currentFilter.value,
   }));
@@ -676,6 +730,7 @@ const restoreScroll = () => {
 const getSourceUrl = (source: string, sourceId: string): string => {
   if (source === 'dlsite')
     return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
+  if (source === 'dmm') return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${sourceId}/`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
   if (source === 'steam') return `https://store.steampowered.com/app/${sourceId}`;

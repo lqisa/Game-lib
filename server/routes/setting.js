@@ -1,6 +1,6 @@
 import express from 'express';
 import * as db from '../database/db.js';
-import { detectExtractTools } from '../tasks.js';
+import { detectExtractTools, getEffectiveTools } from '../tasks.js';
 
 const router = express.Router();
 
@@ -69,8 +69,9 @@ router.get('/detect-tools', (_req, res) => {
 
 router.get('/extract-tools/list', async (_req, res, next) => {
   try {
-    const val = await db.getSetting('extract_tools');
-    res.send(val ? JSON.parse(val) : detectExtractTools());
+    // getEffectiveTools() falls back to on-disk detection when the saved value is
+    // missing or an empty object (the empty object is what migration v8 seeds).
+    res.send(await getEffectiveTools());
   } catch (err) { next(err); }
 });
 

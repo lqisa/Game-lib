@@ -108,7 +108,10 @@ export default defineConfig((/* ctx */) => {
       // directives: [],
 
       // Quasar plugins
-      plugins: ['Dialog'],
+      // `Notify` must be listed here or `$q.notify` is undefined and every call throws -
+      // the app has 18 notify() call sites (task finished, scrape errors, region
+      // warnings), and without this plugin all of them failed silently.
+      plugins: ['Dialog', 'Notify'],
     },
 
     // animations: 'all', // --- includes all animations

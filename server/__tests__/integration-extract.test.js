@@ -1,4 +1,4 @@
-import { describe, it, before } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import express from 'express';
 import gameRouter from '../routes/game.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
+import { closePool } from '../database/db.js';
 import {
   getTask,
   getAllTasks,
@@ -217,4 +218,8 @@ describe('Integration: Extract with Password', () => {
     await db.knex('library').where({ id: libId }).del().catch(() => {});
     await db.knex('setting').where({ key: 'archived_archives' }).del().catch(() => {});
   });
+});
+
+after(async () => {
+  await closePool();
 });

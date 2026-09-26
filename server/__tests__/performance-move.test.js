@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,6 +11,21 @@ import {
   removeTask,
   onTaskChange,
 } from '../tasks.js';
+import { initDatabase } from '../database/init.js';
+import { closePool } from '../database/db.js';
+
+// executeMoveTask() calls db.updateGame() on completion, so the schema must exist.
+// Without this the in-memory db has no `game` table and every move reports
+// "SQLITE_ERROR: no such table: game".
+before(async () => {
+  await initDatabase();
+});
+
+// The knex/sqlite pool keeps the event loop alive, which stops `node --test` from
+// exiting once the tests are done.
+after(async () => {
+  await closePool();
+});
 
 const cleanupTasks = () => {
   for (const t of getAllTasks()) {

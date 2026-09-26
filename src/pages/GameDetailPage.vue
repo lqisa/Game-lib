@@ -52,9 +52,12 @@
               size="sm"
               icon="edit"
               color="grey-7"
+              :disable="gameBusy"
               @click="startEditPath"
             >
-              <q-tooltip>Edit Path</q-tooltip>
+              <q-tooltip>{{
+                gameBusy ? 'A task is still running for this game' : 'Edit Path'
+              }}</q-tooltip>
             </q-btn>
           </div>
           <div v-else class="q-mt-sm row items-center q-gutter-xs">
@@ -262,6 +265,7 @@ import api from '../composables/useApi';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
 import { splitKeyword } from '../composables/useSplitKeyword';
 import { useExpressUrl } from '../composables/useExpressUrl';
+import { useTaskStore } from '../stores/taskStore';
 
 interface GameDetail {
   id: number;
@@ -295,10 +299,12 @@ const coverUrl = computed(() => {
   return '';
 });
 
-const scrapeDefaultSource = computed<'dlsite' | 'bangumi' | 'vndb' | 'steam' | undefined>(() => {
+// Source list comes from match.js rather than a hardcoded union: the union had to be
+// edited every time a source was added, and forgetting meant the tab silently fell back
+// to the auto-detected source.
+const scrapeDefaultSource = computed<SourceType | undefined>(() => {
   const type = game.value?.sources?.[0]?.source_type;
-  if (type === 'dlsite' || type === 'bangumi' || type === 'vndb' || type === 'steam') return type;
-  return undefined;
+  return SOURCE_TYPES.includes(type as SourceType) ? (type as SourceType) : undefined;
 });
 const confirmDelete = ref(false);
 const deleting = ref(false);
@@ -311,6 +317,39 @@ const relocateMoveFiles = ref(false);
 const relocateCompressFiles = ref(false);
 const relocateInfo = ref<{ source: string; target: string; moveDisabled: boolean; compressDisabled: boolean } | null>(null);
 
+const taskStore = useTaskStore();
+
+// A game with a relocate task still in flight must not be relocated again. The flag is derived
+// from the in-memory task list, so nothing is persisted and the SSE completion update re-enables
+// editing by itself - no page-side bookkeeping to get out of sync.
+const gameBusy = computed(() => taskStore.isGameBusy(game.value?.id));
+// The task this page started, so its outcome can be reported once it settles.
+const pendingRelocate = ref<string | null>(null);
+
+const TASK_DONE_LABEL: Record<string, string> = {
+  move: 'Move completed',
+  extract: 'Extraction completed',
+  compress: 'Compression completed',
+};
+
+// Watching the derived busy flag (instead of subscribing to the task itself) cannot miss the
+// completion: a task that finishes before we start watching already leaves the flag false, and
+// any later settle flips it true -> false, which a watcher always observes.
+watch(gameBusy, (busy, wasBusy) => {
+  if (!wasBusy || busy) return;
+  void loadGame();
+  const taskId = pendingRelocate.value;
+  if (!taskId) return;
+  pendingRelocate.value = null;
+  const task = taskStore.tasks.get(taskId);
+  if (!task) return;
+  if (task.status === 'completed') {
+    $q.notify({ type: 'positive', message: TASK_DONE_LABEL[task.type] || 'Task completed' });
+  } else if (task.status === 'failed') {
+    $q.notify({ type: 'negative', message: task.error || 'Task failed' });
+  }
+});
+
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
 const displayName = computed(() => {
@@ -320,6 +359,7 @@ const displayName = computed(() => {
 
 const sourceColor = (source: string) => {
   if (source === 'dlsite') return 'deep-purple';
+  if (source === 'dmm') return 'pink';
   if (source === 'bangumi') return 'orange';
   if (source === 'vndb') return 'cyan';
   if (source === 'steam') return 'blue-grey';
@@ -346,6 +386,19 @@ const openDir = async () => {
       : null;
   if (!fullPath) return;
   await window.electronAPI.openPath(fullPath);
+  // Opening the folder is the event that feeds the Recently list, so record it after the
+  // shell actually took the path - not when the click happened.
+  void recordRecentOpen(game.value.id);
+};
+
+// A failed history write must never break the open itself (a game with no row in `recently`
+// still opens fine), so this deliberately swallows and only logs.
+const recordRecentOpen = async (gameId: number) => {
+  try {
+    await api.post(`/recently/${gameId}`);
+  } catch (err) {
+    console.warn('Failed to record recent open', err);
+  }
 };
 
 const currentFullPath = computed(() => {
@@ -358,6 +411,12 @@ const currentFullPath = computed(() => {
 });
 
 const startEditPath = () => {
+  // One relocate per game: the button is disabled while a task runs, and this keeps the
+  // keyboard/other entry points honest too.
+  if (gameBusy.value) {
+    $q.notify({ type: 'info', message: 'A task is still running for this game' });
+    return;
+  }
   editPathValue.value = currentFullPath.value;
   editingPath.value = true;
 };
@@ -435,6 +494,11 @@ const showRelocateConfirm = (newPath: string) => {
 
 const doRelocate = async () => {
   if (!game.value || !editPathValue.value.trim()) return;
+  if (gameBusy.value) {
+    confirmRelocate.value = false;
+    $q.notify({ type: 'info', message: 'A task is still running for this game' });
+    return;
+  }
   const isArchiveRelocate = relocateInfo.value?.moveDisabled;
   const isCompressRelocate = relocateCompressFiles.value;
   const targetPath = editPathValue.value.trim();
@@ -485,22 +549,10 @@ const doRelocate = async () => {
       icon: operation === 'move' ? 'drive_file_move' : operation === 'extract' ? 'archive' : 'compress',
     });
 
-    const taskStore = (await import('../stores/taskStore')).useTaskStore();
-    const unwatch = taskStore.$subscribe((_mutation, state) => {
-      const task = state.tasks.get(taskId);
-      if (!task) return;
-      if (task.status === 'completed') {
-        unwatch();
-        $q.notify({ type: 'positive', message: task.type === 'move' ? 'Move completed' : task.type === 'extract' ? 'Extraction completed' : 'Compression completed' });
-        void loadGame();
-      } else if (task.status === 'failed') {
-        unwatch();
-        $q.notify({ type: 'negative', message: task.error || 'Task failed' });
-      }
-    });
+    // The busy watcher above reloads the path and reports the outcome once this settles.
+    pendingRelocate.value = taskId;
   } catch (err: unknown) {
-    relocating.value = false;
-    const e = err as { response?: { status?: number; data?: { conflict?: string; destExists?: boolean } } };
+    relocating.value = false;    const e = err as { response?: { status?: number; data?: { conflict?: string; destExists?: boolean } } };
     if (e.response?.status === 409 && e.response.data?.conflict) {
       $q.dialog({
         title: 'Target Conflict',
@@ -538,19 +590,8 @@ const doRelocateWithForce = async (targetPath: string) => {
       message: operation === 'move' ? 'File move started in background' : operation === 'extract' ? 'Extraction started in background' : 'Compression started in background',
     });
 
-    const taskStore = (await import('../stores/taskStore')).useTaskStore();
-    const unwatch = taskStore.$subscribe((_mutation, state) => {
-      const task = state.tasks.get(taskId);
-      if (!task) return;
-      if (task.status === 'completed') {
-        unwatch();
-        $q.notify({ type: 'positive', message: 'Task completed' });
-        void loadGame();
-      } else if (task.status === 'failed') {
-        unwatch();
-        $q.notify({ type: 'negative', message: task.error || 'Task failed' });
-      }
-    });
+    // The busy watcher above reloads the path and reports the outcome once this settles.
+    pendingRelocate.value = taskId;
   } catch {
     relocating.value = false;
   }
@@ -563,10 +604,12 @@ const loadGame = async () => {
 };
 
 import type { SourceType, AdoptData } from '../types/scrape';
+import { SOURCE_TYPES } from '../../server/scraper/match.js';
 
 const getSourceUrl = (source: SourceType, sourceId: string): string => {
   if (source === 'dlsite')
     return `https://www.dlsite.com/maniax/work/=/product_id/${sourceId}.html`;
+  if (source === 'dmm') return `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid=${sourceId}/`;
   if (source === 'bangumi') return `https://bgm.tv/subject/${sourceId}`;
   if (source === 'vndb') return `https://vndb.org/${sourceId}`;
   if (source === 'steam') return `https://store.steampowered.com/app/${sourceId}`;
