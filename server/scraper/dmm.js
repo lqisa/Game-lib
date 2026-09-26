@@ -72,8 +72,12 @@ const REGION_ERROR_MESSAGE =
   'DMM refused the request: the network exit is not Japan. Check that the proxy is on ' +
   'and exits through a Japanese node (DMM serves a region-block or login page to non-JP IPs).';
 
-const regionError = () => {
-  const err = new Error(REGION_ERROR_MESSAGE);
+// `what` names the page that was refused, so the message says which request tripped the
+// region gate instead of just that one did.
+const regionError = (what) => {
+  const err = new Error(
+    what ? `${REGION_ERROR_MESSAGE} (while reading the ${what} page)` : REGION_ERROR_MESSAGE,
+  );
   err.code = 'DMM_REGION_BLOCKED';
   return err;
 };
@@ -123,7 +127,7 @@ const classifyDmmResponse = (url, body) => {
 const readPage = (res, what) => {
   const body = typeof res.data === 'string' ? res.data : '';
   if (classifyDmmResponse(finalUrl(res), body) === 'region') {
-    throw regionError();
+    throw regionError(what);
   }
   return body;
 };

@@ -12,4 +12,7 @@
  *   readonly MY_OTHER_VAR: string;
  * }
  */
+// Declared empty on purpose: this is the augmentation target for Vite/Quasar's env vars,
+// so it is meant to be merged into rather than to carry members itself.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface ImportMetaEnv {}

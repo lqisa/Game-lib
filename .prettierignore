@@ -1,0 +1,30 @@
+# Prettier 3 dropped `--ignore-path`, so the ignore list lives here instead. Without it the
+# `**/*.{js,ts,vue,css,html,md,json}` glob in package.json's lint scripts walks generated and
+# vendored directories and rewrites them.
+#
+# Keep in step with .gitignore: anything generated, downloaded or checked out next to the
+# source belongs here too.
+
+node_modules/
+dist/
+.kilo/
+.quasar/
+graphify-out/
+test-results/
+test-data/
+test_out/
+covers/
+src-electron/Unpackaged/
+src-cordova/node_modules/
+src-cordova/platforms/
+src-cordova/plugins/
+src-cordova/www/
+src-capacitor/node_modules/
+src-capacitor/www/
+
+# Generated
+quasar.config.*.temporary.compiled*
+
+# Lockfiles are generated; reformatting them creates noise in every dependency bump.
+pnpm-lock.yaml
+src-electron/package-lock.json

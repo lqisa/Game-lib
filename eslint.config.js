@@ -13,9 +13,24 @@ export default defineConfigWithVueTs(
      * the "node_modules" folder for you (and all other Quasar project
      * relevant folders and files).
      *
-     * ESLint requires "ignores" key to be the only one in this object
+     * ESLint requires "ignores" key to be the only one in this object.
+     *
+     * ESLint does not read .gitignore, so anything generated or checked out
+     * alongside the source has to be listed here or `npx eslint .` walks into it.
+     * That is what broke before: `.kilo/` holds git worktrees - full copies of this
+     * repo - and their files are not in the root tsconfig, so type-aware rules threw
+     * "you have used a rule which requires type information" instead of reporting
+     * anything useful.
      */
-    // ignores: []
+    ignores: [
+      'dist/**',
+      '.kilo/**',
+      'graphify-out/**',
+      'test-results/**',
+      'test-data/**',
+      'test_out/**',
+      'covers/**',
+    ],
   },
 
   pluginQuasar.configs.recommended(),
@@ -64,6 +79,15 @@ export default defineConfigWithVueTs(
     // add your custom rules here
     rules: {
       'prefer-promise-reject-errors': 'off',
+
+      // A leading underscore is the convention for an argument that has to exist for the
+      // signature but is deliberately unused - Express only treats a handler as an error
+      // handler when it declares four parameters, so `(err, req, res, _next)` is required
+      // even though nothing reads `next`.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
 
       // allow debugger during development only
       'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off',

@@ -6,8 +6,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "lint": "prettier --write \"**/*.{js,ts,vue,css,html,md,json}\" --ignore-path .gitignore && eslint --fix -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
-    "lint:check": "prettier \"**/*.{js,ts,vue,css,html,md,json}\" --ignore-path .gitignore && eslint -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
+    "lint": "prettier --write \"**/*.{js,ts,vue,css,html,md,json}\" && eslint --fix -c ./eslint.config.js .",
+    "lint:check": "prettier --check \"**/*.{js,ts,vue,css,html,md,json}\" && eslint -c ./eslint.config.js .",
     "dev": "cross-env VITE_API_PORT=19700 VITE_FRONTEND_PORT=9000 quasar dev -m electron",
     "dev:prod": "cross-env GAME_LIB_PROD=1 quasar dev -m electron",
     "dev:server": "cross-env VITE_API_PORT=19700 node --watch server/dev.js",

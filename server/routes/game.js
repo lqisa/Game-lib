@@ -648,13 +648,11 @@ router.put('/:id/relocate', async (req, res, next) => {
     if (compressFiles) {
       const compressCheck = shouldCompress(currentFullPath);
       if (!compressCheck.compress) {
-        return res
-          .status(400)
-          .send({
-            error: `Compression not needed: ${compressCheck.reason}`,
-            compressSkipped: true,
-            reason: compressCheck.reason,
-          });
+        return res.status(400).send({
+          error: `Compression not needed: ${compressCheck.reason}`,
+          compressSkipped: true,
+          reason: compressCheck.reason,
+        });
       }
 
       // Ensure target has .rar extension
@@ -741,13 +739,11 @@ router.put('/:id/relocate', async (req, res, next) => {
     if (compressFiles) {
       const compressCheck = shouldCompress(currentFullPath);
       if (!compressCheck.compress) {
-        return res
-          .status(400)
-          .send({
-            error: `Compression not needed: ${compressCheck.reason}`,
-            compressSkipped: true,
-            reason: compressCheck.reason,
-          });
+        return res.status(400).send({
+          error: `Compression not needed: ${compressCheck.reason}`,
+          compressSkipped: true,
+          reason: compressCheck.reason,
+        });
       }
 
       // Ensure target has .rar extension

@@ -555,7 +555,7 @@ describe('Integration: archived_folders excluded from scan', () => {
       },
       ['id'],
     );
-    const gameId2 = gid2.id || gid;
+    const gameId2 = gid2.id || gid2;
 
     await db.setSetting('archived_folders', JSON.stringify(['ArchivedGame']));
 
