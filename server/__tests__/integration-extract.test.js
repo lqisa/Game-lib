@@ -21,7 +21,11 @@ const request = async (method, url, body) => {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   const text = await res.text();
-  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: text }; }
+  try {
+    return { status: res.status, body: JSON.parse(text) };
+  } catch {
+    return { status: res.status, body: text };
+  }
 };
 
 const cleanupTasks = () => {
@@ -33,16 +37,17 @@ const cleanupTasks = () => {
   }
 };
 
-const waitFor = (fn, timeout = 30000, interval = 500) => new Promise((resolve, reject) => {
-  const start = Date.now();
-  const check = () => {
-    const result = fn();
-    if (result) return resolve(result);
-    if (Date.now() - start > timeout) return reject(new Error('waitFor timeout'));
-    setTimeout(check, interval);
-  };
-  check();
-});
+const waitFor = (fn, timeout = 30000, interval = 500) =>
+  new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      const result = fn();
+      if (result) return resolve(result);
+      if (Date.now() - start > timeout) return reject(new Error('waitFor timeout'));
+      setTimeout(check, interval);
+    };
+    check();
+  });
 
 let availableTools = {};
 let has7z = false;
@@ -91,8 +96,16 @@ describe('Integration: Extract with Password', () => {
 
     const { spawn } = await import('node:child_process');
     await new Promise((resolve, reject) => {
-      const child = spawn(sevenzip, ['a', archivePath, path.join(contentDir, '*'), '-ptestpw123', '-y']);
-      child.on('close', (code) => code <= 1 ? resolve() : reject(new Error(`7z create exit ${code}`)));
+      const child = spawn(sevenzip, [
+        'a',
+        archivePath,
+        path.join(contentDir, '*'),
+        '-ptestpw123',
+        '-y',
+      ]);
+      child.on('close', (code) =>
+        code <= 1 ? resolve() : reject(new Error(`7z create exit ${code}`)),
+      );
       child.on('error', reject);
     });
 
@@ -105,14 +118,19 @@ describe('Integration: Extract with Password', () => {
     const archiveInLib = path.join(libDir, 'game.7z');
     fs.copyFileSync(archivePath, archiveInLib);
 
-    const [id] = await db.knex('library').insert({ name: 'ExtLib_' + Date.now(), path: libDir }, ['id']);
+    const [id] = await db
+      .knex('library')
+      .insert({ name: 'ExtLib_' + Date.now(), path: libDir }, ['id']);
     const libId = id.id || id;
 
-    const [gid] = await db.knex('game').insert({
-      name: 'ExtGame_' + Date.now(),
-      library_id: libId,
-      sub_path: 'game.7z',
-    }, ['id']);
+    const [gid] = await db.knex('game').insert(
+      {
+        name: 'ExtGame_' + Date.now(),
+        library_id: libId,
+        sub_path: 'game.7z',
+      },
+      ['id'],
+    );
     const gameId = gid.id || gid;
 
     const destDir = path.join(tmpDir, 'RepoB', 'game');
@@ -121,10 +139,15 @@ describe('Integration: Extract with Password', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
 
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destDir, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'extract');
     assert.ok(res.body.taskId);
@@ -132,7 +155,7 @@ describe('Integration: Extract with Password', () => {
     const taskId = res.body.taskId;
     const finalTask = await waitFor(() => {
       const t = getTask(taskId);
-      return (t && (t.status === 'completed' || t.status === 'failed')) ? t : null;
+      return t && (t.status === 'completed' || t.status === 'failed') ? t : null;
     }, 60000);
 
     assert.equal(finalTask.status, 'completed', `Extract failed: ${finalTask.error}`);
@@ -147,11 +170,31 @@ describe('Integration: Extract with Password', () => {
 
     cleanupTasks();
     server.close();
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    await db.knex('game').where({ id: gameId }).del().catch(() => {});
-    await db.knex('library').where({ id: libId }).del().catch(() => {});
-    await db.knex('setting').where({ key: 'archive_passwords' }).del().catch(() => {});
-    await db.knex('setting').where({ key: 'archived_archives' }).del().catch(() => {});
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    await db
+      .knex('game')
+      .where({ id: gameId })
+      .del()
+      .catch(() => {});
+    await db
+      .knex('library')
+      .where({ id: libId })
+      .del()
+      .catch(() => {});
+    await db
+      .knex('setting')
+      .where({ key: 'archive_passwords' })
+      .del()
+      .catch(() => {});
+    await db
+      .knex('setting')
+      .where({ key: 'archived_archives' })
+      .del()
+      .catch(() => {});
   });
 
   it('should extract a non-encrypted archive without password', async () => {
@@ -168,7 +211,9 @@ describe('Integration: Extract with Password', () => {
     const { spawn } = await import('node:child_process');
     await new Promise((resolve, reject) => {
       const child = spawn(sevenzip, ['a', archivePath, path.join(contentDir, '*'), '-y']);
-      child.on('close', (code) => code <= 1 ? resolve() : reject(new Error(`7z create exit ${code}`)));
+      child.on('close', (code) =>
+        code <= 1 ? resolve() : reject(new Error(`7z create exit ${code}`)),
+      );
       child.on('error', reject);
     });
 
@@ -177,14 +222,19 @@ describe('Integration: Extract with Password', () => {
     const archiveInLib = path.join(libDir, 'plain.7z');
     fs.copyFileSync(archivePath, archiveInLib);
 
-    const [id] = await db.knex('library').insert({ name: 'ExtLib2_' + Date.now(), path: libDir }, ['id']);
+    const [id] = await db
+      .knex('library')
+      .insert({ name: 'ExtLib2_' + Date.now(), path: libDir }, ['id']);
     const libId = id.id || id;
 
-    const [gid] = await db.knex('game').insert({
-      name: 'PlainGame_' + Date.now(),
-      library_id: libId,
-      sub_path: 'plain.7z',
-    }, ['id']);
+    const [gid] = await db.knex('game').insert(
+      {
+        name: 'PlainGame_' + Date.now(),
+        library_id: libId,
+        sub_path: 'plain.7z',
+      },
+      ['id'],
+    );
     const gameId = gid.id || gid;
 
     const destDir = path.join(tmpDir, 'RepoB', 'plain');
@@ -195,17 +245,22 @@ describe('Integration: Extract with Password', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
 
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destDir, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'extract');
 
     const taskId = res.body.taskId;
     const finalTask = await waitFor(() => {
       const t = getTask(taskId);
-      return (t && (t.status === 'completed' || t.status === 'failed')) ? t : null;
+      return t && (t.status === 'completed' || t.status === 'failed') ? t : null;
     }, 60000);
 
     assert.equal(finalTask.status, 'completed', `Extract failed: ${finalTask.error}`);
@@ -213,10 +268,26 @@ describe('Integration: Extract with Password', () => {
 
     cleanupTasks();
     server.close();
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    await db.knex('game').where({ id: gameId }).del().catch(() => {});
-    await db.knex('library').where({ id: libId }).del().catch(() => {});
-    await db.knex('setting').where({ key: 'archived_archives' }).del().catch(() => {});
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    await db
+      .knex('game')
+      .where({ id: gameId })
+      .del()
+      .catch(() => {});
+    await db
+      .knex('library')
+      .where({ id: libId })
+      .del()
+      .catch(() => {});
+    await db
+      .knex('setting')
+      .where({ key: 'archived_archives' })
+      .del()
+      .catch(() => {});
   });
 });
 

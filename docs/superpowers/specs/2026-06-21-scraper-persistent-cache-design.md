@@ -20,6 +20,7 @@ search_cache (
 ```
 
 detail_cache 仅保留在内存 Map 中，不落表。理由：
+
 - search_cache 对 Scrape All 影响最大（每个游戏都要搜一次）
 - detail 只在 adopt 时按需获取，重新 fetch 代价低
 - 减少数据库写入量和实现复杂度
@@ -27,13 +28,16 @@ detail_cache 仅保留在内存 Map 中，不落表。理由：
 ### Data flow
 
 **Scrape All (normal):**
+
 1. Search: check searchCache Map (L1) → hit: return → miss → check search_cache DB (L2) → hit: load to Map, return → miss: fetch from API → write Map + DB
 2. Adopt: check detailCache Map → hit: return → miss: fetch from API → write Map only
 
 **Rescrape / Game detail page:**
+
 - Bypass search cache, fetch directly from API → on success, overwrite search_cache DB
 
 **Force Refresh button:**
+
 - Clears search_cache entries for the current library's scan results → re-fetch everything
 
 ### In-memory cache layer

@@ -36,27 +36,36 @@ const PLACEHOLDER_MARKER = 'now_printing';
 
 const isPlaceholderImage = (finalUrl) => String(finalUrl || '').includes(PLACEHOLDER_MARKER);
 
-// Image magic bytes. A cover URL that no longer resolves often answers 200 with an HTML
-// error page (measured: a dead Steam path returns 200 + `text/html`, 1 MB of markup).
-// Writing that as `steam_570.jpg` sets cover_path, so coverExists() reports true and the
-// repair flow never revisits the row - the user just sees a broken image forever.
+// Image signatures, each paired with the extension we store it under. One list serves
+// both "is this an image at all" and "what should the file be called", so the two cannot
+// drift apart.
 const IMAGE_SIGNATURES = [
-  [0xff, 0xd8, 0xff], // jpeg
-  [0x89, 0x50, 0x4e, 0x47], // png
-  [0x47, 0x49, 0x46, 0x38], // gif
-  [0x42, 0x4d], // bmp
+  { ext: '.jpg', bytes: [0xff, 0xd8, 0xff] }, // jpeg
+  { ext: '.png', bytes: [0x89, 0x50, 0x4e, 0x47] }, // png
+  { ext: '.gif', bytes: [0x47, 0x49, 0x46, 0x38] }, // gif
+  { ext: '.bmp', bytes: [0x42, 0x4d] }, // bmp
 ];
 
-const looksLikeImage = (buffer) => {
+const isWebp = (buf) =>
+  buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+  buf.subarray(8, 12).toString('ascii') === 'WEBP';
+
+/**
+ * The extension to store these bytes under, decided by content rather than by any
+ * caller-supplied file name - a dropped `.exe`, or an `.svg` (which can carry script and
+ * would be served from our own origin), must not end up stored as a cover.
+ *
+ * Returns null when the bytes are not a known image type.
+ */
+const imageExtension = (buffer) => {
   const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
-  if (buf.length < 12) return false;
-  if (IMAGE_SIGNATURES.some((sig) => sig.every((byte, i) => buf[i] === byte))) return true;
-  // webp is `RIFF....WEBP`
-  return (
-    buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    buf.subarray(8, 12).toString('ascii') === 'WEBP'
-  );
+  if (buf.length < 12) return null;
+  const hit = IMAGE_SIGNATURES.find((sig) => sig.bytes.every((byte, i) => buf[i] === byte));
+  if (hit) return hit.ext;
+  return isWebp(buf) ? '.webp' : null;
 };
+
+const looksLikeImage = (buffer) => imageExtension(buffer) !== null;
 
 /**
  * Download a cover and return the stored file name, or null when it could not be fetched.
@@ -117,7 +126,11 @@ const resolveCoverUrl = (sourceType, sourceId, rawData) => {
       /* older rows stored null or non-JSON here */
     }
   }
-  if (sourceType === 'dlsite' && typeof sourceId === 'string' && /^(RJ|VJ|BG|RE)\d+$/i.test(sourceId)) {
+  if (
+    sourceType === 'dlsite' &&
+    typeof sourceId === 'string' &&
+    /^(RJ|VJ|BG|RE)\d+$/i.test(sourceId)
+  ) {
     return buildDlsiteCoverUrl(sourceId);
   }
   // DMM ids are `d_xxxxx`. Its asset path segment (`game` vs `comic`) is NOT derivable from
@@ -179,6 +192,7 @@ export {
   fetchCoverUrlFromSource,
   isPlaceholderImage,
   looksLikeImage,
+  imageExtension,
   DETAIL_FETCH_SOURCES,
   ensureCoversDir,
 };

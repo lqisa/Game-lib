@@ -12,7 +12,8 @@
  */
 
 // game.7z.001 / game.part1.rar / game.rar.r00 / game.rar / game.zip
-const ARCHIVE_EXT_RE = /\.(?:7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(?:\.(?:r\d+|\d+))?$|\.(?:zip|7z)$/i;
+const ARCHIVE_EXT_RE =
+  /\.(?:7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(?:\.(?:r\d+|\d+))?$|\.(?:zip|7z)$/i;
 
 // Bracket pairs whose CONTENTS are tags rather than part of the title: () [] （） 【】
 // plus the CJK quote/brace styles. Built from the pair list so it is obvious which
@@ -20,10 +21,7 @@ const ARCHIVE_EXT_RE = /\.(?:7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(?:\.(?:r\d+|\d+
 const BRACKET_PAIRS = ['()', '[]', '（）', '【】', '〔〕', '{}', '〈〉', '《》', '「」', '『』'];
 const escapeInClass = (chars) => chars.replace(/[\\\]]/g, '\\$&');
 const bracketClass = (index) => escapeInClass(BRACKET_PAIRS.map((p) => p[index]).join(''));
-const BRACKETED_RE = new RegExp(
-  `[${bracketClass(0)}].*?[${bracketClass(1)}]`,
-  'g',
-);
+const BRACKETED_RE = new RegExp(`[${bracketClass(0)}].*?[${bracketClass(1)}]`, 'g');
 
 // Middle dots live inside the katakana block, so KEEP_RE would keep them, but they are
 // purely decorative separators ("A・B" should compare as "AB").

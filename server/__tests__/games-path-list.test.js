@@ -12,7 +12,11 @@ let server;
 const request = async (path) => {
   const res = await fetch(new URL(path, baseUrl));
   const text = await res.text();
-  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: text }; }
+  try {
+    return { status: res.status, body: JSON.parse(text) };
+  } catch {
+    return { status: res.status, body: text };
+  }
 };
 
 const PATH_LIST_KEYS = ['blacklist', 'archived_archives', 'archived_folders'];

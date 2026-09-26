@@ -1,17 +1,46 @@
 <template>
   <q-dialog v-model="show" @hide="onDialogHide">
-    <q-card style="width: 560px; max-height: 85vh; display: flex; flex-direction: column;" class="filter-dialog">
-      <div class="q-px-lg q-pt-md q-pb-sm" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-        <div style="width: 36px; height: 36px; border-radius: 12px; background: var(--m3-primary-container); display: flex; align-items: center; justify-content: center;">
+    <q-card
+      style="width: 560px; max-height: 85vh; display: flex; flex-direction: column"
+      class="filter-dialog"
+    >
+      <div
+        class="q-px-lg q-pt-md q-pb-sm"
+        style="display: flex; align-items: center; gap: 10px; flex-shrink: 0"
+      >
+        <div
+          style="
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: var(--m3-primary-container);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          "
+        >
           <q-icon name="tune" size="20px" color="primary" />
         </div>
-        <span style="font-size: 18px; font-weight: 600; color: var(--m3-on-surface);">Filter</span>
+        <span style="font-size: 18px; font-weight: 600; color: var(--m3-on-surface)">Filter</span>
         <q-space />
         <q-btn flat round dense icon="close" color="grey-7" v-close-popup />
       </div>
 
-      <div v-if="activeFilterChips.length > 0" class="q-px-lg q-pb-sm" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex-shrink: 0;">
-        <span style="font-size: 11px; color: var(--m3-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;">Active:</span>
+      <div
+        v-if="activeFilterChips.length > 0"
+        class="q-px-lg q-pb-sm"
+        style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex-shrink: 0"
+      >
+        <span
+          style="
+            font-size: 11px;
+            color: var(--m3-on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 4px;
+          "
+          >Active:</span
+        >
         <span
           v-for="chip in activeFilterChips"
           :key="chip.key"
@@ -23,211 +52,285 @@
         </span>
         <span class="filter-chip-clear" @click="clearAllFilters">Clear all</span>
       </div>
-      <div v-if="activeFilterChips.length > 0" class="filter-divider" style="flex-shrink: 0;"></div>
+      <div v-if="activeFilterChips.length > 0" class="filter-divider" style="flex-shrink: 0"></div>
 
       <div class="filter-scroll-area">
-      <div style="padding: 14px 20px;">
-        <div class="filter-section-header">
-          <div class="filter-section-icon" style="background: var(--m3-icon-lib-bg);">
-            <q-icon name="folder" size="16px" color="pink" />
+        <div style="padding: 14px 20px">
+          <div class="filter-section-header">
+            <div class="filter-section-icon" style="background: var(--m3-icon-lib-bg)">
+              <q-icon name="folder" size="16px" color="pink" />
+            </div>
+            <span class="filter-section-title">Libraries</span>
           </div>
-          <span class="filter-section-title">Libraries</span>
-        </div>
-        <div v-if="librariesLoading" class="text-center q-pa-xs">
-          <q-spinner-dots size="20px" color="primary" />
-        </div>
-        <template v-else>
-          <q-input
-            v-model="librarySearch"
-            dense
-            borderless
-            placeholder="Search libraries..."
-            class="lib-search-input"
-            style="width: 100%"
-          >
-            <template v-slot:prepend>
-              <q-icon name="search" size="16px" color="grey-6" />
-            </template>
-          </q-input>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            <span
-              v-for="lib in filteredLibraries"
-              :key="lib.id"
-              class="lib-chip-toggle"
-              :class="localFilter.libraryIds.includes(lib.id) ? 'lib-chip-toggle--selected' : 'lib-chip-toggle--unselected'"
-              @click="toggleLibraryId(lib.id)"
+          <div v-if="librariesLoading" class="text-center q-pa-xs">
+            <q-spinner-dots size="20px" color="primary" />
+          </div>
+          <template v-else>
+            <q-input
+              v-model="librarySearch"
+              dense
+              borderless
+              placeholder="Search libraries..."
+              class="lib-search-input"
+              style="width: 100%"
             >
-              {{ lib.name }}
-              <q-icon v-if="localFilter.libraryIds.includes(lib.id)" name="check" size="14px" style="margin-left: 4px;" />
-            </span>
-            <span
-              class="lib-chip-toggle"
-              :class="localFilter.noLibrary ? 'lib-chip-toggle--selected' : 'lib-chip-toggle--unselected'"
-              @click="localFilter.noLibrary = !localFilter.noLibrary"
+              <template v-slot:prepend>
+                <q-icon name="search" size="16px" color="grey-6" />
+              </template>
+            </q-input>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px">
+              <span
+                v-for="lib in filteredLibraries"
+                :key="lib.id"
+                class="lib-chip-toggle"
+                :class="
+                  localFilter.libraryIds.includes(lib.id)
+                    ? 'lib-chip-toggle--selected'
+                    : 'lib-chip-toggle--unselected'
+                "
+                @click="toggleLibraryId(lib.id)"
+              >
+                {{ lib.name }}
+                <q-icon
+                  v-if="localFilter.libraryIds.includes(lib.id)"
+                  name="check"
+                  size="14px"
+                  style="margin-left: 4px"
+                />
+              </span>
+              <span
+                class="lib-chip-toggle"
+                :class="
+                  localFilter.noLibrary
+                    ? 'lib-chip-toggle--selected'
+                    : 'lib-chip-toggle--unselected'
+                "
+                @click="localFilter.noLibrary = !localFilter.noLibrary"
+              >
+                Dropped
+                <q-icon
+                  v-if="localFilter.noLibrary"
+                  name="check"
+                  size="14px"
+                  style="margin-left: 4px"
+                />
+              </span>
+              <div
+                v-if="filteredLibraries.length === 0"
+                style="
+                  font-size: 12px;
+                  color: var(--m3-on-surface-variant);
+                  padding: 4px 0;
+                  display: flex;
+                  align-items: center;
+                "
+              >
+                No match
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="filter-divider"></div>
+
+        <div style="padding: 14px 20px">
+          <div class="filter-section-header">
+            <div class="filter-section-icon" style="background: var(--m3-icon-maker-bg)">
+              <q-icon name="person" size="16px" color="orange" />
+            </div>
+            <span class="filter-section-title">Makers</span>
+          </div>
+          <div v-if="makersLoading" class="text-center q-pa-xs">
+            <q-spinner-dots size="20px" color="primary" />
+          </div>
+          <div v-else>
+            <q-select
+              v-model="localFilter.makerIds"
+              :options="makerFilterOptions"
+              multiple
+              use-input
+              use-chips
+              input-debounce="300"
+              emit-value
+              map-options
+              option-value="id"
+              option-label="name"
+              @filter="onMakerFilter"
+              dense
+              outlined
+              placeholder="Search makers..."
+              virtual-scroll-item-size="32"
+              class="m3-select"
+            />
+          </div>
+        </div>
+        <div class="filter-divider"></div>
+
+        <div style="padding: 14px 20px">
+          <div class="filter-section-header">
+            <div class="filter-section-icon" style="background: var(--m3-icon-genre-bg)">
+              <q-icon name="category" size="16px" color="blue" />
+            </div>
+            <span class="filter-section-title">Genres</span>
+          </div>
+          <div v-if="genresLoading" class="text-center q-pa-xs">
+            <q-spinner-dots size="20px" color="primary" />
+          </div>
+          <div v-else>
+            <q-select
+              v-model="localFilter.genreIds"
+              :options="genres"
+              multiple
+              use-input
+              use-chips
+              input-debounce="300"
+              emit-value
+              map-options
+              option-value="id"
+              option-label="name"
+              @filter="onGenreFilter"
+              dense
+              outlined
+              placeholder="Search genres..."
+              virtual-scroll-item-size="32"
+              class="m3-select"
+            />
+          </div>
+        </div>
+        <div class="filter-divider"></div>
+
+        <div style="padding: 14px 20px">
+          <div class="filter-section-header">
+            <div class="filter-section-icon" style="background: var(--m3-icon-tag-bg)">
+              <q-icon name="label" size="16px" color="teal" />
+            </div>
+            <span class="filter-section-title">Tags</span>
+          </div>
+          <div v-if="tagsLoading" class="text-center q-pa-xs">
+            <q-spinner-dots size="20px" color="primary" />
+          </div>
+          <div v-else>
+            <q-select
+              v-model="localFilter.tagIds"
+              :options="tagFilterOptions"
+              multiple
+              use-input
+              use-chips
+              input-debounce="300"
+              emit-value
+              map-options
+              option-value="id"
+              option-label="name"
+              @filter="onTagFilter"
+              dense
+              outlined
+              placeholder="Search tags..."
+              virtual-scroll-item-size="32"
+              class="m3-select"
+            />
+          </div>
+        </div>
+        <div class="filter-divider"></div>
+
+        <div style="padding: 14px 20px">
+          <div class="filter-section-header">
+            <div class="filter-section-icon" style="background: var(--m3-icon-scraped-bg)">
+              <q-icon name="manage_search" size="16px" color="green" />
+            </div>
+            <span class="filter-section-title">Scrape Status</span>
+          </div>
+          <div class="segmented-btn">
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.scraped === 'all'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.scraped = 'all'"
             >
-              Dropped
-              <q-icon v-if="localFilter.noLibrary" name="check" size="14px" style="margin-left: 4px;" />
-            </span>
-            <div v-if="filteredLibraries.length === 0" style="font-size: 12px; color: var(--m3-on-surface-variant); padding: 4px 0; display: flex; align-items: center;">No match</div>
+              All
+            </div>
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.scraped === 'yes'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.scraped = 'yes'"
+            >
+              Scraped
+            </div>
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.scraped === 'no'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.scraped = 'no'"
+            >
+              Not scraped
+            </div>
           </div>
-        </template>
-      </div>
-      <div class="filter-divider"></div>
+        </div>
+        <div class="filter-divider"></div>
 
-      <div style="padding: 14px 20px;">
-        <div class="filter-section-header">
-          <div class="filter-section-icon" style="background: var(--m3-icon-maker-bg);">
-            <q-icon name="person" size="16px" color="orange" />
+        <div style="padding: 14px 20px">
+          <div class="filter-section-header">
+            <div class="filter-section-icon" style="background: var(--m3-icon-duplicate-bg)">
+              <q-icon name="content_copy" size="16px" color="pink" />
+            </div>
+            <span class="filter-section-title">Duplicate</span>
           </div>
-          <span class="filter-section-title">Makers</span>
-        </div>
-        <div v-if="makersLoading" class="text-center q-pa-xs">
-          <q-spinner-dots size="20px" color="primary" />
-        </div>
-        <div v-else>
-          <q-select
-            v-model="localFilter.makerIds"
-            :options="makerFilterOptions"
-            multiple
-            use-input
-            use-chips
-            input-debounce="300"
-            emit-value
-            map-options
-            option-value="id"
-            option-label="name"
-            @filter="onMakerFilter"
-            dense
-            outlined
-            placeholder="Search makers..."
-            virtual-scroll-item-size="32"
-            class="m3-select"
-          />
-        </div>
-      </div>
-      <div class="filter-divider"></div>
-
-      <div style="padding: 14px 20px;">
-        <div class="filter-section-header">
-          <div class="filter-section-icon" style="background: var(--m3-icon-genre-bg);">
-            <q-icon name="category" size="16px" color="blue" />
+          <div class="segmented-btn">
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.duplicate === 'all'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.duplicate = 'all'"
+            >
+              All
+            </div>
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.duplicate === 'yes'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.duplicate = 'yes'"
+            >
+              Has duplicate
+            </div>
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.duplicate === 'no'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.duplicate = 'no'"
+            >
+              No duplicate
+            </div>
           </div>
-          <span class="filter-section-title">Genres</span>
         </div>
-        <div v-if="genresLoading" class="text-center q-pa-xs">
-          <q-spinner-dots size="20px" color="primary" />
-        </div>
-        <div v-else>
-          <q-select
-            v-model="localFilter.genreIds"
-            :options="genres"
-            multiple
-            use-input
-            use-chips
-            input-debounce="300"
-            emit-value
-            map-options
-            option-value="id"
-            option-label="name"
-            @filter="onGenreFilter"
-            dense
-            outlined
-            placeholder="Search genres..."
-            virtual-scroll-item-size="32"
-            class="m3-select"
-          />
-        </div>
-      </div>
-      <div class="filter-divider"></div>
-
-      <div style="padding: 14px 20px;">
-        <div class="filter-section-header">
-          <div class="filter-section-icon" style="background: var(--m3-icon-tag-bg);">
-            <q-icon name="label" size="16px" color="teal" />
-          </div>
-          <span class="filter-section-title">Tags</span>
-        </div>
-        <div v-if="tagsLoading" class="text-center q-pa-xs">
-          <q-spinner-dots size="20px" color="primary" />
-        </div>
-        <div v-else>
-          <q-select
-            v-model="localFilter.tagIds"
-            :options="tagFilterOptions"
-            multiple
-            use-input
-            use-chips
-            input-debounce="300"
-            emit-value
-            map-options
-            option-value="id"
-            option-label="name"
-            @filter="onTagFilter"
-            dense
-            outlined
-            placeholder="Search tags..."
-            virtual-scroll-item-size="32"
-            class="m3-select"
-          />
-        </div>
-      </div>
-      <div class="filter-divider"></div>
-
-      <div style="padding: 14px 20px;">
-        <div class="filter-section-header">
-          <div class="filter-section-icon" style="background: var(--m3-icon-scraped-bg);">
-            <q-icon name="manage_search" size="16px" color="green" />
-          </div>
-          <span class="filter-section-title">Scrape Status</span>
-        </div>
-        <div class="segmented-btn">
-          <div
-            class="segmented-btn-item"
-            :class="localFilter.scraped === 'all' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
-            @click="localFilter.scraped = 'all'"
-          >All</div>
-          <div
-            class="segmented-btn-item"
-            :class="localFilter.scraped === 'yes' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
-            @click="localFilter.scraped = 'yes'"
-          >Scraped</div>
-          <div
-            class="segmented-btn-item"
-            :class="localFilter.scraped === 'no' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
-            @click="localFilter.scraped = 'no'"
-          >Not scraped</div>
-        </div>
-      </div>
-      <div class="filter-divider"></div>
-
-      <div style="padding: 14px 20px;">
-        <div class="filter-section-header">
-          <div class="filter-section-icon" style="background: var(--m3-icon-duplicate-bg);">
-            <q-icon name="content_copy" size="16px" color="pink" />
-          </div>
-          <span class="filter-section-title">Duplicate</span>
-        </div>
-        <div class="segmented-btn">
-          <div
-            class="segmented-btn-item"
-            :class="localFilter.duplicate === 'all' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
-            @click="localFilter.duplicate = 'all'"
-          >All</div>
-          <div
-            class="segmented-btn-item"
-            :class="localFilter.duplicate === 'yes' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
-            @click="localFilter.duplicate = 'yes'"
-          >Has duplicate</div>
-          <div
-            class="segmented-btn-item"
-            :class="localFilter.duplicate === 'no' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
-            @click="localFilter.duplicate = 'no'"
-          >No duplicate</div>
-        </div>
-      </div>
       </div>
 
-      <div style="padding: 12px 20px 16px; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; border-top: 1px solid var(--m3-outline-variant);">
+      <div
+        style="
+          padding: 12px 20px 16px;
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          flex-shrink: 0;
+          border-top: 1px solid var(--m3-outline-variant);
+        "
+      >
         <button class="m3-btn-outlined" @click="resetFilter">Reset</button>
         <button class="m3-btn-filled" @click="applyFilter">Apply</button>
       </div>
@@ -521,7 +624,15 @@ watch(
 );
 
 const resetFilter = () => {
-  localFilter.value = { libraryIds: [], noLibrary: false, makerIds: [], genreIds: [], tagIds: [], scraped: 'yes', duplicate: 'all' };
+  localFilter.value = {
+    libraryIds: [],
+    noLibrary: false,
+    makerIds: [],
+    genreIds: [],
+    tagIds: [],
+    scraped: 'yes',
+    duplicate: 'all',
+  };
 };
 
 const clearAllFilters = () => {

@@ -20,8 +20,8 @@
 
 ## File Structure
 
-| File | Action | Responsibility |
-|---|---|---|
+| File                              | Action | Responsibility                          |
+| --------------------------------- | ------ | --------------------------------------- |
 | `src/components/FilterDialog.vue` | Modify | All template, script, and style changes |
 
 ---
@@ -29,9 +29,11 @@
 ### Task 1: M3 CSS Variables + Section Header Component Pattern
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (style block + template)
 
 **Interfaces:**
+
 - Produces: CSS custom properties `--m3-primary`, `--m3-primary-container`, `--m3-on-primary-container`, `--m3-outline`, `--m3-outline-variant`, `--m3-on-surface`, `--m3-on-surface-variant` available to all subsequent tasks
 
 - [ ] **Step 1: Add M3 CSS variables to scoped style block**
@@ -99,9 +101,11 @@ git commit -m "feat(filter): add M3 CSS variables and section header classes"
 ### Task 2: Replace Title Bar with M3 Header
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (template)
 
 **Interfaces:**
+
 - Consumes: CSS vars from Task 1
 - Produces: M3-styled dialog header
 
@@ -121,7 +125,9 @@ With:
 
 ```html
 <div class="q-px-lg q-pt-md q-pb-sm" style="display: flex; align-items: center; gap: 10px;">
-  <div style="width: 36px; height: 36px; border-radius: 12px; background: var(--m3-primary-container); display: flex; align-items: center; justify-content: center;">
+  <div
+    style="width: 36px; height: 36px; border-radius: 12px; background: var(--m3-primary-container); display: flex; align-items: center; justify-content: center;"
+  >
     <q-icon name="tune" size="20px" color="primary" />
   </div>
   <span style="font-size: 18px; font-weight: 600; color: var(--m3-on-surface);">筛选器</span>
@@ -147,9 +153,11 @@ git commit -m "feat(filter): replace q-bar title with M3 header"
 ### Task 3: Add Active Filter Summary Area
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (template + script)
 
 **Interfaces:**
+
 - Consumes: `localFilter`, `libraries`, `makers`, `genres`, `tags` refs
 - Produces: `activeFilterChips` computed, `removeFilterChip()` method, `clearAllFilters()` method
 
@@ -182,41 +190,90 @@ const activeFilterChips = computed<FilterChip[]>(() => {
   for (const id of f.libraryIds) {
     const lib = libraries.value.find((l) => l.id === id);
     if (lib) {
-      chips.push({ key: `lib-${id}`, label: lib.name, color: CHIP_COLORS.library, remove: () => { localFilter.value.libraryIds = localFilter.value.libraryIds.filter((i) => i !== id); } });
+      chips.push({
+        key: `lib-${id}`,
+        label: lib.name,
+        color: CHIP_COLORS.library,
+        remove: () => {
+          localFilter.value.libraryIds = localFilter.value.libraryIds.filter((i) => i !== id);
+        },
+      });
     }
   }
 
   if (f.noLibrary) {
-    chips.push({ key: 'noLib', label: 'Dropped', color: CHIP_COLORS.noLibrary, remove: () => { localFilter.value.noLibrary = false; } });
+    chips.push({
+      key: 'noLib',
+      label: 'Dropped',
+      color: CHIP_COLORS.noLibrary,
+      remove: () => {
+        localFilter.value.noLibrary = false;
+      },
+    });
   }
 
   for (const id of f.makerIds) {
     const maker = makers.value.find((m) => m.id === id);
     if (maker) {
-      chips.push({ key: `maker-${id}`, label: maker.name, color: CHIP_COLORS.maker, remove: () => { localFilter.value.makerIds = localFilter.value.makerIds.filter((i) => i !== id); } });
+      chips.push({
+        key: `maker-${id}`,
+        label: maker.name,
+        color: CHIP_COLORS.maker,
+        remove: () => {
+          localFilter.value.makerIds = localFilter.value.makerIds.filter((i) => i !== id);
+        },
+      });
     }
   }
 
   for (const id of f.genreIds) {
     const genre = genres.value.find((g) => g.id === id);
     if (genre) {
-      chips.push({ key: `genre-${id}`, label: genre.name, color: CHIP_COLORS.genre, remove: () => { localFilter.value.genreIds = localFilter.value.genreIds.filter((i) => i !== id); } });
+      chips.push({
+        key: `genre-${id}`,
+        label: genre.name,
+        color: CHIP_COLORS.genre,
+        remove: () => {
+          localFilter.value.genreIds = localFilter.value.genreIds.filter((i) => i !== id);
+        },
+      });
     }
   }
 
   for (const id of f.tagIds) {
     const tag = tags.value.find((t) => t.id === id);
     if (tag) {
-      chips.push({ key: `tag-${id}`, label: tag.name, color: CHIP_COLORS.tag, remove: () => { localFilter.value.tagIds = localFilter.value.tagIds.filter((i) => i !== id); } });
+      chips.push({
+        key: `tag-${id}`,
+        label: tag.name,
+        color: CHIP_COLORS.tag,
+        remove: () => {
+          localFilter.value.tagIds = localFilter.value.tagIds.filter((i) => i !== id);
+        },
+      });
     }
   }
 
   if (f.scraped !== 'all') {
-    chips.push({ key: 'scraped', label: f.scraped === 'yes' ? '已抓取' : '未抓取', color: CHIP_COLORS.scraped, remove: () => { localFilter.value.scraped = 'all'; } });
+    chips.push({
+      key: 'scraped',
+      label: f.scraped === 'yes' ? '已抓取' : '未抓取',
+      color: CHIP_COLORS.scraped,
+      remove: () => {
+        localFilter.value.scraped = 'all';
+      },
+    });
   }
 
   if (f.duplicate !== 'all') {
-    chips.push({ key: 'duplicate', label: f.duplicate === 'yes' ? '有重复' : '无重复', color: CHIP_COLORS.duplicate, remove: () => { localFilter.value.duplicate = 'all'; } });
+    chips.push({
+      key: 'duplicate',
+      label: f.duplicate === 'yes' ? '有重复' : '无重复',
+      color: CHIP_COLORS.duplicate,
+      remove: () => {
+        localFilter.value.duplicate = 'all';
+      },
+    });
   }
 
   return chips;
@@ -232,8 +289,15 @@ const clearAllFilters = () => {
 Insert after the M3 header div (from Task 2), before `<q-card-section>`:
 
 ```html
-<div v-if="activeFilterChips.length > 0" class="q-px-lg q-pb-sm" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-  <span style="font-size: 11px; color: var(--m3-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;">已选:</span>
+<div
+  v-if="activeFilterChips.length > 0"
+  class="q-px-lg q-pb-sm"
+  style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;"
+>
+  <span
+    style="font-size: 11px; color: var(--m3-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;"
+    >已选:</span
+  >
   <span
     v-for="chip in activeFilterChips"
     :key="chip.key"
@@ -270,9 +334,11 @@ git commit -m "feat(filter): add active filter summary with removable chips"
 ### Task 4: Replace Libraries Checkboxes with Searchable Chip Toggle
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (template + style)
 
 **Interfaces:**
+
 - Consumes: `filteredLibraries` computed, `librarySearch` ref, `localFilter.libraryIds`, `localFilter.noLibrary`
 - Produces: Chip toggle UI for library selection
 
@@ -382,7 +448,12 @@ With:
         @click="toggleLibraryId(lib.id)"
       >
         {{ lib.name }}
-        <q-icon v-if="localFilter.libraryIds.includes(lib.id)" name="check" size="14px" style="margin-left: 4px;" />
+        <q-icon
+          v-if="localFilter.libraryIds.includes(lib.id)"
+          name="check"
+          size="14px"
+          style="margin-left: 4px;"
+        />
       </span>
       <span
         class="lib-chip-toggle"
@@ -392,7 +463,12 @@ With:
         Dropped
         <q-icon v-if="localFilter.noLibrary" name="check" size="14px" style="margin-left: 4px;" />
       </span>
-      <div v-if="filteredLibraries.length === 0" style="font-size: 12px; color: var(--m3-on-surface-variant);">无匹配</div>
+      <div
+        v-if="filteredLibraries.length === 0"
+        style="font-size: 12px; color: var(--m3-on-surface-variant);"
+      >
+        无匹配
+      </div>
     </div>
   </template>
 </div>
@@ -431,9 +507,11 @@ git commit -m "feat(filter): replace library checkboxes with searchable chip tog
 ### Task 5: Add Icon Headers to Makers/Genres/Tags Sections
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (template)
 
 **Interfaces:**
+
 - Consumes: CSS classes from Task 1
 - Produces: Icon + color block headers for each select section
 
@@ -607,9 +685,11 @@ git commit -m "feat(filter): add M3 icon headers to makers/genres/tags sections"
 ### Task 6: Replace Radio Groups with Segmented Buttons
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (template + style)
 
 **Interfaces:**
+
 - Consumes: `localFilter.scraped`, `localFilter.duplicate`
 - Produces: Segmented button UI for status filters
 
@@ -680,17 +760,23 @@ With:
       class="segmented-btn-item"
       :class="localFilter.scraped === 'all' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
       @click="localFilter.scraped = 'all'"
-    >全部</div>
+    >
+      全部
+    </div>
     <div
       class="segmented-btn-item"
       :class="localFilter.scraped === 'yes' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
       @click="localFilter.scraped = 'yes'"
-    >已抓取</div>
+    >
+      已抓取
+    </div>
     <div
       class="segmented-btn-item"
       :class="localFilter.scraped === 'no' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
       @click="localFilter.scraped = 'no'"
-    >未抓取</div>
+    >
+      未抓取
+    </div>
   </div>
 </div>
 <div class="filter-divider"></div>
@@ -724,17 +810,23 @@ With:
       class="segmented-btn-item"
       :class="localFilter.duplicate === 'all' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
       @click="localFilter.duplicate = 'all'"
-    >全部</div>
+    >
+      全部
+    </div>
     <div
       class="segmented-btn-item"
       :class="localFilter.duplicate === 'yes' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
       @click="localFilter.duplicate = 'yes'"
-    >有重复</div>
+    >
+      有重复
+    </div>
     <div
       class="segmented-btn-item"
       :class="localFilter.duplicate === 'no' ? 'segmented-btn-item--selected' : 'segmented-btn-item--unselected'"
       @click="localFilter.duplicate = 'no'"
-    >无重复</div>
+    >
+      无重复
+    </div>
   </div>
 </div>
 ```
@@ -756,9 +848,11 @@ git commit -m "feat(filter): replace radio groups with M3 segmented buttons"
 ### Task 7: M3 Pill Buttons for Bottom Actions
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (template + style)
 
 **Interfaces:**
+
 - Consumes: `resetFilter`, `applyFilter` methods
 - Produces: M3-styled pill action buttons
 
@@ -837,6 +931,7 @@ git commit -m "feat(filter): replace action buttons with M3 pill buttons"
 ### Task 8: Final Cleanup and Verification
 
 **Files:**
+
 - Modify: `src/components/FilterDialog.vue` (template cleanup)
 
 - [ ] **Step 1: Remove the outer `<q-card-section class="q-py-xs">` wrapper**
@@ -855,6 +950,7 @@ Expected: No errors
 - [ ] **Step 4: Full manual smoke test**
 
 Open the app, click Filter, verify:
+
 - M3 header with icon and "筛选器"
 - Active filter chips appear when filters selected, removable
 - Library chip toggle with search works

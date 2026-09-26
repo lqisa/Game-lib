@@ -21,7 +21,12 @@ router.get('/image', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=86400');
     res.send(Buffer.from(response.data));
   } catch (err) {
-    console.error('[proxy/image] ERROR:', err.message, err.response?.status, err.response?.headers?.['content-type']);
+    console.error(
+      '[proxy/image] ERROR:',
+      err.message,
+      err.response?.status,
+      err.response?.headers?.['content-type'],
+    );
     res.status(502).send({ error: 'Failed to proxy image' });
   }
 });

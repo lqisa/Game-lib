@@ -21,11 +21,13 @@
 ### Task 1: Electron IPC — Open Path for Relocate
 
 **Files:**
+
 - Modify: `src-electron/electron-main.ts`
 - Modify: `src-electron/electron-preload.ts`
 - Modify: `src/types/electron.d.ts`
 
 **Interfaces:**
+
 - Consumes: None (first task)
 - Produces: `window.electronAPI.openPathForRelocate(): Promise<string | null>`
 
@@ -82,9 +84,11 @@ git commit -m "feat: add openPathForRelocate IPC for folder/file picker"
 ### Task 2: Backend API — `PUT /games/:id/relocate`
 
 **Files:**
+
 - Modify: `server/routes/game.js`
 
 **Interfaces:**
+
 - Consumes: `ARCHIVE_EXTENSIONS` from `server/constants.js`, `db.knex` from `server/database/db.js`, `getGameDetail` from `server/database/db.js`
 - Produces: `PUT /games/:id/relocate` endpoint accepting `{ newPath: string }`, returning updated game detail
 
@@ -109,7 +113,10 @@ router.put('/:id/relocate', async (req, res, next) => {
       return res.status(400).send({ error: 'newPath is required' });
     }
 
-    const game = await db.knex('game').where({ id: Number(id) }).first();
+    const game = await db
+      .knex('game')
+      .where({ id: Number(id) })
+      .first();
     if (!game) {
       return res.status(404).send({ error: 'Game not found' });
     }
@@ -118,7 +125,11 @@ router.put('/:id/relocate', async (req, res, next) => {
     const normalizedNew = normalizePath(newPath);
 
     const currentFullPath = game.library_id
-      ? normalizePath((await db.knex('library').where({ id: game.library_id }).first())?.path || '') + '\\' + normalizePath(game.sub_path)
+      ? normalizePath(
+          (await db.knex('library').where({ id: game.library_id }).first())?.path || '',
+        ) +
+        '\\' +
+        normalizePath(game.sub_path)
       : normalizePath(game.sub_path);
 
     if (normalizedNew.toLowerCase() === currentFullPath.toLowerCase()) {
@@ -173,7 +184,9 @@ router.put('/:id/relocate', async (req, res, next) => {
         }
       } catch (moveErr) {
         if (sourceDrive !== destDrive && fs.existsSync(moveDest)) {
-          try { fs.rmSync(moveDest, { recursive: true, force: true }); } catch {}
+          try {
+            fs.rmSync(moveDest, { recursive: true, force: true });
+          } catch {}
         }
         return res.status(500).send({ error: `Failed to move files: ${moveErr.message}` });
       }
@@ -209,9 +222,11 @@ git commit -m "feat: add PUT /games/:id/relocate API endpoint"
 ### Task 3: Frontend — Detail Page Path Editing UI
 
 **Files:**
+
 - Modify: `src/pages/GameDetailPage.vue`
 
 **Interfaces:**
+
 - Consumes: `PUT /games/:id/relocate` API from Task 2, `window.electronAPI.openPathForRelocate()` from Task 1
 - Produces: Inline path editing with confirmation dialog on the Detail page
 
@@ -268,7 +283,20 @@ const submitEditPath = async () => {
 
   const srcExists = !!currentFullPath.value;
   const ext = newPath.split('.').pop()?.toLowerCase() || '';
-  const archiveExts = ['zip', '7z', 'rar', '001', '002', '003', '004', '005', '006', '007', '008', '009'];
+  const archiveExts = [
+    'zip',
+    '7z',
+    'rar',
+    '001',
+    '002',
+    '003',
+    '004',
+    '005',
+    '006',
+    '007',
+    '008',
+    '009',
+  ];
   const isArchive = archiveExts.includes(ext);
 
   let operation = 'update_only';
@@ -321,15 +349,7 @@ Replace the existing path display div (the one with `Path: {{ game.library ? ...
   >
     <q-tooltip>Open Directory</q-tooltip>
   </q-btn>
-  <q-btn
-    flat
-    round
-    dense
-    size="sm"
-    icon="edit"
-    color="grey-7"
-    @click="startEditPath"
-  >
+  <q-btn flat round dense size="sm" icon="edit" color="grey-7" @click="startEditPath">
     <q-tooltip>Edit Path</q-tooltip>
   </q-btn>
 </div>
@@ -372,13 +392,13 @@ Add these dialogs before the closing `</q-page>` tag, after the existing `Scrape
   <q-card>
     <q-card-section class="text-h6">Confirm Path Change</q-card-section>
     <q-card-section>
-      <div class="q-mb-sm">
-        <span class="text-grey">From: </span>{{ relocateInfo?.source }}
-      </div>
-      <div class="q-mb-md">
-        <span class="text-grey">To: </span>{{ relocateInfo?.target }}
-      </div>
-      <q-banner v-if="relocateInfo?.operation === 'move'" dense class="bg-blue-1 text-blue-9 rounded-borders">
+      <div class="q-mb-sm"><span class="text-grey">From: </span>{{ relocateInfo?.source }}</div>
+      <div class="q-mb-md"><span class="text-grey">To: </span>{{ relocateInfo?.target }}</div>
+      <q-banner
+        v-if="relocateInfo?.operation === 'move'"
+        dense
+        class="bg-blue-1 text-blue-9 rounded-borders"
+      >
         <template v-slot:avatar>
           <q-icon name="drive_file_move" color="blue" />
         </template>

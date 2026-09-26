@@ -30,6 +30,7 @@ Add a chip summary area below the title bar showing all active filters. Each chi
 ### 4. Libraries: Searchable Chip Toggle List (confirmed)
 
 Replace bare `q-checkbox` list with:
+
 - A search input at the top for filtering library names
 - Flat chip toggle list below — selected chips use filled background + border (M3 toggle chip), unselected use outline style
 - "Dropped" chip included with distinct styling
@@ -37,6 +38,7 @@ Replace bare `q-checkbox` list with:
 ### 5. Scrape Status / Duplicate: Segmented Button (confirmed)
 
 Replace bare `q-radio` groups with M3 segmented button (`q-btn-toggle`):
+
 - Three segments in a row with rounded container
 - Selected segment gets filled background (primary tint)
 - More compact and visually modern than radio
@@ -44,6 +46,7 @@ Replace bare `q-radio` groups with M3 segmented button (`q-btn-toggle`):
 ### 6. Section Grouping: Icon + Color Block Headers
 
 Each filter section gets:
+
 - A small icon in a rounded color-tinted container (e.g., 📁 for Libraries, 👤 for Makers, 🎮 for Genres, 🏷 for Tags, 🔍 for Scrape Status, 📋 for Duplicate)
 - Section title text next to the icon
 - Thin divider line between sections
@@ -107,15 +110,15 @@ No structural changes needed. The `FilterDialog` API (props/emits) stays the sam
 
 The `activeFilterChips` computed iterates over `localFilter`:
 
-| Filter Key | Condition | Chip Label | Chip Color |
-|---|---|---|---|
-| `libraryIds[i]` | id in array | Library name (lookup) | `#e8def8` |
-| `noLibrary` | `true` | "Dropped" | `#fce4ec` |
-| `makerIds[i]` | id in array | Maker name (lookup) | `#fff3e0` |
-| `genreIds[i]` | id in array | Genre name (lookup) | `#e3f2fd` |
-| `tagIds[i]` | id in array | Tag name (lookup) | `#e0f2f1` |
-| `scraped` | not `'all'` | "已抓取" / "未抓取" | `#e8f5e9` |
-| `duplicate` | not `'all'` | "有重复" / "无重复" | `#fce4ec` |
+| Filter Key      | Condition   | Chip Label            | Chip Color |
+| --------------- | ----------- | --------------------- | ---------- |
+| `libraryIds[i]` | id in array | Library name (lookup) | `#e8def8`  |
+| `noLibrary`     | `true`      | "Dropped"             | `#fce4ec`  |
+| `makerIds[i]`   | id in array | Maker name (lookup)   | `#fff3e0`  |
+| `genreIds[i]`   | id in array | Genre name (lookup)   | `#e3f2fd`  |
+| `tagIds[i]`     | id in array | Tag name (lookup)     | `#e0f2f1`  |
+| `scraped`       | not `'all'` | "已抓取" / "未抓取"   | `#e8f5e9`  |
+| `duplicate`     | not `'all'` | "有重复" / "无重复"   | `#fce4ec`  |
 
 Removing a chip calls the appropriate mutation on `localFilter` (splice from array, or reset to `'all'`).
 

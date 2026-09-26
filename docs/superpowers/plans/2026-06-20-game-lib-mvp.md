@@ -12,38 +12,39 @@
 
 ## 文件结构
 
-| 文件 | 职责 |
-|------|------|
-| `src-electron/main.js` | Electron 主进程入口，启动 Express + 创建窗口 |
-| `src-electron/preload.js` | contextBridge |
-| `server/app.js` | Express 应用配置 |
-| `server/database/db.js` | Knex 实例 + 数据访问层 |
-| `server/database/schema.js` | 建表 SQL |
-| `server/database/init.js` | 数据库初始化 |
-| `server/routes/index.js` | 路由汇总 |
-| `server/routes/library.js` | 游戏库 CRUD |
-| `server/routes/game.js` | 游戏 CRUD + 扫描 |
-| `server/routes/scraper.js` | 采集 API |
-| `server/routes/setting.js` | 设置 API |
-| `server/routes/cover.js` | 封面服务 |
-| `server/scraper/axios.js` | HTTP 客户端 |
-| `server/scraper/dlsite.js` | DLSite 爬虫 |
-| `server/scanner.js` | 目录扫描 |
-| `src/layouts/MainLayout.vue` | 主布局 |
-| `src/pages/GameLibPage.vue` | 游戏库主页 |
-| `src/pages/GameDetailPage.vue` | 游戏详情 |
-| `src/pages/SettingPage.vue` | 设置页 |
-| `src/components/GameCard.vue` | 游戏卡片 |
-| `src/components/ScannerDialog.vue` | 扫描采集弹窗 |
-| `src/composables/useApi.ts` | Axios 封装 |
-| `src/stores/game.ts` | Pinia 状态 |
-| `src/router/routes.ts` | 路由 |
+| 文件                               | 职责                                         |
+| ---------------------------------- | -------------------------------------------- |
+| `src-electron/main.js`             | Electron 主进程入口，启动 Express + 创建窗口 |
+| `src-electron/preload.js`          | contextBridge                                |
+| `server/app.js`                    | Express 应用配置                             |
+| `server/database/db.js`            | Knex 实例 + 数据访问层                       |
+| `server/database/schema.js`        | 建表 SQL                                     |
+| `server/database/init.js`          | 数据库初始化                                 |
+| `server/routes/index.js`           | 路由汇总                                     |
+| `server/routes/library.js`         | 游戏库 CRUD                                  |
+| `server/routes/game.js`            | 游戏 CRUD + 扫描                             |
+| `server/routes/scraper.js`         | 采集 API                                     |
+| `server/routes/setting.js`         | 设置 API                                     |
+| `server/routes/cover.js`           | 封面服务                                     |
+| `server/scraper/axios.js`          | HTTP 客户端                                  |
+| `server/scraper/dlsite.js`         | DLSite 爬虫                                  |
+| `server/scanner.js`                | 目录扫描                                     |
+| `src/layouts/MainLayout.vue`       | 主布局                                       |
+| `src/pages/GameLibPage.vue`        | 游戏库主页                                   |
+| `src/pages/GameDetailPage.vue`     | 游戏详情                                     |
+| `src/pages/SettingPage.vue`        | 设置页                                       |
+| `src/components/GameCard.vue`      | 游戏卡片                                     |
+| `src/components/ScannerDialog.vue` | 扫描采集弹窗                                 |
+| `src/composables/useApi.ts`        | Axios 封装                                   |
+| `src/stores/game.ts`               | Pinia 状态                                   |
+| `src/router/routes.ts`             | 路由                                         |
 
 ---
 
 ## 任务 1：Quasar Electron 项目初始化
 
 **文件：**
+
 - 修改：`package.json`
 - 创建：`quasar.config.ts`
 - 创建：`src-electron/main.js`
@@ -88,6 +89,7 @@ git commit -m "feat: init quasar electron project with dependencies"
 ## 任务 2：数据库层
 
 **文件：**
+
 - 创建：`server/database/schema.js`
 - 创建：`server/database/db.js`
 - 创建：`server/database/init.js`
@@ -96,238 +98,242 @@ git commit -m "feat: init quasar electron project with dependencies"
 
 ```javascript
 // server/database/schema.js
-const { knex } = require('./db')
+const { knex } = require('./db');
 
-const createSchema = () => knex.schema
-  .createTable('library', (table) => {
-    table.increments()
-    table.string('name').notNullable()
-    table.string('path').notNullable()
-  })
-  .createTable('maker', (table) => {
-    table.increments()
-    table.string('name').notNullable()
-    table.text('description')
-  })
-  .createTable('genre', (table) => {
-    table.increments()
-    table.string('name').notNullable()
-    table.text('description')
-  })
-  .createTable('tag', (table) => {
-    table.increments()
-    table.string('name').notNullable()
-    table.text('description')
-  })
-  .createTable('game', (table) => {
-    table.increments()
-    table.string('name').notNullable()
-    table.text('cover_path')
-    table.text('description')
-    table.integer('library_id').notNullable()
-    table.string('sub_path').notNullable()
-    table.dateTime('created_at').defaultTo(knex.fn.now())
-    table.dateTime('updated_at').defaultTo(knex.fn.now())
-    table.foreign('library_id').references('id').inTable('library').onDelete('CASCADE')
-  })
-  .createTable('game_maker', (table) => {
-    table.integer('game_id').notNullable()
-    table.integer('maker_id').notNullable()
-    table.primary(['game_id', 'maker_id'])
-    table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE')
-    table.foreign('maker_id').references('id').inTable('maker').onDelete('CASCADE')
-  })
-  .createTable('game_genre', (table) => {
-    table.integer('game_id').notNullable()
-    table.integer('genre_id').notNullable()
-    table.primary(['game_id', 'genre_id'])
-    table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE')
-    table.foreign('genre_id').references('id').inTable('genre').onDelete('CASCADE')
-  })
-  .createTable('game_tag', (table) => {
-    table.integer('game_id').notNullable()
-    table.integer('tag_id').notNullable()
-    table.primary(['game_id', 'tag_id'])
-    table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE')
-    table.foreign('tag_id').references('id').inTable('tag').onDelete('CASCADE')
-  })
-  .createTable('game_source', (table) => {
-    table.increments()
-    table.integer('game_id').notNullable()
-    table.string('source_type').notNullable()
-    table.string('source_id').notNullable()
-    table.text('source_url')
-    table.text('raw_data')
-    table.unique(['source_type', 'source_id'])
-    table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE')
-  })
-  .createTable('setting', (table) => {
-    table.string('key').primary()
-    table.text('value').notNullable()
-  })
+const createSchema = () =>
+  knex.schema
+    .createTable('library', (table) => {
+      table.increments();
+      table.string('name').notNullable();
+      table.string('path').notNullable();
+    })
+    .createTable('maker', (table) => {
+      table.increments();
+      table.string('name').notNullable();
+      table.text('description');
+    })
+    .createTable('genre', (table) => {
+      table.increments();
+      table.string('name').notNullable();
+      table.text('description');
+    })
+    .createTable('tag', (table) => {
+      table.increments();
+      table.string('name').notNullable();
+      table.text('description');
+    })
+    .createTable('game', (table) => {
+      table.increments();
+      table.string('name').notNullable();
+      table.text('cover_path');
+      table.text('description');
+      table.integer('library_id').notNullable();
+      table.string('sub_path').notNullable();
+      table.dateTime('created_at').defaultTo(knex.fn.now());
+      table.dateTime('updated_at').defaultTo(knex.fn.now());
+      table.foreign('library_id').references('id').inTable('library').onDelete('CASCADE');
+    })
+    .createTable('game_maker', (table) => {
+      table.integer('game_id').notNullable();
+      table.integer('maker_id').notNullable();
+      table.primary(['game_id', 'maker_id']);
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+      table.foreign('maker_id').references('id').inTable('maker').onDelete('CASCADE');
+    })
+    .createTable('game_genre', (table) => {
+      table.integer('game_id').notNullable();
+      table.integer('genre_id').notNullable();
+      table.primary(['game_id', 'genre_id']);
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+      table.foreign('genre_id').references('id').inTable('genre').onDelete('CASCADE');
+    })
+    .createTable('game_tag', (table) => {
+      table.integer('game_id').notNullable();
+      table.integer('tag_id').notNullable();
+      table.primary(['game_id', 'tag_id']);
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+      table.foreign('tag_id').references('id').inTable('tag').onDelete('CASCADE');
+    })
+    .createTable('game_source', (table) => {
+      table.increments();
+      table.integer('game_id').notNullable();
+      table.string('source_type').notNullable();
+      table.string('source_id').notNullable();
+      table.text('source_url');
+      table.text('raw_data');
+      table.unique(['source_type', 'source_id']);
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+    })
+    .createTable('setting', (table) => {
+      table.string('key').primary();
+      table.text('value').notNullable();
+    });
 
-module.exports = { createSchema }
+module.exports = { createSchema };
 ```
 
 - [ ] **步骤 2：创建 db.js**
 
 ```javascript
 // server/database/db.js
-const path = require('path')
-const fs = require('fs')
-const knex = require('knex')
+const path = require('path');
+const fs = require('fs');
+const knex = require('knex');
 
-const DB_DIR = path.join(__dirname, '..', '..', 'data')
-const DB_PATH = path.join(DB_DIR, 'db.sqlite3')
+const DB_DIR = path.join(__dirname, '..', '..', 'data');
+const DB_PATH = path.join(DB_DIR, 'db.sqlite3');
 
 if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true })
+  fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
 const db = knex({
   client: 'sqlite3',
   connection: { filename: DB_PATH },
-  useNullAsDefault: true
-})
+  useNullAsDefault: true,
+});
 
 const getGameDetail = async (id) => {
-  const game = await db('game').where({ id }).first()
-  if (!game) return null
+  const game = await db('game').where({ id }).first();
+  if (!game) return null;
 
   const makers = await db('game_maker')
     .join('maker', 'game_maker.maker_id', 'maker.id')
     .where('game_maker.game_id', id)
-    .select('maker.id', 'maker.name')
+    .select('maker.id', 'maker.name');
 
   const genres = await db('game_genre')
     .join('genre', 'game_genre.genre_id', 'genre.id')
     .where('game_genre.game_id', id)
-    .select('genre.id', 'genre.name')
+    .select('genre.id', 'genre.name');
 
   const tags = await db('game_tag')
     .join('tag', 'game_tag.tag_id', 'tag.id')
     .where('game_tag.game_id', id)
-    .select('tag.id', 'tag.name')
+    .select('tag.id', 'tag.name');
 
   const sources = await db('game_source')
     .where('game_id', id)
-    .select('id', 'source_type', 'source_id', 'source_url')
+    .select('id', 'source_type', 'source_id', 'source_url');
 
-  const library = await db('library').where({ id: game.library_id }).first()
+  const library = await db('library').where({ id: game.library_id }).first();
 
-  return { ...game, makers, genres, tags, sources, library }
-}
+  return { ...game, makers, genres, tags, sources, library };
+};
 
 const getGames = async ({ page = 1, pageSize = 50, keyword = '' }) => {
   let query = db('game')
     .leftJoin('library', 'game.library_id', 'library.id')
     .select('game.*', 'library.name as library_name', 'library.path as library_path')
-    .orderBy('game.updated_at', 'desc')
+    .orderBy('game.updated_at', 'desc');
 
   if (keyword) {
-    query = query.where('game.name', 'like', `%${keyword}%`)
+    query = query.where('game.name', 'like', `%${keyword}%`);
   }
 
-  const total = await query.clone().count('* as count').first()
-  const offset = (page - 1) * pageSize
-  const games = await query.offset(offset).limit(pageSize)
+  const total = await query.clone().count('* as count').first();
+  const offset = (page - 1) * pageSize;
+  const games = await query.offset(offset).limit(pageSize);
 
-  return { games, total: total.count, page, pageSize }
-}
+  return { games, total: total.count, page, pageSize };
+};
 
-const insertGame = async (data) => db('game').insert(data)
-const updateGame = async (id, data) => db('game').where({ id }).update({ ...data, updated_at: db.fn.now() })
-const deleteGame = async (id) => db('game').where({ id }).del()
-const batchDeleteGames = async (ids) => db('game').whereIn('id', ids).del()
-const insertLibrary = async (data) => db('library').insert(data)
-const getLibraries = async () => db('library').select('*')
-const updateLibrary = async (id, data) => db('library').where({ id }).update(data)
-const deleteLibrary = async (id) => db('library').where({ id }).del()
+const insertGame = async (data) => db('game').insert(data);
+const updateGame = async (id, data) =>
+  db('game')
+    .where({ id })
+    .update({ ...data, updated_at: db.fn.now() });
+const deleteGame = async (id) => db('game').where({ id }).del();
+const batchDeleteGames = async (ids) => db('game').whereIn('id', ids).del();
+const insertLibrary = async (data) => db('library').insert(data);
+const getLibraries = async () => db('library').select('*');
+const updateLibrary = async (id, data) => db('library').where({ id }).update(data);
+const deleteLibrary = async (id) => db('library').where({ id }).del();
 
 const getSetting = async (key) => {
-  const row = await db('setting').where({ key }).first()
-  return row ? row.value : null
-}
+  const row = await db('setting').where({ key }).first();
+  return row ? row.value : null;
+};
 
 const setSetting = async (key, value) => {
-  return db('setting').insert({ key, value }).onConflict('key').merge()
-}
+  return db('setting').insert({ key, value }).onConflict('key').merge();
+};
 
 const getAllSettings = async () => {
-  const rows = await db('setting').select('*')
-  const settings = {}
+  const rows = await db('setting').select('*');
+  const settings = {};
   for (const row of rows) {
-    settings[row.key] = row.value
+    settings[row.key] = row.value;
   }
-  return settings
-}
+  return settings;
+};
 
 const insertGameSource = async (data) => {
-  return db('game_source').insert(data).onConflict(['source_type', 'source_id']).merge()
-}
+  return db('game_source').insert(data).onConflict(['source_type', 'source_id']).merge();
+};
 
 const insertMakers = async (names) => {
-  const results = []
+  const results = [];
   for (const name of names) {
-    const existing = await db('maker').where({ name }).first()
+    const existing = await db('maker').where({ name }).first();
     if (existing) {
-      results.push(existing.id)
+      results.push(existing.id);
     } else {
-      const [id] = await db('maker').insert({ name })
-      results.push(id)
+      const [id] = await db('maker').insert({ name });
+      results.push(id);
     }
   }
-  return results
-}
+  return results;
+};
 
 const insertGenres = async (names) => {
-  const results = []
+  const results = [];
   for (const name of names) {
-    const existing = await db('genre').where({ name }).first()
+    const existing = await db('genre').where({ name }).first();
     if (existing) {
-      results.push(existing.id)
+      results.push(existing.id);
     } else {
-      const [id] = await db('genre').insert({ name })
-      results.push(id)
+      const [id] = await db('genre').insert({ name });
+      results.push(id);
     }
   }
-  return results
-}
+  return results;
+};
 
 const insertTags = async (names) => {
-  const results = []
+  const results = [];
   for (const name of names) {
-    const existing = await db('tag').where({ name }).first()
+    const existing = await db('tag').where({ name }).first();
     if (existing) {
-      results.push(existing.id)
+      results.push(existing.id);
     } else {
-      const [id] = await db('tag').insert({ name })
-      results.push(id)
+      const [id] = await db('tag').insert({ name });
+      results.push(id);
     }
   }
-  return results
-}
+  return results;
+};
 
 const syncGameMakers = async (gameId, makerIds) => {
-  await db('game_maker').where({ game_id: gameId }).del()
+  await db('game_maker').where({ game_id: gameId }).del();
   if (makerIds.length > 0) {
-    await db('game_maker').insert(makerIds.map(m => ({ game_id: gameId, maker_id: m })))
+    await db('game_maker').insert(makerIds.map((m) => ({ game_id: gameId, maker_id: m })));
   }
-}
+};
 
 const syncGameGenres = async (gameId, genreIds) => {
-  await db('game_genre').where({ game_id: gameId }).del()
+  await db('game_genre').where({ game_id: gameId }).del();
   if (genreIds.length > 0) {
-    await db('game_genre').insert(genreIds.map(g => ({ game_id: gameId, genre_id: g })))
+    await db('game_genre').insert(genreIds.map((g) => ({ game_id: gameId, genre_id: g })));
   }
-}
+};
 
 const syncGameTags = async (gameId, tagIds) => {
-  await db('game_tag').where({ game_id: gameId }).del()
+  await db('game_tag').where({ game_id: gameId }).del();
   if (tagIds.length > 0) {
-    await db('game_tag').insert(tagIds.map(t => ({ game_id: gameId, tag_id: t })))
+    await db('game_tag').insert(tagIds.map((t) => ({ game_id: gameId, tag_id: t })));
   }
-}
+};
 
 module.exports = {
   knex: db,
@@ -350,34 +356,34 @@ module.exports = {
   insertTags,
   syncGameMakers,
   syncGameGenres,
-  syncGameTags
-}
+  syncGameTags,
+};
 ```
 
 - [ ] **步骤 3：创建 init.js**
 
 ```javascript
 // server/database/init.js
-const fs = require('fs')
-const path = require('path')
-const { knex } = require('./db')
-const { createSchema } = require('./schema')
+const fs = require('fs');
+const path = require('path');
+const { knex } = require('./db');
+const { createSchema } = require('./schema');
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'db.sqlite3')
+const DB_PATH = path.join(__dirname, '..', '..', 'data', 'db.sqlite3');
 
 const initDatabase = async () => {
-  const dbExists = fs.existsSync(DB_PATH)
+  const dbExists = fs.existsSync(DB_PATH);
 
   if (!dbExists) {
-    console.log(' * 数据库不存在，正在创建...')
-    await createSchema()
-    console.log(' * 数据库创建完成.')
+    console.log(' * 数据库不存在，正在创建...');
+    await createSchema();
+    console.log(' * 数据库创建完成.');
   } else {
-    console.log(' * 数据库已存在.')
+    console.log(' * 数据库已存在.');
   }
-}
+};
 
-module.exports = { initDatabase }
+module.exports = { initDatabase };
 ```
 
 - [ ] **步骤 4：验证数据库初始化**
@@ -412,6 +418,7 @@ git commit -m "feat: add database layer with schema, db access and init"
 ## 任务 3：Express 服务器 + 主进程集成
 
 **文件：**
+
 - 创建：`server/app.js`
 - 创建：`server/routes/index.js`
 - 创建：`server/routes/library.js`（占位）
@@ -425,82 +432,85 @@ git commit -m "feat: add database layer with schema, db access and init"
 
 ```javascript
 // server/app.js
-const express = require('express')
-const bodyParser = require('body-parser')
-const path = require('path')
-const routes = require('./routes')
+const express = require('express');
+const bodyParser = require('body-parser');
+const path = require('path');
+const routes = require('./routes');
 
 const createApp = () => {
-  const app = express()
+  const app = express();
 
-  app.use(bodyParser.json())
-  app.use(bodyParser.urlencoded({ extended: true }))
+  app.use(bodyParser.json());
+  app.use(bodyParser.urlencoded({ extended: true }));
 
-  app.use('/api', routes)
+  app.use('/api', routes);
 
-  const coversDir = path.join(__dirname, '..', 'data', 'covers')
+  const coversDir = path.join(__dirname, '..', 'data', 'covers');
   if (!require('fs').existsSync(coversDir)) {
-    require('fs').mkdirSync(coversDir, { recursive: true })
+    require('fs').mkdirSync(coversDir, { recursive: true });
   }
-  app.use('/covers', express.static(coversDir))
+  app.use('/covers', express.static(coversDir));
 
-  return app
-}
+  return app;
+};
 
-module.exports = { createApp }
+module.exports = { createApp };
 ```
 
 - [ ] **步骤 2：创建路由汇总**
 
 ```javascript
 // server/routes/index.js
-const express = require('express')
-const router = express.Router()
+const express = require('express');
+const router = express.Router();
 
-router.use('/libraries', require('./library'))
-router.use('/games', require('./game'))
-router.use('/scraper', require('./scraper'))
-router.use('/settings', require('./setting'))
-router.use('/cover', require('./cover'))
+router.use('/libraries', require('./library'));
+router.use('/games', require('./game'));
+router.use('/scraper', require('./scraper'));
+router.use('/settings', require('./setting'));
+router.use('/cover', require('./cover'));
 
 router.get('/health', (req, res) => {
-  res.send({ status: 'ok' })
-})
+  res.send({ status: 'ok' });
+});
 
-module.exports = router
+module.exports = router;
 ```
 
 - [ ] **步骤 3：创建占位路由文件（5 个）**
 
 每个都是：
+
 ```javascript
 // server/routes/library.js  (同样模式用于 game.js, scraper.js, setting.js, cover.js)
-const express = require('express')
-const router = express.Router()
-module.exports = router
+const express = require('express');
+const router = express.Router();
+module.exports = router;
 ```
 
 - [ ] **步骤 4：修改 Electron 主进程**
 
 ```javascript
 // src-electron/main.js
-import { app, BrowserWindow } from 'electron'
-import path from 'path'
+import { app, BrowserWindow } from 'electron';
+import path from 'path';
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname)
+const __dirname = path.dirname(new URL(import.meta.url).pathname);
 
-let mainWindow
+let mainWindow;
 
 async function createWindow() {
-  const { createApp } = await import(path.resolve(__dirname, '..', '..', 'server', 'app.js'))
-  const { initDatabase } = await import(path.resolve(__dirname, '..', '..', 'server', 'database', 'init.js'))
+  const { createApp } = await import(path.resolve(__dirname, '..', '..', 'server', 'app.js'));
+  const { initDatabase } = await import(
+    path.resolve(__dirname, '..', '..', 'server', 'database', 'init.js')
+  );
 
-  await initDatabase()
+  await initDatabase();
 
-  const expressApp = createApp()
+  const expressApp = createApp();
   const server = expressApp.listen(0, '127.0.0.1', () => {
-    const port = server.address().port
-    console.log(`Express server running on http://127.0.0.1:${port}`)
+    const port = server.address().port;
+    console.log(`Express server running on http://127.0.0.1:${port}`);
 
     mainWindow = new BrowserWindow({
       width: 1200,
@@ -508,28 +518,28 @@ async function createWindow() {
       webPreferences: {
         preload: path.resolve(__dirname, 'preload.js'),
         contextIsolation: true,
-        nodeIntegration: false
-      }
-    })
+        nodeIntegration: false,
+      },
+    });
 
-    mainWindow.loadURL(`http://127.0.0.1:${port}`)
+    mainWindow.loadURL(`http://127.0.0.1:${port}`);
     mainWindow.on('closed', () => {
-      mainWindow = null
-    })
-  })
+      mainWindow = null;
+    });
+  });
 }
 
-app.on('ready', createWindow)
+app.on('ready', createWindow);
 
 app.on('window-all-closed', () => {
-  app.quit()
-})
+  app.quit();
+});
 
 app.on('activate', () => {
   if (mainWindow === null) {
-    createWindow()
+    createWindow();
   }
-})
+});
 ```
 
 > 注意：Quasar Electron 的 main.js 是 ESM 格式。如果 `require()` 报错，改用 `import()` 动态导入。
@@ -556,60 +566,61 @@ git commit -m "feat: add express server and electron main process integration"
 ## 任务 4：游戏库 CRUD API
 
 **文件：**
+
 - 修改：`server/routes/library.js`
 
 - [ ] **步骤 1：实现游戏库路由**
 
 ```javascript
 // server/routes/library.js
-const express = require('express')
-const router = express.Router()
-const db = require('../database/db')
+const express = require('express');
+const router = express.Router();
+const db = require('../database/db');
 
 router.get('/', async (req, res, next) => {
   try {
-    const libraries = await db.getLibraries()
-    res.send(libraries)
+    const libraries = await db.getLibraries();
+    res.send(libraries);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, path } = req.body
+    const { name, path } = req.body;
     if (!name || !path) {
-      return res.status(400).send({ error: 'name 和 path 为必填项' })
+      return res.status(400).send({ error: 'name 和 path 为必填项' });
     }
-    const [id] = await db.insertLibrary({ name, path })
-    const library = await db.knex('library').where({ id }).first()
-    res.send(library)
+    const [id] = await db.insertLibrary({ name, path });
+    const library = await db.knex('library').where({ id }).first();
+    res.send(library);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, path } = req.body
-    await db.updateLibrary(req.params.id, { name, path })
-    const library = await db.knex('library').where({ id: req.params.id }).first()
-    res.send(library)
+    const { name, path } = req.body;
+    await db.updateLibrary(req.params.id, { name, path });
+    const library = await db.knex('library').where({ id: req.params.id }).first();
+    res.send(library);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    await db.deleteLibrary(req.params.id)
-    res.send({ message: '删除成功' })
+    await db.deleteLibrary(req.params.id);
+    res.send({ message: '删除成功' });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
-module.exports = router
+module.exports = router;
 ```
 
 - [ ] **步骤 2：手动测试 API**
@@ -634,6 +645,7 @@ git commit -m "feat: add library CRUD API"
 ## 任务 5：目录扫描 + 游戏 CRUD API
 
 **文件：**
+
 - 创建：`server/scanner.js`
 - 修改：`server/routes/game.js`
 
@@ -641,128 +653,124 @@ git commit -m "feat: add library CRUD API"
 
 ```javascript
 // server/scanner.js
-const fs = require('fs')
+const fs = require('fs');
 
 const scanLibrary = (libraryPath) => {
   if (!fs.existsSync(libraryPath)) {
-    return []
+    return [];
   }
-  const entries = fs.readdirSync(libraryPath, { withFileTypes: true })
-  return entries
-    .filter(entry => entry.isDirectory())
-    .map(entry => entry.name)
-}
+  const entries = fs.readdirSync(libraryPath, { withFileTypes: true });
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+};
 
-module.exports = { scanLibrary }
+module.exports = { scanLibrary };
 ```
 
 - [ ] **步骤 2：实现游戏路由**
 
 ```javascript
 // server/routes/game.js
-const express = require('express')
-const router = express.Router()
-const db = require('../database/db')
-const { scanLibrary } = require('../scanner')
+const express = require('express');
+const router = express.Router();
+const db = require('../database/db');
+const { scanLibrary } = require('../scanner');
 
 router.get('/', async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1
-    const pageSize = parseInt(req.query.pageSize) || 50
-    const keyword = req.query.keyword || ''
-    const result = await db.getGames({ page, pageSize, keyword })
-    res.send(result)
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 50;
+    const keyword = req.query.keyword || '';
+    const result = await db.getGames({ page, pageSize, keyword });
+    res.send(result);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const game = await db.getGameDetail(req.params.id)
+    const game = await db.getGameDetail(req.params.id);
     if (!game) {
-      return res.status(404).send({ error: '游戏不存在' })
+      return res.status(404).send({ error: '游戏不存在' });
     }
-    res.send(game)
+    res.send(game);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, description, cover_path } = req.body
-    await db.updateGame(req.params.id, { name, description, cover_path })
-    const game = await db.getGameDetail(req.params.id)
-    res.send(game)
+    const { name, description, cover_path } = req.body;
+    await db.updateGame(req.params.id, { name, description, cover_path });
+    const game = await db.getGameDetail(req.params.id);
+    res.send(game);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    await db.deleteGame(req.params.id)
-    res.send({ message: '删除成功' })
+    await db.deleteGame(req.params.id);
+    res.send({ message: '删除成功' });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/batch-delete', async (req, res, next) => {
   try {
-    const { ids } = req.body
+    const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).send({ error: 'ids 为必填数组' })
+      return res.status(400).send({ error: 'ids 为必填数组' });
     }
-    await db.batchDeleteGames(ids)
-    res.send({ message: '批量删除成功' })
+    await db.batchDeleteGames(ids);
+    res.send({ message: '批量删除成功' });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/scan', async (req, res, next) => {
   try {
-    const { libraryId } = req.body
+    const { libraryId } = req.body;
     if (!libraryId) {
-      return res.status(400).send({ error: 'libraryId 为必填项' })
+      return res.status(400).send({ error: 'libraryId 为必填项' });
     }
-    const library = await db.knex('library').where({ id: libraryId }).first()
+    const library = await db.knex('library').where({ id: libraryId }).first();
     if (!library) {
-      return res.status(404).send({ error: '游戏库不存在' })
+      return res.status(404).send({ error: '游戏库不存在' });
     }
-    const dirs = scanLibrary(library.path)
-    const existing = await db.knex('game')
-      .where({ library_id: libraryId })
-      .select('sub_path')
-    const existingPaths = new Set(existing.map(g => g.sub_path))
-    const newDirs = dirs.filter(d => !existingPaths.has(d))
-    res.send({ library, dirs, newDirs })
+    const dirs = scanLibrary(library.path);
+    const existing = await db.knex('game').where({ library_id: libraryId }).select('sub_path');
+    const existingPaths = new Set(existing.map((g) => g.sub_path));
+    const newDirs = dirs.filter((d) => !existingPaths.has(d));
+    res.send({ library, dirs, newDirs });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/scan/add', async (req, res, next) => {
   try {
-    const { libraryId, dirs } = req.body
+    const { libraryId, dirs } = req.body;
     if (!libraryId || !Array.isArray(dirs)) {
-      return res.status(400).send({ error: 'libraryId 和 dirs 为必填项' })
+      return res.status(400).send({ error: 'libraryId 和 dirs 为必填项' });
     }
-    const games = dirs.map(dir => ({
+    const games = dirs.map((dir) => ({
       name: dir,
       library_id: libraryId,
-      sub_path: dir
-    }))
-    await db.knex('game').insert(games)
-    res.send({ message: `成功添加 ${games.length} 个游戏` })
+      sub_path: dir,
+    }));
+    await db.knex('game').insert(games);
+    res.send({ message: `成功添加 ${games.length} 个游戏` });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
-module.exports = router
+module.exports = router;
 ```
 
 - [ ] **步骤 3：手动测试扫描和游戏 API**
@@ -786,6 +794,7 @@ git commit -m "feat: add scanner and game CRUD API"
 ## 任务 6：设置 API + 封面服务
 
 **文件：**
+
 - 修改：`server/routes/setting.js`
 - 修改：`server/routes/cover.js`
 - 创建：`server/static/no-cover.png`
@@ -794,68 +803,68 @@ git commit -m "feat: add scanner and game CRUD API"
 
 ```javascript
 // server/routes/setting.js
-const express = require('express')
-const router = express.Router()
-const db = require('../database/db')
+const express = require('express');
+const router = express.Router();
+const db = require('../database/db');
 
 router.get('/', async (req, res, next) => {
   try {
-    const settings = await db.getAllSettings()
-    res.send(settings)
+    const settings = await db.getAllSettings();
+    res.send(settings);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.put('/', async (req, res, next) => {
   try {
     for (const [key, value] of Object.entries(req.body)) {
-      await db.setSetting(key, String(value))
+      await db.setSetting(key, String(value));
     }
-    const settings = await db.getAllSettings()
-    res.send(settings)
+    const settings = await db.getAllSettings();
+    res.send(settings);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
-module.exports = router
+module.exports = router;
 ```
 
 - [ ] **步骤 2：实现封面路由**
 
 ```javascript
 // server/routes/cover.js
-const express = require('express')
-const router = express.Router()
-const path = require('path')
-const fs = require('fs')
-const db = require('../database/db')
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+const db = require('../database/db');
 
-const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers')
+const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers');
 
 if (!fs.existsSync(COVERS_DIR)) {
-  fs.mkdirSync(COVERS_DIR, { recursive: true })
+  fs.mkdirSync(COVERS_DIR, { recursive: true });
 }
 
 router.get('/:id', async (req, res) => {
-  const game = await db.knex('game').where({ id: req.params.id }).first()
+  const game = await db.knex('game').where({ id: req.params.id }).first();
   if (!game || !game.cover_path) {
-    return res.sendFile(path.join(__dirname, '..', 'static', 'no-cover.png'))
+    return res.sendFile(path.join(__dirname, '..', 'static', 'no-cover.png'));
   }
 
   const coverPath = path.isAbsolute(game.cover_path)
     ? game.cover_path
-    : path.join(COVERS_DIR, game.cover_path)
+    : path.join(COVERS_DIR, game.cover_path);
 
   if (fs.existsSync(coverPath)) {
-    res.sendFile(coverPath)
+    res.sendFile(coverPath);
   } else {
-    res.sendFile(path.join(__dirname, '..', 'static', 'no-cover.png'))
+    res.sendFile(path.join(__dirname, '..', 'static', 'no-cover.png'));
   }
-})
+});
 
-module.exports = router
+module.exports = router;
 ```
 
 - [ ] **步骤 3：创建默认封面占位图**
@@ -879,6 +888,7 @@ git commit -m "feat: add settings API and cover serving"
 ## 任务 7：DLSite 爬虫
 
 **文件：**
+
 - 创建：`server/scraper/axios.js`
 - 创建：`server/scraper/dlsite.js`
 
@@ -886,110 +896,121 @@ git commit -m "feat: add settings API and cover serving"
 
 ```javascript
 // server/scraper/axios.js
-const axios = require('axios')
+const axios = require('axios');
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const retryGet = async (url, options = {}, retries = 3) => {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await axios.get(url, {
         timeout: 15000,
-        ...options
-      })
-      return response
+        ...options,
+      });
+      return response;
     } catch (err) {
-      if (i === retries - 1) throw err
-      await sleep(1000 * (i + 1))
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
     }
   }
-}
+};
 
-module.exports = { retryGet }
+module.exports = { retryGet };
 ```
 
 - [ ] **步骤 2：创建 DLSite 爬虫**
 
 ```javascript
 // server/scraper/dlsite.js
-const cheerio = require('cheerio')
-const { retryGet } = require('./axios')
+const cheerio = require('cheerio');
+const { retryGet } = require('./axios');
 
 const searchDLSite = async (keyword) => {
-  const url = `https://www.dlsite.com/maniax/fsr/=/keyword/${encodeURIComponent(keyword)}/work_category%5B0%5D/%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0/order%5B%5D/trend`
+  const url = `https://www.dlsite.com/maniax/fsr/=/keyword/${encodeURIComponent(keyword)}/work_category%5B0%5D/%E5%90%8C%E4%BA%BA%E3%82%B2%E3%83%BC%E3%83%A0/order%5B%5D/trend`;
   const response = await retryGet(url, {
-    headers: { cookie: 'locale=zh-cn' }
-  })
-  const $ = cheerio.load(response.data)
-  const results = []
+    headers: { cookie: 'locale=zh-cn' },
+  });
+  const $ = cheerio.load(response.data);
+  const results = [];
 
   $('table.work_1col tr').each((_, el) => {
-    const titleEl = $(el).find('.work_name a')
-    const name = titleEl.text().trim()
-    const href = titleEl.attr('href') || ''
-    const rjMatch = href.match(/RJ(\d+)/)
+    const titleEl = $(el).find('.work_name a');
+    const name = titleEl.text().trim();
+    const href = titleEl.attr('href') || '';
+    const rjMatch = href.match(/RJ(\d+)/);
     if (name && rjMatch) {
-      const rjcode = rjMatch[1]
-      const makerEl = $(el).find('.maker_name a')
-      const makerName = makerEl.text().trim()
-      results.push({ rjcode, name, makerName })
+      const rjcode = rjMatch[1];
+      const makerEl = $(el).find('.maker_name a');
+      const makerName = makerEl.text().trim();
+      results.push({ rjcode, name, makerName });
     }
-  })
+  });
 
-  return results
-}
+  return results;
+};
 
 const fetchDLSiteDetail = async (rjcode) => {
-  const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html`
+  const url = `https://www.dlsite.com/maniax/work/=/product_id/RJ${rjcode}.html`;
   const response = await retryGet(url, {
-    headers: { cookie: 'locale=zh-cn' }
-  })
-  const $ = cheerio.load(response.data)
+    headers: { cookie: 'locale=zh-cn' },
+  });
+  const $ = cheerio.load(response.data);
 
-  const work = { id: rjcode, tags: [], genres: [], makers: [] }
+  const work = { id: rjcode, tags: [], genres: [], makers: [] };
 
-  const title = $('meta[property="og:title"]').attr('content')
-  work.title = title ? title.replace(/ \[.+\] \| DLsite$/, '') : ''
+  const title = $('meta[property="og:title"]').attr('content');
+  work.title = title ? title.replace(/ \[.+\] \| DLsite$/, '') : '';
 
-  const candidateStr = $('.work_slider_container .slider_item.active img-with-fallback').attr(':candidates')
+  const candidateStr = $('.work_slider_container .slider_item.active img-with-fallback').attr(
+    ':candidates',
+  );
   const imgList = candidateStr
-    ? candidateStr.replace(/[['\\]\\s]/g, '').split(',').filter(Boolean)
-    : []
-  const fallbackImg = $("meta[itemprop='image']").attr('content') || ''
-  let coverURL = ''
+    ? candidateStr
+        .replace(/[['\\]\\s]/g, '')
+        .split(',')
+        .filter(Boolean)
+    : [];
+  const fallbackImg = $("meta[itemprop='image']").attr('content') || '';
+  let coverURL = '';
   if (imgList.length > 0) {
-    coverURL = imgList[0].startsWith('//') ? `https:${imgList[0]}` : imgList[0]
+    coverURL = imgList[0].startsWith('//') ? `https:${imgList[0]}` : imgList[0];
   } else if (fallbackImg) {
-    coverURL = fallbackImg.startsWith('//') ? `https:${fallbackImg}` : fallbackImg
+    coverURL = fallbackImg.startsWith('//') ? `https:${fallbackImg}` : fallbackImg;
   }
-  work.coverURL = coverURL
+  work.coverURL = coverURL;
 
-  const circleEl = $('span[class="maker_name"]').children('a')
-  const circleName = circleEl.text().trim()
+  const circleEl = $('span[class="maker_name"]').children('a');
+  const circleName = circleEl.text().trim();
   if (circleName) {
-    work.makers.push(circleName)
+    work.makers.push(circleName);
   }
 
   $('th').each((_, el) => {
-    const label = $(el).text().trim()
+    const label = $(el).text().trim();
     if (label === '分类') {
-      $(el).next('td').find('a').each((_, a) => {
-        work.genres.push($(a).text().trim())
-      })
+      $(el)
+        .next('td')
+        .find('a')
+        .each((_, a) => {
+          work.genres.push($(a).text().trim());
+        });
     }
     if (label === '标签') {
-      $(el).next('td').find('a').each((_, a) => {
-        work.tags.push($(a).text().trim())
-      })
+      $(el)
+        .next('td')
+        .find('a')
+        .each((_, a) => {
+          work.tags.push($(a).text().trim());
+        });
     }
-  })
+  });
 
-  work.description = $('.work_parts_container .work_parts .work_text').text().trim()
+  work.description = $('.work_parts_container .work_parts .work_text').text().trim();
 
-  return work
-}
+  return work;
+};
 
-module.exports = { searchDLSite, fetchDLSiteDetail }
+module.exports = { searchDLSite, fetchDLSiteDetail };
 ```
 
 - [ ] **步骤 3：手动测试爬虫**
@@ -1014,137 +1035,146 @@ git commit -m "feat: add DLSite scraper with search and detail fetch"
 ## 任务 8：采集 API
 
 **文件：**
+
 - 修改：`server/routes/scraper.js`
 
 - [ ] **步骤 1：实现采集路由**
 
 ```javascript
 // server/routes/scraper.js
-const express = require('express')
-const router = express.Router()
-const path = require('path')
-const fs = require('fs')
-const axios = require('axios')
-const db = require('../database/db')
-const { searchDLSite, fetchDLSiteDetail } = require('../scraper/dlsite')
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+const axios = require('axios');
+const db = require('../database/db');
+const { searchDLSite, fetchDLSiteDetail } = require('../scraper/dlsite');
 
-const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers')
+const COVERS_DIR = path.join(__dirname, '..', '..', 'data', 'covers');
 
 if (!fs.existsSync(COVERS_DIR)) {
-  fs.mkdirSync(COVERS_DIR, { recursive: true })
+  fs.mkdirSync(COVERS_DIR, { recursive: true });
 }
 
 router.post('/dlsite/search', async (req, res, next) => {
   try {
-    const { keyword } = req.body
+    const { keyword } = req.body;
     if (!keyword) {
-      return res.status(400).send({ error: 'keyword 为必填项' })
+      return res.status(400).send({ error: 'keyword 为必填项' });
     }
-    const results = await searchDLSite(keyword)
-    res.send(results)
+    const results = await searchDLSite(keyword);
+    res.send(results);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/dlsite/fetch', async (req, res, next) => {
   try {
-    const { rjcode } = req.body
+    const { rjcode } = req.body;
     if (!rjcode) {
-      return res.status(400).send({ error: 'rjcode 为必填项' })
+      return res.status(400).send({ error: 'rjcode 为必填项' });
     }
-    const detail = await fetchDLSiteDetail(rjcode)
-    res.send(detail)
+    const detail = await fetchDLSiteDetail(rjcode);
+    res.send(detail);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/dlsite/batch', async (req, res, next) => {
   try {
-    const { games } = req.body
+    const { games } = req.body;
     if (!Array.isArray(games)) {
-      return res.status(400).send({ error: 'games 为必填数组' })
+      return res.status(400).send({ error: 'games 为必填数组' });
     }
-    const results = []
+    const results = [];
     for (const game of games) {
       try {
-        const keyword = game.keyword || game.name
-        const searchResults = await searchDLSite(keyword)
+        const keyword = game.keyword || game.name;
+        const searchResults = await searchDLSite(keyword);
         if (searchResults.length > 0) {
-          const detail = await fetchDLSiteDetail(searchResults[0].rjcode)
-          results.push({ gameId: game.id, success: true, data: detail })
+          const detail = await fetchDLSiteDetail(searchResults[0].rjcode);
+          results.push({ gameId: game.id, success: true, data: detail });
         } else {
-          results.push({ gameId: game.id, success: false, error: '未找到结果' })
+          results.push({ gameId: game.id, success: false, error: '未找到结果' });
         }
       } catch (err) {
-        results.push({ gameId: game.id, success: false, error: err.message })
+        results.push({ gameId: game.id, success: false, error: err.message });
       }
     }
-    res.send(results)
+    res.send(results);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/adopt', async (req, res, next) => {
   try {
     const {
-      gameId, sourceType, sourceId, sourceUrl,
-      name, coverUrl, makers, genres, tags, description
-    } = req.body
+      gameId,
+      sourceType,
+      sourceId,
+      sourceUrl,
+      name,
+      coverUrl,
+      makers,
+      genres,
+      tags,
+      description,
+    } = req.body;
 
     if (!gameId || !sourceType || !sourceId) {
-      return res.status(400).send({ error: 'gameId, sourceType, sourceId 为必填项' })
+      return res.status(400).send({ error: 'gameId, sourceType, sourceId 为必填项' });
     }
 
-    let coverPath = null
+    let coverPath = null;
     if (coverUrl) {
       try {
-        const ext = coverUrl.match(/\.(jpg|jpeg|png|webp)/)?.[1] || 'jpg'
-        const filename = `${sourceType}_${sourceId}.${ext}`
-        const filePath = path.join(COVERS_DIR, filename)
-        const response = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 15000 })
-        fs.writeFileSync(filePath, response.data)
-        coverPath = filename
+        const ext = coverUrl.match(/\.(jpg|jpeg|png|webp)/)?.[1] || 'jpg';
+        const filename = `${sourceType}_${sourceId}.${ext}`;
+        const filePath = path.join(COVERS_DIR, filename);
+        const response = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 15000 });
+        fs.writeFileSync(filePath, response.data);
+        coverPath = filename;
       } catch (err) {
-        console.error('封面下载失败:', err.message)
+        console.error('封面下载失败:', err.message);
       }
     }
 
-    await db.updateGame(gameId, { name, description, cover_path: coverPath })
+    await db.updateGame(gameId, { name, description, cover_path: coverPath });
 
     await db.insertGameSource({
       game_id: gameId,
       source_type: sourceType,
       source_id: sourceId,
       source_url: sourceUrl || null,
-      raw_data: null
-    })
+      raw_data: null,
+    });
 
     if (Array.isArray(makers) && makers.length > 0) {
-      const makerIds = await db.insertMakers(makers)
-      await db.syncGameMakers(gameId, makerIds)
+      const makerIds = await db.insertMakers(makers);
+      await db.syncGameMakers(gameId, makerIds);
     }
 
     if (Array.isArray(genres) && genres.length > 0) {
-      const genreIds = await db.insertGenres(genres)
-      await db.syncGameGenres(gameId, genreIds)
+      const genreIds = await db.insertGenres(genres);
+      await db.syncGameGenres(gameId, genreIds);
     }
 
     if (Array.isArray(tags) && tags.length > 0) {
-      const tagIds = await db.insertTags(tags)
-      await db.syncGameTags(gameId, tagIds)
+      const tagIds = await db.insertTags(tags);
+      await db.syncGameTags(gameId, tagIds);
     }
 
-    const game = await db.getGameDetail(gameId)
-    res.send(game)
+    const game = await db.getGameDetail(gameId);
+    res.send(game);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
-module.exports = router
+module.exports = router;
 ```
 
 - [ ] **步骤 2：手动测试采集流程**
@@ -1168,6 +1198,7 @@ git commit -m "feat: add scraper API with DLSite search, fetch, batch and adopt"
 ## 任务 9：前端主布局 + 路由
 
 **文件：**
+
 - 修改：`src/layouts/MainLayout.vue`
 - 修改：`src/router/routes.ts`
 - 创建：`src/composables/useApi.ts`
@@ -1179,7 +1210,7 @@ git commit -m "feat: add scraper API with DLSite search, fetch, batch and adopt"
 
 ```typescript
 // src/router/routes.ts
-import type { RouteRecordRaw } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -1189,39 +1220,39 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'GameLib',
-        component: () => import('pages/GameLibPage.vue')
+        component: () => import('pages/GameLibPage.vue'),
       },
       {
         path: 'game/:id',
         name: 'GameDetail',
-        component: () => import('pages/GameDetailPage.vue')
+        component: () => import('pages/GameDetailPage.vue'),
       },
       {
         path: 'settings',
         name: 'Setting',
-        component: () => import('pages/SettingPage.vue')
-      }
-    ]
-  }
-]
+        component: () => import('pages/SettingPage.vue'),
+      },
+    ],
+  },
+];
 
-export default routes
+export default routes;
 ```
 
 - [ ] **步骤 2：创建 useApi composable**
 
 ```typescript
 // src/composables/useApi.ts
-import axios from 'axios'
+import axios from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 30000
-})
+  timeout: 30000,
+});
 
-export const useApi = () => api
+export const useApi = () => api;
 
-export default api
+export default api;
 ```
 
 - [ ] **步骤 3：实现 MainLayout**
@@ -1261,9 +1292,9 @@ export default api
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref } from 'vue';
 
-const leftDrawerOpen = ref(false)
+const leftDrawerOpen = ref(false);
 </script>
 ```
 
@@ -1277,8 +1308,7 @@ const leftDrawerOpen = ref(false)
   </q-page>
 </template>
 
-<script setup lang="ts">
-</script>
+<script setup lang="ts"></script>
 ```
 
 GameDetailPage.vue 和 SettingPage.vue 同理，替换文字。
@@ -1305,6 +1335,7 @@ git commit -m "feat: add main layout, routing and placeholder pages"
 ## 任务 10：设置页面
 
 **文件：**
+
 - 修改：`src/pages/SettingPage.vue`
 
 - [ ] **步骤 1：实现设置页面**
@@ -1330,7 +1361,12 @@ git commit -m "feat: add main layout, routing and placeholder pages"
         <div class="text-subtitle1 q-mb-sm">添加游戏库</div>
         <q-input v-model="newLib.name" label="库名称" dense class="q-mb-sm" />
         <q-input v-model="newLib.path" label="库路径" dense class="q-mb-sm" />
-        <q-btn color="primary" label="添加" @click="addLibrary" :disable="!newLib.name || !newLib.path" />
+        <q-btn
+          color="primary"
+          label="添加"
+          @click="addLibrary"
+          :disable="!newLib.name || !newLib.path"
+        />
       </q-card-section>
     </q-card>
 
@@ -1338,7 +1374,13 @@ git commit -m "feat: add main layout, routing and placeholder pages"
 
     <q-card>
       <q-card-section>
-        <q-input v-model="bangumiToken" label="Bangumi Token" type="password" dense class="q-mb-sm" />
+        <q-input
+          v-model="bangumiToken"
+          label="Bangumi Token"
+          type="password"
+          dense
+          class="q-mb-sm"
+        />
         <q-btn color="primary" label="保存" @click="saveSettings" />
       </q-card-section>
     </q-card>
@@ -1346,48 +1388,48 @@ git commit -m "feat: add main layout, routing and placeholder pages"
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import api from '../composables/useApi'
+import { ref, onMounted } from 'vue';
+import api from '../composables/useApi';
 
 interface Library {
-  id: number
-  name: string
-  path: string
+  id: number;
+  name: string;
+  path: string;
 }
 
-const libraries = ref<Library[]>([])
-const newLib = ref({ name: '', path: '' })
-const bangumiToken = ref('')
+const libraries = ref<Library[]>([]);
+const newLib = ref({ name: '', path: '' });
+const bangumiToken = ref('');
 
 const fetchLibraries = async () => {
-  const res = await api.get('/libraries')
-  libraries.value = res.data
-}
+  const res = await api.get('/libraries');
+  libraries.value = res.data;
+};
 
 const addLibrary = async () => {
-  await api.post('/libraries', newLib.value)
-  newLib.value = { name: '', path: '' }
-  await fetchLibraries()
-}
+  await api.post('/libraries', newLib.value);
+  newLib.value = { name: '', path: '' };
+  await fetchLibraries();
+};
 
 const deleteLibrary = async (id: number) => {
-  await api.delete(`/libraries/${id}`)
-  await fetchLibraries()
-}
+  await api.delete(`/libraries/${id}`);
+  await fetchLibraries();
+};
 
 const fetchSettings = async () => {
-  const res = await api.get('/settings')
-  bangumiToken.value = res.data.bangumi_token || ''
-}
+  const res = await api.get('/settings');
+  bangumiToken.value = res.data.bangumi_token || '';
+};
 
 const saveSettings = async () => {
-  await api.put('/settings', { bangumi_token: bangumiToken.value })
-}
+  await api.put('/settings', { bangumi_token: bangumiToken.value });
+};
 
 onMounted(() => {
-  fetchLibraries()
-  fetchSettings()
-})
+  fetchLibraries();
+  fetchSettings();
+});
 </script>
 ```
 
@@ -1412,6 +1454,7 @@ git commit -m "feat: add setting page with library management and token config"
 ## 任务 11：游戏库主页 + 卡片组件
 
 **文件：**
+
 - 创建：`src/components/GameCard.vue`
 - 修改：`src/pages/GameLibPage.vue`
 - 创建：`src/stores/game.ts`
@@ -1420,21 +1463,21 @@ git commit -m "feat: add setting page with library management and token config"
 
 ```typescript
 // src/stores/game.ts
-import { defineStore } from 'pinia'
-import api from '../composables/useApi'
+import { defineStore } from 'pinia';
+import api from '../composables/useApi';
 
 interface Game {
-  id: number
-  name: string
-  cover_path: string | null
-  description: string | null
-  library_id: number
-  sub_path: string
-  library_name: string
-  library_path: string
-  makers?: { id: number; name: string }[]
-  genres?: { id: number; name: string }[]
-  tags?: { id: number; name: string }[]
+  id: number;
+  name: string;
+  cover_path: string | null;
+  description: string | null;
+  library_id: number;
+  sub_path: string;
+  library_name: string;
+  library_path: string;
+  makers?: { id: number; name: string }[];
+  genres?: { id: number; name: string }[];
+  tags?: { id: number; name: string }[];
 }
 
 export const useGameStore = defineStore('game', {
@@ -1444,31 +1487,31 @@ export const useGameStore = defineStore('game', {
     pageSize: 50,
     total: 0,
     keyword: '',
-    stopLoad: false
+    stopLoad: false,
   }),
   actions: {
     async fetchGames(reset = false) {
       if (reset) {
-        this.games = []
-        this.page = 1
-        this.stopLoad = false
+        this.games = [];
+        this.page = 1;
+        this.stopLoad = false;
       }
       const res = await api.get('/games', {
-        params: { page: this.page, pageSize: this.pageSize, keyword: this.keyword }
-      })
-      this.games = this.page === 1 ? res.data.games : this.games.concat(res.data.games)
-      this.total = res.data.total
-      this.page++
+        params: { page: this.page, pageSize: this.pageSize, keyword: this.keyword },
+      });
+      this.games = this.page === 1 ? res.data.games : this.games.concat(res.data.games);
+      this.total = res.data.total;
+      this.page++;
       if (this.games.length >= this.total) {
-        this.stopLoad = true
+        this.stopLoad = true;
       }
     },
     async deleteGame(id: number) {
-      await api.delete(`/games/${id}`)
-      this.games = this.games.filter(g => g.id !== id)
-    }
-  }
-})
+      await api.delete(`/games/${id}`);
+      this.games = this.games.filter((g) => g.id !== id);
+    },
+  },
+});
 ```
 
 - [ ] **步骤 2：创建 GameCard 组件**
@@ -1477,12 +1520,7 @@ export const useGameStore = defineStore('game', {
 <!-- src/components/GameCard.vue -->
 <template>
   <q-card class="game-card cursor-pointer" @click="$emit('click')">
-    <q-img
-      :src="`/api/cover/${game.id}`"
-      :ratio="3/4"
-      fit="cover"
-      no-native-menu
-    >
+    <q-img :src="`/api/cover/${game.id}`" :ratio="3 / 4" fit="cover" no-native-menu>
       <template v-slot:error>
         <div class="full-width full-height row items-center justify-center bg-grey-3">
           <q-icon name="videogame_asset" size="48px" color="grey-5" />
@@ -1492,7 +1530,7 @@ export const useGameStore = defineStore('game', {
     <q-card-section>
       <div class="text-subtitle2 ellipsis">{{ game.name }}</div>
       <div v-if="game.makers?.length" class="text-caption text-grey ellipsis">
-        {{ game.makers.map(m => m.name).join(', ') }}
+        {{ game.makers.map((m) => m.name).join(', ') }}
       </div>
     </q-card-section>
   </q-card>
@@ -1500,14 +1538,14 @@ export const useGameStore = defineStore('game', {
 
 <script setup lang="ts">
 interface Game {
-  id: number
-  name: string
-  cover_path: string | null
-  makers?: { id: number; name: string }[]
+  id: number;
+  name: string;
+  cover_path: string | null;
+  makers?: { id: number; name: string }[];
 }
 
-defineProps<{ game: Game }>()
-defineEmits<{ click: [] }>()
+defineProps<{ game: Game }>();
+defineEmits<{ click: [] }>();
 </script>
 
 <style scoped>
@@ -1558,10 +1596,18 @@ defineEmits<{ click: [] }>()
             <q-spinner-dots color="primary" size="40px" />
           </div>
         </template>
-        <div v-if="gameStore.stopLoad && gameStore.games.length > 0" class="q-mt-lg q-mb-xl text-h6 text-bold text-center">END</div>
+        <div
+          v-if="gameStore.stopLoad && gameStore.games.length > 0"
+          class="q-mt-lg q-mb-xl text-h6 text-bold text-center"
+        >
+          END
+        </div>
       </q-infinite-scroll>
 
-      <div v-if="gameStore.games.length === 0 && !gameStore.stopLoad" class="text-center q-mt-xl text-grey">
+      <div
+        v-if="gameStore.games.length === 0 && !gameStore.stopLoad"
+        class="text-center q-mt-xl text-grey"
+      >
         <q-icon name="videogame_asset" size="64px" class="q-mb-md" />
         <div class="text-h6">暂无游戏</div>
         <div class="text-subtitle2">请先在设置中添加游戏库，然后扫描采集</div>
@@ -1573,38 +1619,38 @@ defineEmits<{ click: [] }>()
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useGameStore } from '../stores/game'
-import GameCard from '../components/GameCard.vue'
-import ScannerDialog from '../components/ScannerDialog.vue'
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useGameStore } from '../stores/game';
+import GameCard from '../components/GameCard.vue';
+import ScannerDialog from '../components/ScannerDialog.vue';
 
-const router = useRouter()
-const gameStore = useGameStore()
-const searchKeyword = ref('')
-const showScanner = ref(false)
+const router = useRouter();
+const gameStore = useGameStore();
+const searchKeyword = ref('');
+const showScanner = ref(false);
 
 const onLoad = async (_index: number, done: (stop: boolean) => void) => {
-  await gameStore.fetchGames()
-  done(gameStore.stopLoad)
-}
+  await gameStore.fetchGames();
+  done(gameStore.stopLoad);
+};
 
 const onSearch = () => {
-  gameStore.keyword = searchKeyword.value
-  gameStore.fetchGames(true)
-}
+  gameStore.keyword = searchKeyword.value;
+  gameStore.fetchGames(true);
+};
 
 const goToDetail = (id: number) => {
-  router.push(`/game/${id}`)
-}
+  router.push(`/game/${id}`);
+};
 
 const onScanDone = () => {
-  gameStore.fetchGames(true)
-}
+  gameStore.fetchGames(true);
+};
 
 onMounted(() => {
-  gameStore.fetchGames(true)
-})
+  gameStore.fetchGames(true);
+});
 </script>
 ```
 
@@ -1629,6 +1675,7 @@ git commit -m "feat: add game lib page with card grid and infinite scroll"
 ## 任务 12：扫描采集弹窗
 
 **文件：**
+
 - 创建：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：实现 ScannerDialog**
@@ -1659,7 +1706,12 @@ git commit -m "feat: add game lib page with card grid and infinite scroll"
             style="min-width: 200px"
           />
           <q-btn color="primary" label="扫描目录" @click="scanDir" :disable="!selectedLibrary" />
-          <q-btn color="secondary" label="一键采集" @click="batchScrape" :disable="scanResults.length === 0" />
+          <q-btn
+            color="secondary"
+            label="一键采集"
+            @click="batchScrape"
+            :disable="scanResults.length === 0"
+          />
         </div>
 
         <q-table
@@ -1699,71 +1751,71 @@ git commit -m "feat: add game lib page with card grid and infinite scroll"
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import api from '../composables/useApi'
+import { ref, watch } from 'vue';
+import api from '../composables/useApi';
 
 interface ScanRow {
-  name: string
-  status: 'pending' | 'loading' | 'done' | 'error'
-  loading: boolean
-  gameId?: number
+  name: string;
+  status: 'pending' | 'loading' | 'done' | 'error';
+  loading: boolean;
+  gameId?: number;
 }
 
-const modelValue = defineModel<boolean>()
-const emit = defineEmits<{ done: [] }>()
+const modelValue = defineModel<boolean>();
+const emit = defineEmits<{ done: [] }>();
 
-const libraries = ref<{ id: number; name: string; path: string }[]>([])
-const selectedLibrary = ref<number | null>(null)
-const scanResults = ref<ScanRow[]>([])
+const libraries = ref<{ id: number; name: string; path: string }[]>([]);
+const selectedLibrary = ref<number | null>(null);
+const scanResults = ref<ScanRow[]>([]);
 
 const columns = [
   { name: 'name', label: '游戏名', field: 'name', align: 'left' as const, sortable: true },
   { name: 'dlsite', label: 'DLSite', field: 'dlsite', align: 'center' as const },
-  { name: 'status', label: '状态', field: 'status', align: 'center' as const }
-]
+  { name: 'status', label: '状态', field: 'status', align: 'center' as const },
+];
 
 const fetchLibraries = async () => {
-  const res = await api.get('/libraries')
-  libraries.value = res.data
-}
+  const res = await api.get('/libraries');
+  libraries.value = res.data;
+};
 
 const scanDir = async () => {
-  if (!selectedLibrary.value) return
-  const res = await api.post('/games/scan', { libraryId: selectedLibrary.value })
-  const newDirs: string[] = res.data.newDirs
+  if (!selectedLibrary.value) return;
+  const res = await api.post('/games/scan', { libraryId: selectedLibrary.value });
+  const newDirs: string[] = res.data.newDirs;
   if (newDirs.length === 0) {
-    scanResults.value = []
-    return
+    scanResults.value = [];
+    return;
   }
   await api.post('/games/scan/add', {
     libraryId: selectedLibrary.value,
-    dirs: newDirs
-  })
-  const gamesRes = await api.get('/games', { params: { pageSize: 9999 } })
+    dirs: newDirs,
+  });
+  const gamesRes = await api.get('/games', { params: { pageSize: 9999 } });
   const addedGames = gamesRes.data.games.filter(
-    (g: any) => g.library_id === selectedLibrary.value && newDirs.includes(g.sub_path)
-  )
+    (g: any) => g.library_id === selectedLibrary.value && newDirs.includes(g.sub_path),
+  );
   scanResults.value = addedGames.map((g: any) => ({
     name: g.name,
     status: 'pending' as const,
     loading: false,
-    gameId: g.id
-  }))
-}
+    gameId: g.id,
+  }));
+};
 
 const scrapeSingle = async (row: ScanRow) => {
-  row.status = 'loading'
-  row.loading = true
+  row.status = 'loading';
+  row.loading = true;
   try {
-    const keyword = row.name.match(/RJ\d+/)?.[0] || row.name
-    const searchRes = await api.post('/scraper/dlsite/search', { keyword })
-    const results = searchRes.data
+    const keyword = row.name.match(/RJ\d+/)?.[0] || row.name;
+    const searchRes = await api.post('/scraper/dlsite/search', { keyword });
+    const results = searchRes.data;
     if (results.length === 0) {
-      row.status = 'error'
-      return
+      row.status = 'error';
+      return;
     }
-    const detailRes = await api.post('/scraper/dlsite/fetch', { rjcode: results[0].rjcode })
-    const detail = detailRes.data
+    const detailRes = await api.post('/scraper/dlsite/fetch', { rjcode: results[0].rjcode });
+    const detail = detailRes.data;
     await api.post('/scraper/adopt', {
       gameId: row.gameId,
       sourceType: 'dlsite',
@@ -1774,30 +1826,30 @@ const scrapeSingle = async (row: ScanRow) => {
       makers: detail.makers,
       genres: detail.genres,
       tags: detail.tags,
-      description: detail.description
-    })
-    row.status = 'done'
+      description: detail.description,
+    });
+    row.status = 'done';
   } catch {
-    row.status = 'error'
+    row.status = 'error';
   } finally {
-    row.loading = false
+    row.loading = false;
   }
-}
+};
 
 const batchScrape = async () => {
   for (const row of scanResults.value) {
-    if (row.status !== 'pending') continue
-    await scrapeSingle(row)
+    if (row.status !== 'pending') continue;
+    await scrapeSingle(row);
   }
-  emit('done')
-}
+  emit('done');
+};
 
 watch(modelValue, (val) => {
   if (val) {
-    fetchLibraries()
-    scanResults.value = []
+    fetchLibraries();
+    scanResults.value = [];
   }
-})
+});
 </script>
 ```
 
@@ -1822,6 +1874,7 @@ git commit -m "feat: add scanner dialog with DLSite scraping"
 ## 任务 13：游戏详情页
 
 **文件：**
+
 - 修改：`src/pages/GameDetailPage.vue`
 
 - [ ] **步骤 1：实现游戏详情页**
@@ -1834,11 +1887,7 @@ git commit -m "feat: add scanner dialog with DLSite scraping"
 
     <div v-if="game" class="row q-col-gutter-md">
       <div class="col-auto">
-        <q-img
-          :src="`/api/cover/${game.id}`"
-          style="width: 300px; height: 400px"
-          fit="cover"
-        >
+        <q-img :src="`/api/cover/${game.id}`" style="width: 300px; height: 400px" fit="cover">
           <template v-slot:error>
             <div class="full-width full-height row items-center justify-center bg-grey-3">
               <q-icon name="videogame_asset" size="64px" color="grey-5" />
@@ -1857,12 +1906,28 @@ git commit -m "feat: add scanner dialog with DLSite scraping"
 
         <div v-if="game.genres?.length" class="q-mb-sm">
           <span class="text-grey">类型:</span>
-          <q-chip v-for="g in game.genres" :key="g.id" dense size="sm" color="blue" text-color="white">{{ g.name }}</q-chip>
+          <q-chip
+            v-for="g in game.genres"
+            :key="g.id"
+            dense
+            size="sm"
+            color="blue"
+            text-color="white"
+            >{{ g.name }}</q-chip
+          >
         </div>
 
         <div v-if="game.tags?.length" class="q-mb-sm">
           <span class="text-grey">TAG:</span>
-          <q-chip v-for="t in game.tags" :key="t.id" dense size="sm" color="teal" text-color="white">{{ t.name }}</q-chip>
+          <q-chip
+            v-for="t in game.tags"
+            :key="t.id"
+            dense
+            size="sm"
+            color="teal"
+            text-color="white"
+            >{{ t.name }}</q-chip
+          >
         </div>
 
         <div v-if="game.description" class="q-mb-sm">
@@ -1892,18 +1957,18 @@ git commit -m "feat: add scanner dialog with DLSite scraping"
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import api from '../composables/useApi'
+import { ref, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import api from '../composables/useApi';
 
-const route = useRoute()
-const router = useRouter()
-const game = ref<any>(null)
+const route = useRoute();
+const router = useRouter();
+const game = ref<any>(null);
 
 onMounted(async () => {
-  const res = await api.get(`/games/${route.params.id}`)
-  game.value = res.data
-})
+  const res = await api.get(`/games/${route.params.id}`);
+  game.value = res.data;
+});
 </script>
 ```
 

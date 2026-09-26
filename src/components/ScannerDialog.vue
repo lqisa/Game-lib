@@ -1,13 +1,30 @@
 <template>
   <q-dialog v-model="modelValue" maximized transition-show="fade" transition-hide="fade">
     <q-card class="column no-shadow full-height scanner-card">
-      <div class="scanner-titlebar row items-center q-px-md" style="height: 56px;">
-        <div class="scanner-titlebar-icon row flex-center q-mr-sm" style="width: 36px; height: 36px; border-radius: 12px; background: var(--m3-primary-container);">
+      <div class="scanner-titlebar row items-center q-px-md" style="height: 56px">
+        <div
+          class="scanner-titlebar-icon row flex-center q-mr-sm"
+          style="
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: var(--m3-primary-container);
+          "
+        >
           <q-icon name="search" size="20px" color="primary" />
         </div>
-        <div class="text-subtitle1" style="color: var(--m3-on-surface); font-weight: 600;">Scan & Scrape</div>
+        <div class="text-subtitle1" style="color: var(--m3-on-surface); font-weight: 600">
+          Scan & Scrape
+        </div>
         <q-space />
-        <q-btn dense flat round icon="close" v-close-popup style="color: var(--m3-on-surface-variant);" />
+        <q-btn
+          dense
+          flat
+          round
+          icon="close"
+          v-close-popup
+          style="color: var(--m3-on-surface-variant)"
+        />
       </div>
 
       <q-card-section class="q-pa-md col" style="position: relative; overflow: hidden">
@@ -107,7 +124,11 @@
           </q-btn>
         </div>
 
-        <div class="scan-header q-px-md" :class="{ 'scan-header--compact': compact }" style="background: var(--m3-surface); border-bottom: 1px solid var(--m3-outline-variant);">
+        <div
+          class="scan-header q-px-md"
+          :class="{ 'scan-header--compact': compact }"
+          style="background: var(--m3-surface); border-bottom: 1px solid var(--m3-outline-variant)"
+        >
           <div class="scan-header__cover"></div>
           <div class="scan-header__cell scan-header__cell--sortable" @click="toggleSort('name')">
             <span>Name</span>
@@ -155,8 +176,22 @@
                   <img
                     :src="resolveCoverUrl(row.searchResult.coverUrl)"
                     class="scan-row__cover-img"
-                    @error="(e) => { const img = e.target as HTMLImageElement; img.style.display = 'none'; img.dataset.error = '1'; }"
-                    @load="(e) => { const img = e.target as HTMLImageElement; if (img.dataset.error) { img.style.display = ''; delete img.dataset.error; } }"
+                    @error="
+                      (e) => {
+                        const img = e.target as HTMLImageElement;
+                        img.style.display = 'none';
+                        img.dataset.error = '1';
+                      }
+                    "
+                    @load="
+                      (e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (img.dataset.error) {
+                          img.style.display = '';
+                          delete img.dataset.error;
+                        }
+                      }
+                    "
                   />
                   <q-icon
                     name="image"
@@ -185,7 +220,11 @@
                   </q-tooltip>
                 </div>
                 <div v-else class="scan-row__cover-empty flex flex-center">
-                  <q-icon :name="row.isArchive ? 'archive' : 'folder'" :size="compact ? '16px' : '48px'" color="grey" />
+                  <q-icon
+                    :name="row.isArchive ? 'archive' : 'folder'"
+                    :size="compact ? '16px' : '48px'"
+                    color="grey"
+                  />
                 </div>
               </div>
 
@@ -367,7 +406,8 @@
             Add to Blacklist
           </div>
           <div class="text-body2 q-mt-sm">
-            Add <strong>{{ blacklistRow?.subPath }}</strong> to blacklist? This directory will be excluded from all scan results and game lists.
+            Add <strong>{{ blacklistRow?.subPath }}</strong> to blacklist? This directory will be
+            excluded from all scan results and game lists.
           </div>
         </q-card-section>
         <q-card-actions align="right">
@@ -587,8 +627,12 @@ const sortedResults = computed(() => {
 const hasPending = computed(() =>
   flattenAllRows(scanResults.value).some((r) => r.status === 'pending' || r.status === 'error'),
 );
-const adoptedCount = computed(() => flattenAllRows(scanResults.value).filter((r) => r.status === 'adopted').length);
-const staleCount = computed(() => flattenAllRows(scanResults.value).filter((r) => r.status === 'stale').length);
+const adoptedCount = computed(
+  () => flattenAllRows(scanResults.value).filter((r) => r.status === 'adopted').length,
+);
+const staleCount = computed(
+  () => flattenAllRows(scanResults.value).filter((r) => r.status === 'stale').length,
+);
 const totalCount = computed(() => flattenAllRows(scanResults.value).length);
 
 let scrapeConcurrency = 4;
@@ -627,7 +671,22 @@ const loadUnscraped = async () => {
   scanResults.value = res.data.map((g: { id: number; name: string; sub_path: string }) => {
     const isArchive = ARCHIVE_EXT_RE.test(g.name);
     const cleanName = isArchive ? g.name.replace(ARCHIVE_EXT_RE, '') : g.name;
-    return { name: cleanName, subPath: g.sub_path, status: 'pending' as const, searchResult: null, adoptData: null, searchKeyword: cleanName, source: null as SourceType | null, loading: false, gameId: g.id, children: [], expanded: false, isArchive, depth: 0, hasChildren: null };
+    return {
+      name: cleanName,
+      subPath: g.sub_path,
+      status: 'pending' as const,
+      searchResult: null,
+      adoptData: null,
+      searchKeyword: cleanName,
+      source: null as SourceType | null,
+      loading: false,
+      gameId: g.id,
+      children: [],
+      expanded: false,
+      isArchive,
+      depth: 0,
+      hasChildren: null,
+    };
   });
 
   for (const row of scanResults.value) {
@@ -671,10 +730,15 @@ const preloadAdoptCache = async () => {
     if (!params.gameIds && !params.subPaths) return;
     const res = await api.get('/cache/adopt', { params });
     const entries: AdoptCacheEntry[] = res.data.entries || [];
-    const adoptByGameId = new Map(entries.filter((e) => e.game_id > 0).map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
-    const adoptBySubPath = new Map(entries.filter((e) => e.sub_path).map((e): [string, AdoptCacheEntry] => [e.sub_path, e]));
+    const adoptByGameId = new Map(
+      entries.filter((e) => e.game_id > 0).map((e): [number, AdoptCacheEntry] => [e.game_id, e]),
+    );
+    const adoptBySubPath = new Map(
+      entries.filter((e) => e.sub_path).map((e): [string, AdoptCacheEntry] => [e.sub_path, e]),
+    );
     for (const row of allRows) {
-      const cached = row.gameId > 0 ? adoptByGameId.get(row.gameId) : adoptBySubPath.get(row.subPath);
+      const cached =
+        row.gameId > 0 ? adoptByGameId.get(row.gameId) : adoptBySubPath.get(row.subPath);
       if (cached) {
         row.source = cached.source_type as SourceType;
         row.searchResult = {
@@ -781,9 +845,7 @@ const scanDir = async () => {
           });
         }
       }
-      const newRows = scanResults.value.filter(
-        (r) => addedGames.some((g) => g.id === r.gameId),
-      );
+      const newRows = scanResults.value.filter((r) => addedGames.some((g) => g.id === r.gameId));
       if (newRows.length > 0) {
         const keywords = newRows.map((r) => r.searchKeyword || r.name);
         try {
@@ -797,7 +859,9 @@ const scanDir = async () => {
         }
         const newGameIds = newRows.map((r) => r.gameId);
         try {
-          const adoptRes = await api.get('/cache/adopt', { params: { gameIds: newGameIds.join(',') } });
+          const adoptRes = await api.get('/cache/adopt', {
+            params: { gameIds: newGameIds.join(',') },
+          });
           const entries: AdoptCacheEntry[] = adoptRes.data.entries || [];
           const adoptMap = new Map(entries.map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
           for (const row of newRows) {
@@ -889,7 +953,10 @@ const expandRow = async (row: ScanRow) => {
         searchResult: null,
         adoptData: null,
         searchKeyword: isArchive
-          ? displayName.replace(/\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.r\d+)?$|\.(zip|7z|rar)$/i, '')
+          ? displayName.replace(
+              /\.(7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(\.r\d+)?$|\.(zip|7z|rar)$/i,
+              '',
+            )
           : displayName,
         source: null,
         loading: false,
@@ -923,7 +990,9 @@ const expandRow = async (row: ScanRow) => {
             params: { libraryId: selectedLibrary.value, subPaths: subPathList.join(',') },
           });
           const adoptEntries: AdoptCacheEntry[] = adoptRes.data.entries || [];
-          const adoptBySubPath = new Map(adoptEntries.map((e): [string, AdoptCacheEntry] => [e.sub_path, e]));
+          const adoptBySubPath = new Map(
+            adoptEntries.map((e): [string, AdoptCacheEntry] => [e.sub_path, e]),
+          );
           for (const child of newRows) {
             const cached = adoptBySubPath.get(child.subPath);
             if (cached) {
@@ -994,20 +1063,22 @@ const onSearched = (source: SourceType, keyword: string, results: SearchResult[]
 const saveAdoptCache = (row: ScanRow) => {
   if (!row.adoptData) return;
   const d = row.adoptData;
-  api.post('/cache/adopt', {
-    gameId: row.gameId,
-    libraryId: selectedLibrary.value || 0,
-    subPath: row.subPath,
-    sourceType: d.source,
-    sourceId: d.sourceId,
-    sourceUrl: getSourceUrl(d.source, d.sourceId),
-    name: d.detail.title,
-    coverUrl: d.detail.coverURL,
-    makers: d.detail.makers,
-    genres: d.detail.genres,
-    tags: d.detail.tags,
-    description: d.detail.description,
-  }).catch(() => {});
+  api
+    .post('/cache/adopt', {
+      gameId: row.gameId,
+      libraryId: selectedLibrary.value || 0,
+      subPath: row.subPath,
+      sourceType: d.source,
+      sourceId: d.sourceId,
+      sourceUrl: getSourceUrl(d.source, d.sourceId),
+      name: d.detail.title,
+      coverUrl: d.detail.coverURL,
+      makers: d.detail.makers,
+      genres: d.detail.genres,
+      tags: d.detail.tags,
+      description: d.detail.description,
+    })
+    .catch(() => {});
 };
 
 const quickAdopt = async (row: ScanRow) => {
@@ -1090,7 +1161,11 @@ const discardRow = (row: ScanRow) => {
   if (row.gameId > 0) {
     api.delete('/cache/adopt', { params: { gameIds: row.gameId } }).catch(() => {});
   } else if (selectedLibrary.value && row.subPath) {
-    api.delete('/cache/adopt', { params: { libraryId: selectedLibrary.value, subPaths: row.subPath } }).catch(() => {});
+    api
+      .delete('/cache/adopt', {
+        params: { libraryId: selectedLibrary.value, subPaths: row.subPath },
+      })
+      .catch(() => {});
   }
   if (row.status === 'adopted') {
     row.status = row.searchResult ? 'searched' : 'pending';
@@ -1112,7 +1187,9 @@ const togglePause = () => {
 };
 
 const batchScrape = async () => {
-  const rows = flattenAllRows(scanResults.value).filter((r) => r.status === 'pending' || r.status === 'error');
+  const rows = flattenAllRows(scanResults.value).filter(
+    (r) => r.status === 'pending' || r.status === 'error',
+  );
   if (rows.length === 0) return;
 
   scrapeDone.value = 0;
@@ -1254,10 +1331,17 @@ const forceRefresh = async () => {
     const realIdRows = allRows.filter((r) => r.gameId > 0);
     const tempIdRows = allRows.filter((r) => r.gameId === 0 && r.subPath);
     if (realIdRows.length > 0) {
-      await api.delete('/cache/adopt', { params: { gameIds: realIdRows.map((r) => r.gameId).join(',') } });
+      await api.delete('/cache/adopt', {
+        params: { gameIds: realIdRows.map((r) => r.gameId).join(',') },
+      });
     }
     if (tempIdRows.length > 0 && selectedLibrary.value) {
-      await api.delete('/cache/adopt', { params: { libraryId: selectedLibrary.value, subPaths: tempIdRows.map((r) => r.subPath).join(',') } });
+      await api.delete('/cache/adopt', {
+        params: {
+          libraryId: selectedLibrary.value,
+          subPaths: tempIdRows.map((r) => r.subPath).join(','),
+        },
+      });
     }
   } catch {
     // cache delete failure is non-critical
@@ -1315,8 +1399,12 @@ const doSubmit = async (games: SubmitGame[], staleRows: ScanRow[]) => {
 
 const submitAdopted = async () => {
   submitting.value = true;
-  const adoptedRows = flattenAllRows(scanResults.value).filter((r) => r.status === 'adopted' && r.adoptData);
-  const staleRows = flattenAllRows(scanResults.value).filter((r) => r.status === 'stale' && r.gameId > 0);
+  const adoptedRows = flattenAllRows(scanResults.value).filter(
+    (r) => r.status === 'adopted' && r.adoptData,
+  );
+  const staleRows = flattenAllRows(scanResults.value).filter(
+    (r) => r.status === 'stale' && r.gameId > 0,
+  );
   try {
     const unregisteredRows = adoptedRows.filter((r) => r.gameId === 0);
     if (unregisteredRows.length > 0 && selectedLibrary.value) {
@@ -1335,14 +1423,17 @@ const submitAdopted = async () => {
         }
       }
       if (Object.keys(subPathToGameId).length > 0) {
-        await api.post('/cache/adopt/migrate', { libraryId: selectedLibrary.value, subPathToGameId }).catch(() => {});
+        await api
+          .post('/cache/adopt/migrate', { libraryId: selectedLibrary.value, subPathToGameId })
+          .catch(() => {});
       }
     }
 
     if (adoptedRows.length > 0) {
       const games: SubmitGame[] = adoptedRows.map((row) => {
         const d = row.adoptData!;
-        const source: SourceType = (d.source && d.source !== ('auto' as string)) ? d.source : 'dlsite';
+        const source: SourceType =
+          d.source && d.source !== ('auto' as string) ? d.source : 'dlsite';
         return {
           gameId: row.gameId,
           subPath: row.subPath,
@@ -1420,7 +1511,9 @@ const getRowFolderPath = (row: ScanRow) => {
 const blacklistRow = ref<ScanRow | null>(null);
 const showBlacklistDialog = computed({
   get: () => blacklistRow.value !== null,
-  set: (val: boolean) => { if (!val) blacklistRow.value = null; },
+  set: (val: boolean) => {
+    if (!val) blacklistRow.value = null;
+  },
 });
 
 const confirmBlacklist = async () => {

@@ -54,11 +54,13 @@
 分两步：
 
 **步骤 1：** 当前属于该 library 的游戏重新评估
+
 - 用旧路径重建绝对路径：`absPath = oldLib.path + '\' + game.sub_path`
 - 仍在新路径下 → 更新 `sub_path` 为新的相对路径
 - 不在新路径下 → 转为 dropped：`library_id = null`，`sub_path = absPath`
 
 **步骤 2：** 吸纳 dropped 游戏
+
 - 与 `POST /` 相同的 `migrateDroppedGames` 逻辑
 
 **不处理的场景：** 用户物理移动目录后修改 library 路径 — 匹配到的自动迁移，匹配不到的保留原数据。
@@ -75,8 +77,8 @@ const normalize = (p) => p.replace(/\//g, '\\').toLowerCase().replace(/\\+$/, ''
 
 ## 修改文件清单
 
-| 文件 | 改动 |
-|------|------|
+| 文件                        | 改动                                                     |
+| --------------------------- | -------------------------------------------------------- |
 | `src/pages/GameLibPage.vue` | `onDropAdopt` 添加 library 匹配逻辑，移除无 library 阻断 |
-| `src/pages/SettingPage.vue` | 添加/编辑 library 时前端嵌套校验 |
-| `server/routes/library.js` | 嵌套校验 + dropped 迁移 + PUT 迁移 |
+| `src/pages/SettingPage.vue` | 添加/编辑 library 时前端嵌套校验                         |
+| `server/routes/library.js`  | 嵌套校验 + dropped 迁移 + PUT 迁移                       |

@@ -2,7 +2,17 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveCoverUrl, coverExists, COVERS_DIR, ensureCoversDir, fetchCoverUrlFromSource, isPlaceholderImage, looksLikeImage, DETAIL_FETCH_SOURCES } from '../scraper/cover.js';
+import {
+  resolveCoverUrl,
+  coverExists,
+  COVERS_DIR,
+  ensureCoversDir,
+  fetchCoverUrlFromSource,
+  isPlaceholderImage,
+  looksLikeImage,
+  imageExtension,
+  DETAIL_FETCH_SOURCES,
+} from '../scraper/cover.js';
 
 describe('resolveCoverUrl', () => {
   it('prefers the cover URL recorded at adopt time', () => {
@@ -26,7 +36,10 @@ describe('resolveCoverUrl', () => {
 
   it('falls back to the DLsite URL when raw_data is unusable', () => {
     assert.match(resolveCoverUrl('dlsite', 'RJ01681172', 'not json'), /RJ01681172_img_main\.jpg$/);
-    assert.match(resolveCoverUrl('dlsite', 'RJ01681172', JSON.stringify({})), /RJ01681172_img_main\.jpg$/);
+    assert.match(
+      resolveCoverUrl('dlsite', 'RJ01681172', JSON.stringify({})),
+      /RJ01681172_img_main\.jpg$/,
+    );
     assert.match(
       resolveCoverUrl('dlsite', 'RJ01681172', JSON.stringify({ coverUrl: null })),
       /RJ01681172_img_main\.jpg$/,
@@ -121,6 +134,43 @@ describe('looksLikeImage', () => {
     assert.equal(looksLikeImage(Buffer.from([0xff, 0xd8, 0xff])), false, 'truncated jpeg header');
     assert.equal(looksLikeImage(null), false);
     assert.equal(looksLikeImage(undefined), false);
+  });
+});
+
+describe('imageExtension', () => {
+  it('names the format it detected', () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    const gif = Buffer.from('GIF89a----------');
+    const webp = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([0, 0, 0, 0]),
+      Buffer.from('WEBP'),
+      Buffer.from([0, 0, 0, 0]),
+    ]);
+    assert.equal(imageExtension(jpeg), '.jpg');
+    assert.equal(imageExtension(png), '.png');
+    assert.equal(imageExtension(gif), '.gif');
+    assert.equal(imageExtension(webp), '.webp');
+  });
+
+  it('returns null for anything that is not a known image', () => {
+    // The extension must come from the bytes: a caller-supplied name is not evidence.
+    assert.equal(imageExtension(Buffer.from('<!DOCTYPE html><html>x</html>')), null);
+    assert.equal(imageExtension(Buffer.from('{"error":"nope"}.......')), null);
+    assert.equal(imageExtension(Buffer.alloc(0)), null);
+    assert.equal(imageExtension(null), null);
+  });
+
+  it('agrees with looksLikeImage', () => {
+    const samples = [
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      Buffer.from('<!DOCTYPE html><html>x</html>'),
+      Buffer.alloc(0),
+    ];
+    for (const s of samples) {
+      assert.equal(looksLikeImage(s), imageExtension(s) !== null);
+    }
   });
 });
 

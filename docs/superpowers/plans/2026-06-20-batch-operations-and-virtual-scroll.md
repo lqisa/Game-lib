@@ -5,11 +5,13 @@
 **文件**: `server/routes/scraper.js`
 
 **1a. `POST /scraper/dlsite/segments/batch`**
+
 - 接收 `{ names: string[] }`
 - 对每个 name 调用 `splitKeyword` 生成 `{ name, keyword, segments }`
 - 返回 `{ results: [...] }`
 
 **1b. `POST /scraper/adopt/batch`**
+
 - 接收 `{ games: [...] }`，每个 game 包含 `{ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }`
 - 提取现有的 adopt 核心逻辑为 `adoptOne(game)` 函数
 - 循环处理每个 game，用 try/catch 包裹，收集成功/失败结果
@@ -32,16 +34,19 @@
 **文件**: `src/components/ScannerDialog.vue`
 
 **3a. 替换 q-table 为 q-virtual-scroll**
+
 - 移除 `q-table` 和 `columns` 定义
 - 使用 `q-virtual-scroll` 渲染自定义列表
 - 每行：封面缩略图(40px) | 目录名 + 路径 | 匹配结果(名称/"Not found") | 状态 | 操作按钮
 - 容器固定高度 `max-height: 70vh`
 
 **3b. 替换为批量 API 调用**
+
 - `loadUnscraped`: 收集所有 names → 一次 `POST /scraper/dlsite/segments/batch` → 设置 searchKeyword 和 segmentsCache
 - `submitAdopted`: 收集所有 adoptedRows → 一次 `POST /scraper/adopt/batch` → 根据结果更新状态
 
 **3c. 添加并发限制**
+
 - `batchScrape` 中从 settings 读取 `scrape_concurrency`
 - 按 chunk 并发处理
 

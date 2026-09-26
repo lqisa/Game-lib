@@ -2,13 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import taskRouter from '../routes/task.js';
-import {
-  createTask,
-  getTask,
-  getAllTasks,
-  updateTask,
-  removeTask,
-} from '../tasks.js';
+import { createTask, getTask, getAllTasks, updateTask, removeTask } from '../tasks.js';
 
 let app;
 let baseUrl;
@@ -20,7 +14,11 @@ const request = async (method, path, body) => {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   const text = await res.text();
-  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: text }; }
+  try {
+    return { status: res.status, body: JSON.parse(text) };
+  } catch {
+    return { status: res.status, body: text };
+  }
 };
 
 const cleanup = () => {

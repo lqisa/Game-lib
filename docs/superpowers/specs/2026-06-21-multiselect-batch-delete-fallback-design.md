@@ -46,8 +46,8 @@ const fallbackDetail: DetailResult = {
   makers: [],
   genres: [],
   tags: [],
-  description: ''
-}
+  description: '',
+};
 ```
 
 ### Where

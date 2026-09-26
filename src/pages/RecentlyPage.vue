@@ -1,9 +1,16 @@
 <template>
-  <q-page style="overflow: hidden; display: flex; flex-direction: column;">
-    <div class="row items-center q-gutter-sm q-px-md q-py-sm" style="border-bottom: 1px solid var(--m3-outline-variant);">
-      <q-icon name="history" size="24px" style="color: var(--m3-primary);" />
-      <span class="text-subtitle2" style="color: var(--m3-on-surface);">Recently Opened</span>
-      <span v-if="games.length > 0" class="text-caption" style="color: var(--m3-on-surface-variant);">
+  <q-page style="overflow: hidden; display: flex; flex-direction: column">
+    <div
+      class="row items-center q-gutter-sm q-px-md q-py-sm"
+      style="border-bottom: 1px solid var(--m3-outline-variant)"
+    >
+      <q-icon name="history" size="24px" style="color: var(--m3-primary)" />
+      <span class="text-subtitle2" style="color: var(--m3-on-surface)">Recently Opened</span>
+      <span
+        v-if="games.length > 0"
+        class="text-caption"
+        style="color: var(--m3-on-surface-variant)"
+      >
         ({{ games.length }})
       </span>
       <q-space />
@@ -11,7 +18,7 @@
         flat
         round
         icon="refresh"
-        style="color: var(--m3-on-surface-variant);"
+        style="color: var(--m3-on-surface-variant)"
         :loading="loading"
         @click="loadRecently"
       >
@@ -30,7 +37,7 @@
     <div
       ref="gridContainer"
       class="q-pa-md"
-      style="flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column;"
+      style="flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column"
     >
       <VirtualGrid
         v-if="games.length > 0"
@@ -43,12 +50,8 @@
         :buffer-rows="3"
       >
         <template #default="{ item: game }">
-          <div :data-game-id="game.id" style="display: flex; flex-direction: column; height: 100%;">
-            <GameCard
-              :game="game"
-              class="recently-card"
-              @click="goDetail(game.id)"
-            />
+          <div :data-game-id="game.id" style="display: flex; flex-direction: column; height: 100%">
+            <GameCard :game="game" class="recently-card" @click="goDetail(game.id)" />
             <div class="recently-meta row items-center no-wrap q-mt-xs">
               <q-icon name="schedule" size="14px" class="q-mr-xs" />
               <span class="text-caption ellipsis" :title="formatOpenedAt(game.opened_at)">
@@ -62,7 +65,7 @@
                 dense
                 size="sm"
                 icon="folder_open"
-                style="color: var(--m3-on-surface-variant);"
+                style="color: var(--m3-on-surface-variant)"
                 @click.stop="openDir(game)"
               >
                 <q-tooltip>Open Directory</q-tooltip>
@@ -73,7 +76,7 @@
                 dense
                 size="sm"
                 icon="close"
-                style="color: var(--m3-on-surface-variant);"
+                style="color: var(--m3-on-surface-variant)"
                 @click.stop="removeEntry(game.id)"
               >
                 <q-tooltip>Remove from Recently</q-tooltip>
@@ -83,9 +86,13 @@
         </template>
       </VirtualGrid>
 
-      <div v-if="games.length === 0 && !loading" class="text-center q-mt-xl" style="color: var(--m3-on-surface-variant);">
+      <div
+        v-if="games.length === 0 && !loading"
+        class="text-center q-mt-xl"
+        style="color: var(--m3-on-surface-variant)"
+      >
         <q-icon name="history" size="64px" />
-        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface);">Nothing opened yet</div>
+        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface)">Nothing opened yet</div>
         <div class="text-body2">Games whose folder or archive you open show up here.</div>
       </div>
 
@@ -97,17 +104,17 @@
     <q-dialog v-model="confirmClearDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-icon name="warning" size="lg" class="q-mr-sm" style="color: var(--m3-error);" />
-          <span style="color: var(--m3-on-surface);">Clear the whole Recently list?</span>
+          <q-icon name="warning" size="lg" class="q-mr-sm" style="color: var(--m3-error)" />
+          <span style="color: var(--m3-on-surface)">Clear the whole Recently list?</span>
         </q-card-section>
-        <q-card-section class="text-caption q-pt-none" style="color: var(--m3-on-surface-variant);">
+        <q-card-section class="text-caption q-pt-none" style="color: var(--m3-on-surface-variant)">
           Only the history is cleared. The games themselves are not touched.
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
           <q-btn
             unelevated
-            style="background: var(--m3-error) !important; color: var(--m3-on-error) !important;"
+            style="background: var(--m3-error) !important; color: var(--m3-on-error) !important"
             label="Clear"
             @click="doClear"
           />

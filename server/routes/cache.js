@@ -124,7 +124,12 @@ router.post('/search/preload', async (req, res, next) => {
 router.get('/adopt', async (req, res, next) => {
   try {
     const { gameIds, libraryId, subPaths } = req.query;
-    const gameIdList = gameIds ? String(gameIds).split(',').map(Number).filter((n) => !isNaN(n) && n > 0) : [];
+    const gameIdList = gameIds
+      ? String(gameIds)
+          .split(',')
+          .map(Number)
+          .filter((n) => !isNaN(n) && n > 0)
+      : [];
     const subPathList = subPaths ? String(subPaths).split(',') : [];
     const libId = libraryId ? Number(libraryId) : 0;
 
@@ -132,7 +137,8 @@ router.get('/adopt', async (req, res, next) => {
       return res.send({ entries: [] });
     }
 
-    const subPathEntries = libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
+    const subPathEntries =
+      libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
     const entries = await db.getAdoptCacheMixed(gameIdList, subPathEntries);
     res.send({ entries });
   } catch (err) {
@@ -142,14 +148,40 @@ router.get('/adopt', async (req, res, next) => {
 
 router.post('/adopt', async (req, res, next) => {
   try {
-    const { gameId, libraryId, subPath, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description } = req.body;
+    const {
+      gameId,
+      libraryId,
+      subPath,
+      sourceType,
+      sourceId,
+      sourceUrl,
+      name,
+      coverUrl,
+      makers,
+      genres,
+      tags,
+      description,
+    } = req.body;
     if (!sourceType || !sourceId) {
       return res.status(400).send({ error: 'sourceType, sourceId are required' });
     }
     if (!gameId && !libraryId && !subPath) {
       return res.status(400).send({ error: 'gameId or libraryId + subPath is required' });
     }
-    await db.setAdoptCache({ gameId, libraryId, subPath, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description });
+    await db.setAdoptCache({
+      gameId,
+      libraryId,
+      subPath,
+      sourceType,
+      sourceId,
+      sourceUrl,
+      name,
+      coverUrl,
+      makers,
+      genres,
+      tags,
+      description,
+    });
     res.send({ ok: true });
   } catch (err) {
     next(err);
@@ -185,7 +217,12 @@ router.post('/adopt/batch', async (req, res, next) => {
 router.delete('/adopt', async (req, res, next) => {
   try {
     const { gameIds, libraryId, subPaths } = req.query;
-    const gameIdList = gameIds ? String(gameIds).split(',').map(Number).filter((n) => !isNaN(n) && n > 0) : [];
+    const gameIdList = gameIds
+      ? String(gameIds)
+          .split(',')
+          .map(Number)
+          .filter((n) => !isNaN(n) && n > 0)
+      : [];
     const subPathList = subPaths ? String(subPaths).split(',') : [];
     const libId = libraryId ? Number(libraryId) : 0;
 
@@ -193,7 +230,8 @@ router.delete('/adopt', async (req, res, next) => {
       return res.send({ ok: true });
     }
 
-    const subPathEntries = libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
+    const subPathEntries =
+      libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
     await db.deleteAdoptCacheMixed(gameIdList, subPathEntries);
     res.send({ ok: true });
   } catch (err) {

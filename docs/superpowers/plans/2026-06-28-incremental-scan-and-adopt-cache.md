@@ -12,20 +12,21 @@
 
 ## 文件结构
 
-| 文件 | 职责 | 操作 |
-|------|------|------|
-| `server/database/schema.js` | 建表 DDL | 修改：加 adopt_cache 表 |
-| `server/database/init.js` | 迁移逻辑 | 修改：加 adopt_cache 到 ALL_TABLES + TABLE_DDL |
-| `server/database/db.js` | 数据访问层 | 修改：加 adopt_cache CRUD 函数 |
-| `server/routes/cache.js` | 缓存 API 路由 | 修改：加 adopt_cache 4 个端点 |
-| `server/routes/game.js` | 游戏 API 路由 | 修改：scan/add 返回新游戏列表 |
-| `src/components/ScannerDialog.vue` | 扫描对话框 | 修改：增量合并 + adopt 缓存 + 缓存共享 |
+| 文件                               | 职责          | 操作                                           |
+| ---------------------------------- | ------------- | ---------------------------------------------- |
+| `server/database/schema.js`        | 建表 DDL      | 修改：加 adopt_cache 表                        |
+| `server/database/init.js`          | 迁移逻辑      | 修改：加 adopt_cache 到 ALL_TABLES + TABLE_DDL |
+| `server/database/db.js`            | 数据访问层    | 修改：加 adopt_cache CRUD 函数                 |
+| `server/routes/cache.js`           | 缓存 API 路由 | 修改：加 adopt_cache 4 个端点                  |
+| `server/routes/game.js`            | 游戏 API 路由 | 修改：scan/add 返回新游戏列表                  |
+| `src/components/ScannerDialog.vue` | 扫描对话框    | 修改：增量合并 + adopt 缓存 + 缓存共享         |
 
 ---
 
 ### 任务 1：数据库 — adopt_cache 表 + 迁移
 
 **文件：**
+
 - 修改：`server/database/schema.js`
 - 修改：`server/database/init.js`
 - 修改：`server/database/db.js`
@@ -110,7 +111,18 @@ const getAdoptCache = async (gameIds) => {
   }));
 };
 
-const setAdoptCache = async ({ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }) => {
+const setAdoptCache = async ({
+  gameId,
+  sourceType,
+  sourceId,
+  sourceUrl,
+  name,
+  coverUrl,
+  makers,
+  genres,
+  tags,
+  description,
+}) => {
   const data = {
     game_id: gameId,
     source_type: sourceType,
@@ -168,6 +180,7 @@ git commit -m "feat: add adopt_cache table and CRUD functions"
 ### 任务 2：后端 — adopt_cache API 端点
 
 **文件：**
+
 - 修改：`server/routes/cache.js`
 
 - [ ] **步骤 1：添加 import**
@@ -185,7 +198,10 @@ router.get('/adopt', async (req, res, next) => {
     if (!gameIds) {
       return res.status(400).send({ error: 'gameIds is required' });
     }
-    const ids = String(gameIds).split(',').map(Number).filter((n) => !isNaN(n));
+    const ids = String(gameIds)
+      .split(',')
+      .map(Number)
+      .filter((n) => !isNaN(n));
     const entries = await db.getAdoptCache(ids);
     res.send({ entries });
   } catch (err) {
@@ -199,11 +215,33 @@ router.get('/adopt', async (req, res, next) => {
 ```js
 router.post('/adopt', async (req, res, next) => {
   try {
-    const { gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description } = req.body;
+    const {
+      gameId,
+      sourceType,
+      sourceId,
+      sourceUrl,
+      name,
+      coverUrl,
+      makers,
+      genres,
+      tags,
+      description,
+    } = req.body;
     if (!gameId || !sourceType || !sourceId) {
       return res.status(400).send({ error: 'gameId, sourceType, sourceId are required' });
     }
-    await db.setAdoptCache({ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description });
+    await db.setAdoptCache({
+      gameId,
+      sourceType,
+      sourceId,
+      sourceUrl,
+      name,
+      coverUrl,
+      makers,
+      genres,
+      tags,
+      description,
+    });
     res.send({ ok: true });
   } catch (err) {
     next(err);
@@ -237,7 +275,10 @@ router.delete('/adopt', async (req, res, next) => {
     if (!gameIds) {
       return res.status(400).send({ error: 'gameIds is required' });
     }
-    const ids = String(gameIds).split(',').map(Number).filter((n) => !isNaN(n));
+    const ids = String(gameIds)
+      .split(',')
+      .map(Number)
+      .filter((n) => !isNaN(n));
     await db.deleteAdoptCache(ids);
     res.send({ ok: true });
   } catch (err) {
@@ -264,6 +305,7 @@ git commit -m "feat: add adopt_cache API endpoints"
 ### 任务 3：后端 — 修改 scan/add 返回新游戏列表
 
 **文件：**
+
 - 修改：`server/routes/game.js`
 
 - [ ] **步骤 1：修改 POST /scan/add 端点**
@@ -318,7 +360,9 @@ router.post('/scan/add', async (req, res, next) => {
     if (rows.length > 0) {
       const BATCH_SIZE = 100;
       for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-        const ids = await db.knex('game').insert(rows.slice(i, i + BATCH_SIZE), ['id', 'name', 'sub_path']);
+        const ids = await db
+          .knex('game')
+          .insert(rows.slice(i, i + BATCH_SIZE), ['id', 'name', 'sub_path']);
         inserted.push(...ids);
       }
     }
@@ -348,6 +392,7 @@ git commit -m "feat: scan/add returns inserted game list"
 ### 任务 4：前端 — 增量 Scan 合并 + adopt 缓存 + 缓存共享
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：添加 preloadAdoptCache 函数**
@@ -402,8 +447,8 @@ const preloadAdoptCache = async () => {
 将 `loadUnscraped` 函数末尾的 `await preloadCache();` 改为：
 
 ```ts
-  await preloadCache();
-  await preloadAdoptCache();
+await preloadCache();
+await preloadAdoptCache();
 ```
 
 - [ ] **步骤 3：修改 onLibraryChange — 不再清空缓存**
@@ -505,9 +550,7 @@ const scanDir = async () => {
           });
         }
       }
-      const newRows = scanResults.value.filter(
-        (r) => addedGames.some((g) => g.id === r.gameId),
-      );
+      const newRows = scanResults.value.filter((r) => addedGames.some((g) => g.id === r.gameId));
       if (newRows.length > 0) {
         const keywords = newRows.map((r) => r.searchKeyword || r.name);
         try {
@@ -521,7 +564,9 @@ const scanDir = async () => {
         }
         const newGameIds = newRows.map((r) => r.gameId);
         try {
-          const adoptRes = await api.get('/cache/adopt', { params: { gameIds: newGameIds.join(',') } });
+          const adoptRes = await api.get('/cache/adopt', {
+            params: { gameIds: newGameIds.join(',') },
+          });
           const entries = adoptRes.data.entries || [];
           const adoptMap = new Map(entries.map((e) => [e.game_id, e]));
           for (const row of newRows) {
@@ -599,18 +644,20 @@ const onAdopted = (data: AdoptData) => {
   scrapingRow.value.adoptData = data;
   scrapingRow.value.source = data.source;
   scrapingRow.value.status = 'adopted';
-  api.post('/cache/adopt', {
-    gameId: scrapingRow.value.gameId,
-    sourceType: data.source,
-    sourceId: data.sourceId,
-    sourceUrl: getSourceUrl(data.source, data.sourceId),
-    name: data.detail.title,
-    coverUrl: data.detail.coverURL,
-    makers: data.detail.makers,
-    genres: data.detail.genres,
-    tags: data.detail.tags,
-    description: data.detail.description,
-  }).catch(() => {});
+  api
+    .post('/cache/adopt', {
+      gameId: scrapingRow.value.gameId,
+      sourceType: data.source,
+      sourceId: data.sourceId,
+      sourceUrl: getSourceUrl(data.source, data.sourceId),
+      name: data.detail.title,
+      coverUrl: data.detail.coverURL,
+      makers: data.detail.makers,
+      genres: data.detail.genres,
+      tags: data.detail.tags,
+      description: data.detail.description,
+    })
+    .catch(() => {});
 };
 ```
 
@@ -619,52 +666,58 @@ const onAdopted = (data: AdoptData) => {
 在 `quickAdopt` 函数中，找到第一个 `row.status = 'adopted';`（缓存命中分支），在其后添加：
 
 ```ts
-    api.post('/cache/adopt', {
-      gameId: row.gameId,
-      sourceType: row.source || 'dlsite',
-      sourceId: row.searchResult!.id,
-      sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult!.id),
-      name: cached.title,
-      coverUrl: cached.coverURL,
-      makers: cached.makers,
-      genres: cached.genres,
-      tags: cached.tags,
-      description: cached.description,
-    }).catch(() => {});
+api
+  .post('/cache/adopt', {
+    gameId: row.gameId,
+    sourceType: row.source || 'dlsite',
+    sourceId: row.searchResult!.id,
+    sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult!.id),
+    name: cached.title,
+    coverUrl: cached.coverURL,
+    makers: cached.makers,
+    genres: cached.genres,
+    tags: cached.tags,
+    description: cached.description,
+  })
+  .catch(() => {});
 ```
 
 找到第二个 `row.status = 'adopted';`（API 获取分支，try 块内），在其后添加：
 
 ```ts
-    api.post('/cache/adopt', {
-      gameId: row.gameId,
-      sourceType: row.source || 'dlsite',
-      sourceId: row.searchResult!.id,
-      sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult!.id),
-      name: detail.title,
-      coverUrl: detail.coverURL,
-      makers: detail.makers,
-      genres: detail.genres,
-      tags: detail.tags,
-      description: detail.description,
-    }).catch(() => {});
+api
+  .post('/cache/adopt', {
+    gameId: row.gameId,
+    sourceType: row.source || 'dlsite',
+    sourceId: row.searchResult!.id,
+    sourceUrl: getSourceUrl(row.source || 'dlsite', row.searchResult!.id),
+    name: detail.title,
+    coverUrl: detail.coverURL,
+    makers: detail.makers,
+    genres: detail.genres,
+    tags: detail.tags,
+    description: detail.description,
+  })
+  .catch(() => {});
 ```
 
 找到第三个 `row.status = 'adopted';`（catch 块内，fallback 分支），在其后添加：
 
 ```ts
-    api.post('/cache/adopt', {
-      gameId: row.gameId,
-      sourceType: row.source || 'dlsite',
-      sourceId: sr.id,
-      sourceUrl: getSourceUrl(row.source || 'dlsite', sr.id),
-      name: fallback.title,
-      coverUrl: fallback.coverURL,
-      makers: fallback.makers,
-      genres: fallback.genres,
-      tags: fallback.tags,
-      description: fallback.description,
-    }).catch(() => {});
+api
+  .post('/cache/adopt', {
+    gameId: row.gameId,
+    sourceType: row.source || 'dlsite',
+    sourceId: sr.id,
+    sourceUrl: getSourceUrl(row.source || 'dlsite', sr.id),
+    name: fallback.title,
+    coverUrl: fallback.coverURL,
+    makers: fallback.makers,
+    genres: fallback.genres,
+    tags: fallback.tags,
+    description: fallback.description,
+  })
+  .catch(() => {});
 ```
 
 - [ ] **步骤 7：修改 discardRow — 删除 adopt_cache**
@@ -707,14 +760,14 @@ const discardRow = (row: ScanRow) => {
 在 `doSubmit` 函数中，找到 `if (staleRows.length > 0) {` 之前，添加 adopt_cache 删除逻辑：
 
 ```ts
-  const adoptedGameIds = games.map((g) => g.gameId);
-  if (adoptedGameIds.length > 0) {
-    try {
-      await api.delete('/cache/adopt', { params: { gameIds: adoptedGameIds.join(',') } });
-    } catch {
-      // adopt cache delete failure is non-critical
-    }
+const adoptedGameIds = games.map((g) => g.gameId);
+if (adoptedGameIds.length > 0) {
+  try {
+    await api.delete('/cache/adopt', { params: { gameIds: adoptedGameIds.join(',') } });
+  } catch {
+    // adopt cache delete failure is non-critical
   }
+}
 ```
 
 完整的 `doSubmit` 函数变为：
@@ -850,6 +903,7 @@ watch(modelValue, (val) => {
 运行：`cd d:\work\game-lib && npx quasar dev -m electron`
 
 测试场景：
+
 1. 打开 Scan & Scrape 对话框，选择一个库
 2. 点 Scan → 确认游戏列表加载
 3. 点 Scrape All → 等待完成

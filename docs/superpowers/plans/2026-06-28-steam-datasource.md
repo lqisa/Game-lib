@@ -25,16 +25,17 @@ server/
 
 ### 文件职责
 
-| 文件 | 职责 |
-|------|------|
-| `steam.js` | Steam API 调用、数据标准化、多语言 Fallback、缓存逻辑 |
-| `scraper.js` | HTTP 路由端点、自动搜索策略调度 |
+| 文件         | 职责                                                  |
+| ------------ | ----------------------------------------------------- |
+| `steam.js`   | Steam API 调用、数据标准化、多语言 Fallback、缓存逻辑 |
+| `scraper.js` | HTTP 路由端点、自动搜索策略调度                       |
 
 ---
 
 ### 任务 1：创建 Steam Scraper 核心模块
 
 **文件：**
+
 - 创建：`server/scraper/steam.js`
 - 参考：`server/scraper/vndb.js`, `server/scraper/dlsite.js`
 
@@ -131,9 +132,7 @@ const fetchWithLocale = async (appId, locale) => {
     genres: Array.isArray(appData.genres)
       ? appData.genres.map((g) => g.description).filter(Boolean)
       : [],
-    tags: Array.isArray(appData.tags)
-      ? appData.tags.map((t) => t.name).filter(Boolean)
-      : [],
+    tags: Array.isArray(appData.tags) ? appData.tags.map((t) => t.name).filter(Boolean) : [],
     description: stripHtmlTags(appData.short_description || ''),
   };
 };
@@ -197,6 +196,7 @@ git commit -m "feat(steam): add Steam scraper with search, detail, fallback and 
 ### 任务 2：添加 Steam 路由端点
 
 **文件：**
+
 - 修改：`server/routes/scraper.js`
 - 参考：现有 `/dlsite/search`, `/vndb/fetch` 等路由模式
 
@@ -266,6 +266,7 @@ git commit -m "feat(scraper): add Steam search and fetch routes"
 ### 任务 3：更新自动搜索策略
 
 **文件：**
+
 - 修改：`server/routes/scraper.js` (auto/search 路由)
 
 - [ ] **步骤 1：定位 auto/search 路由**
@@ -310,6 +311,7 @@ if (source === 'steam') {
 - [ ] **步骤 4：测试 auto/search 逻辑**
 
 手动验证：
+
 - 英文关键词（如 "Portal"）应先调用 searchSteam
 - RJ 码关键词应仍优先 DLSite
 - 中文关键词应保持原有顺序，steam 在最后
@@ -326,6 +328,7 @@ git commit -m "feat(scraper): update auto-search strategy to include Steam datas
 ### 任务 4：端到端集成测试
 
 **文件：**
+
 - 测试：手动验证所有功能路径
 
 - [ ] **步骤 1：启动开发服务器**
@@ -342,6 +345,7 @@ curl -X POST http://localhost:<port>/scraper/steam/search \
 ```
 
 预期响应：
+
 ```json
 {
   "results": [
@@ -364,6 +368,7 @@ curl -X POST http://localhost:<port>/scraper/steam/fetch \
 ```
 
 预期响应：
+
 ```json
 {
   "id": "620",
@@ -372,7 +377,7 @@ curl -X POST http://localhost:<port>/scraper/steam/fetch \
   "makers": ["Valve"],
   "genres": ["Action", "Indie", "Puzzle"],
   "tags": ["Puzzle", "Physics"],
-  description: "..."
+  "description": "..."
 }
 ```
 
@@ -460,11 +465,11 @@ git commit -m "test(steam): verify integration and fix issues"
 ### 依赖关系
 
 ```
-任务 1 (核心模块) 
+任务 1 (核心模块)
    ↓ 必须先完成
 任务 2 (路由端点)
    ↓ 可并行
-任务 3 (搜索策略) 
+任务 3 (搜索策略)
    ↓ 全部完成后
 任务 4 (集成测试)
 ```

@@ -12,13 +12,13 @@
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|---|
-| 桌面框架 | Quasar 2.x Electron 模式 |
-| 前端 | Vue 3 + TypeScript + Pinia |
-| 后端 | Express + Knex.js |
-| 数据库 | SQLite3 |
-| 爬虫 | cheerio + axios（从 kikoeru 改造） |
+| 层       | 技术                               |
+| -------- | ---------------------------------- |
+| 桌面框架 | Quasar 2.x Electron 模式           |
+| 前端     | Vue 3 + TypeScript + Pinia         |
+| 后端     | Express + Knex.js                  |
+| 数据库   | SQLite3                            |
+| 爬虫     | cheerio + axios（从 kikoeru 改造） |
 
 ## 数据库设计
 
@@ -101,6 +101,7 @@ CREATE TABLE setting (
 ```
 
 关键设计：
+
 - 厂商/类型/TAG 与游戏均为 M2M 关系，通过中间表关联
 - `game_source` 记录采集来源和外部 ID，为 Bangumi/VNDB 扩展预留
 - `setting` 表存储 Token 等配置
@@ -154,76 +155,82 @@ game-lib/
 
 ### 游戏库
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/libraries` | 获取所有游戏库 |
-| POST | `/api/libraries` | 新增游戏库 |
-| PUT | `/api/libraries/:id` | 修改游戏库 |
-| DELETE | `/api/libraries/:id` | 删除游戏库 |
+| 方法   | 路径                 | 说明           |
+| ------ | -------------------- | -------------- |
+| GET    | `/api/libraries`     | 获取所有游戏库 |
+| POST   | `/api/libraries`     | 新增游戏库     |
+| PUT    | `/api/libraries/:id` | 修改游戏库     |
+| DELETE | `/api/libraries/:id` | 删除游戏库     |
 
 ### 游戏
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/games?page=&pageSize=50&keyword=` | 分页查询所有游戏 |
-| GET | `/api/games/:id` | 游戏详情 |
-| PUT | `/api/games/:id` | 修改游戏信息 |
-| DELETE | `/api/games/:id` | 删除游戏 |
-| POST | `/api/games/batch-delete` | 批量删除 |
+| 方法   | 路径                                    | 说明             |
+| ------ | --------------------------------------- | ---------------- |
+| GET    | `/api/games?page=&pageSize=50&keyword=` | 分页查询所有游戏 |
+| GET    | `/api/games/:id`                        | 游戏详情         |
+| PUT    | `/api/games/:id`                        | 修改游戏信息     |
+| DELETE | `/api/games/:id`                        | 删除游戏         |
+| POST   | `/api/games/batch-delete`               | 批量删除         |
 
 ### 目录扫描
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/scanner/scan` | 扫描游戏库目录 |
-| POST | `/api/scanner/add` | 将扫描结果添加为游戏 |
+| 方法 | 路径                | 说明                 |
+| ---- | ------------------- | -------------------- |
+| POST | `/api/scanner/scan` | 扫描游戏库目录       |
+| POST | `/api/scanner/add`  | 将扫描结果添加为游戏 |
 
 ### 采集
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
+| 方法 | 路径                         | 说明              |
+| ---- | ---------------------------- | ----------------- |
 | POST | `/api/scraper/dlsite/search` | DLSite 关键字搜索 |
-| POST | `/api/scraper/dlsite/fetch` | DLSite 采集详情 |
-| POST | `/api/scraper/dlsite/batch` | 一键批量采集 |
-| POST | `/api/scraper/adopt` | 采纳采集结果 |
+| POST | `/api/scraper/dlsite/fetch`  | DLSite 采集详情   |
+| POST | `/api/scraper/dlsite/batch`  | 一键批量采集      |
+| POST | `/api/scraper/adopt`         | 采纳采集结果      |
 
 ### 设置
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/settings` | 获取所有设置 |
-| PUT | `/api/settings` | 更新设置 |
+| 方法 | 路径            | 说明         |
+| ---- | --------------- | ------------ |
+| GET  | `/api/settings` | 获取所有设置 |
+| PUT  | `/api/settings` | 更新设置     |
 
 ### 封面
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/cover/:id` | 获取游戏封面 |
+| 方法 | 路径             | 说明         |
+| ---- | ---------------- | ------------ |
+| GET  | `/api/cover/:id` | 获取游戏封面 |
 
 ## 前端页面
 
 ### MainLayout
+
 - 左侧边栏：Game Lib / Setting
 - 顶栏：搜索框
 - 主区域：内容区
 
 ### GameLibPage
+
 - 展示所有库的游戏合集（无库切换器）
 - 卡片流式布局，默认 50 条，滚动加载
 - 卡片显示：封面 + 名称 + 厂商
 
 ### GameDetailPage
+
 - 封面 + 游戏固有信息 + 安装路径 + 采集来源
 - 重新采集 / 编辑按钮
 
 ### ScannerDialog
+
 - 表格：游戏名 | DLSite 采集按钮 | 状态
 - 一键采集按钮，并发控制
 
 ### SearchResultDialog
+
 - 展示采集结果，采纳/取消
 
 ### SettingPage
+
 - 游戏库管理（增删改）
 - API Token 管理
 
@@ -243,11 +250,11 @@ game-lib/
 
 ## MVP 范围
 
-| 包含 | 不包含（后续迭代） |
-|------|------------------|
-| 游戏库增删改查 | Bangumi / VNDB 采集 |
-| DLSite 单源采集 | 全局搜索弹窗 (Ctrl+Shift+F) |
-| 目录扫描 + 添加游戏 | 批量修改路径 |
-| 卡片浏览 + 分页加载 | 匹配算法自动采纳 |
-| 采集结果二次确认弹窗 | |
-| 设置页（Token + 游戏库管理）| |
+| 包含                         | 不包含（后续迭代）          |
+| ---------------------------- | --------------------------- |
+| 游戏库增删改查               | Bangumi / VNDB 采集         |
+| DLSite 单源采集              | 全局搜索弹窗 (Ctrl+Shift+F) |
+| 目录扫描 + 添加游戏          | 批量修改路径                |
+| 卡片浏览 + 分页加载          | 匹配算法自动采纳            |
+| 采集结果二次确认弹窗         |                             |
+| 设置页（Token + 游戏库管理） |                             |

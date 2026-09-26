@@ -7,7 +7,8 @@ const router = express.Router();
 const attachDisplayNames = async (games) => {
   if (games.length === 0) return games;
   const ids = games.map((g) => g.id);
-  const sources = await db.knex('game_source')
+  const sources = await db
+    .knex('game_source')
     .whereIn('game_id', ids)
     .whereNotNull('name')
     .orderBy('id')

@@ -4,7 +4,9 @@
     :class="{ 'game-card--selected': selected }"
     @click="handleClick"
   >
-    <div class="game-cover">
+    <!-- The cover doubles as its own backdrop (see .game-cover::before), exposed as a
+         custom property because the URL only exists at runtime. -->
+    <div class="game-cover" :style="{ '--cover-url': coverFill }">
       <!-- A cover can be missing for two different reasons: the game was never scraped
            (or its source has no cover art), or cover_path is set but the file is not a
            decodable image. Both fall back to the same placeholder instead of leaving the
@@ -23,10 +25,10 @@
         draggable="false"
         alt=""
       />
-      <div v-if="selectable && selected" class="absolute-top-left q-pa-xs">
+      <div v-if="selectable && selected" class="absolute-top-left q-pa-xs" style="z-index: 2">
         <q-icon name="check_circle" color="primary" size="24px" />
       </div>
-      <div v-if="duplicate" class="absolute-top-right q-pa-xs" style="z-index: 1">
+      <div v-if="duplicate" class="absolute-top-right q-pa-xs" style="z-index: 2">
         <q-icon name="content_copy" color="warning" size="18px">
           <q-tooltip>Shares a source with another game</q-tooltip>
         </q-icon>
@@ -34,11 +36,7 @@
       <div class="game-cover__title">
         <div class="text-subtitle2 ellipsis game-cover__name">
           {{ game.sourceName || game.name }}
-          <q-tooltip
-            v-if="game.sourceName"
-            anchor="bottom middle"
-            self="top middle"
-          >
+          <q-tooltip v-if="game.sourceName" anchor="bottom middle" self="top middle">
             {{ game.name }}
           </q-tooltip>
         </div>
@@ -89,6 +87,10 @@ const coverSrc = computed(() => {
   return '';
 });
 
+// `url("")` would resolve to the page itself, so an absent cover yields `none` and the
+// tile falls back to the surface gradient.
+const coverFill = computed(() => (coverSrc.value ? `url("${coverSrc.value}")` : 'none'));
+
 // Set when a cover file exists but is not a decodable image, so the tile falls back to the
 // placeholder rather than going blank. No reset-on-change is needed: both lists key their
 // items by game id (`item-key` on VirtualGrid), so an instance is never rebound to another
@@ -125,21 +127,48 @@ const handleClick = (e: MouseEvent) => {
   box-shadow: 0 0 0 2px var(--m3-primary) !important;
 }
 
+/* Frosted-glass base for the letterbox bars a non-portrait cover leaves: the cover itself,
+   blurred and lifted, so the tile reads as one pane of glass tinted by the artwork.
+   The blur is a `filter` on this layer rather than `backdrop-filter` on the artwork. Both
+   give the same picture here, but `backdrop-filter` re-samples whatever is behind it on
+   every frame, while this is painted once and then cached by the compositor.
+   `inset` + `scale` overshoot the tile so the blur's soft edge falls outside the visible
+   area instead of showing as a halo. */
 .game-cover {
   position: relative;
   aspect-ratio: 2.8 / 4;
-  background: var(--m3-surface-container-highest);
+  background-color: var(--m3-surface-container-highest);
+  background-image: linear-gradient(
+    165deg,
+    var(--m3-surface-container) 0%,
+    var(--m3-surface-dim) 100%
+  );
   overflow: hidden;
 }
 
+.game-cover::before {
+  content: '';
+  position: absolute;
+  inset: -14%;
+  z-index: 0;
+  background-image: var(--cover-url, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px) saturate(1.6) brightness(0.6);
+  transform: scale(1.16);
+}
+
+/* Above the backdrop, but below the title overlay. */
 .game-cover__img {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
 /* `cover` rather than `contain`: the placeholder is decorative, so filling the tile looks
-   better than letterboxing it against the surface colour. */
+   better than letterboxing it against the backdrop. */
 .game-cover__placeholder {
   width: 100%;
   height: 100%;
@@ -154,6 +183,7 @@ const handleClick = (e: MouseEvent) => {
 
 .game-cover__title {
   position: absolute;
+  z-index: 2;
   bottom: 0;
   left: 0;
   right: 0;

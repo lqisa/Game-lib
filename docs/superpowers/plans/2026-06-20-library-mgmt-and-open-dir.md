@@ -12,19 +12,20 @@
 
 ## 文件结构
 
-| 文件 | 职责 |
-|------|------|
-| `src-electron/electron-main.ts` | 注册 ipcMain handlers |
+| 文件                               | 职责                                |
+| ---------------------------------- | ----------------------------------- |
+| `src-electron/electron-main.ts`    | 注册 ipcMain handlers               |
 | `src-electron/electron-preload.ts` | 通过 contextBridge 暴露 electronAPI |
-| `src/types/electron.d.ts` | TypeScript 类型声明 |
-| `src/pages/SettingPage.vue` | Library 编辑弹窗 + Browse 按钮 |
-| `src/pages/GameDetailPage.vue` | 打开目录按钮 |
+| `src/types/electron.d.ts`          | TypeScript 类型声明                 |
+| `src/pages/SettingPage.vue`        | Library 编辑弹窗 + Browse 按钮      |
+| `src/pages/GameDetailPage.vue`     | 打开目录按钮                        |
 
 ---
 
 ### 任务 1：Electron IPC 通道 — electron-main.ts
 
 **文件：**
+
 - 修改：`src-electron/electron-main.ts`
 
 - [ ] **步骤 1：添加 ipcMain handlers**
@@ -32,7 +33,7 @@
 在文件顶部 import 中加入 `ipcMain`, `dialog`, `shell`：
 
 ```typescript
-import { BrowserWindow, app, ipcMain, dialog, shell } from "electron";
+import { BrowserWindow, app, ipcMain, dialog, shell } from 'electron';
 ```
 
 在 `void app.whenReady().then(...)` 内、`createWindow()` 调用之前，注册两个 handler：
@@ -41,15 +42,15 @@ import { BrowserWindow, app, ipcMain, dialog, shell } from "electron";
 ipcMain.handle('dialog:openDirectory', async (_event, title: string) => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
-    title: title || 'Select Directory'
-  })
-  if (result.canceled || result.filePaths.length === 0) return null
-  return result.filePaths[0]
-})
+    title: title || 'Select Directory',
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
 
 ipcMain.handle('shell:openPath', async (_event, path: string) => {
-  await shell.openPath(path)
-})
+  await shell.openPath(path);
+});
 ```
 
 - [ ] **步骤 2：验证编译**
@@ -70,6 +71,7 @@ git commit -m "feat: add IPC handlers for directory dialog and open path"
 ### 任务 2：Electron IPC 通道 — preload + 类型声明
 
 **文件：**
+
 - 修改：`src-electron/electron-preload.ts`
 - 创建：`src/types/electron.d.ts`
 
@@ -78,16 +80,15 @@ git commit -m "feat: add IPC handlers for directory dialog and open path"
 修改 `src-electron/electron-preload.ts`，将现有内容替换为：
 
 ```typescript
-import { contextBridge, ipcRenderer } from "electron";
-import { quasarRuntime } from "#q-app/electron/preload";
+import { contextBridge, ipcRenderer } from 'electron';
+import { quasarRuntime } from '#q-app/electron/preload';
 
-contextBridge.exposeInMainWorld("quasarRuntime", quasarRuntime);
+contextBridge.exposeInMainWorld('quasarRuntime', quasarRuntime);
 
-contextBridge.exposeInMainWorld("electronAPI", {
+contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: (title: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openDirectory', title),
-  openPath: (path: string): Promise<void> =>
-    ipcRenderer.invoke('shell:openPath', path),
+  openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 });
 ```
 
@@ -97,12 +98,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 ```typescript
 interface ElectronAPI {
-  openDirectory(title: string): Promise<string | null>
-  openPath(path: string): Promise<void>
+  openDirectory(title: string): Promise<string | null>;
+  openPath(path: string): Promise<void>;
 }
 
 interface Window {
-  electronAPI?: ElectronAPI
+  electronAPI?: ElectronAPI;
 }
 ```
 
@@ -124,6 +125,7 @@ git commit -m "feat: expose electronAPI via preload for directory dialog and ope
 ### 任务 3：SettingPage — Library 编辑弹窗 + Browse 按钮
 
 **文件：**
+
 - 修改：`src/pages/SettingPage.vue`
 
 - [ ] **步骤 1：添加编辑弹窗状态和逻辑**
@@ -131,33 +133,36 @@ git commit -m "feat: expose electronAPI via preload for directory dialog and ope
 在 `<script setup>` 中添加：
 
 ```typescript
-const showEditDialog = ref(false)
-const editLibId = ref(0)
-const editLibName = ref('')
-const editLibPath = ref('')
+const showEditDialog = ref(false);
+const editLibId = ref(0);
+const editLibName = ref('');
+const editLibPath = ref('');
 
 const openEditDialog = (lib: Library) => {
-  editLibId.value = lib.id
-  editLibName.value = lib.name
-  editLibPath.value = lib.path
-  showEditDialog.value = true
-}
+  editLibId.value = lib.id;
+  editLibName.value = lib.name;
+  editLibPath.value = lib.path;
+  showEditDialog.value = true;
+};
 
 const saveEditLibrary = async () => {
-  if (!editLibName.value || !editLibPath.value) return
-  await api.put(`/libraries/${editLibId.value}`, { name: editLibName.value, path: editLibPath.value })
-  showEditDialog.value = false
-  await fetchLibraries()
-}
+  if (!editLibName.value || !editLibPath.value) return;
+  await api.put(`/libraries/${editLibId.value}`, {
+    name: editLibName.value,
+    path: editLibPath.value,
+  });
+  showEditDialog.value = false;
+  await fetchLibraries();
+};
 
 const browseDirectory = async (target: 'add' | 'edit') => {
-  if (!window.electronAPI) return
-  const path = await window.electronAPI.openDirectory('Select Library Path')
+  if (!window.electronAPI) return;
+  const path = await window.electronAPI.openDirectory('Select Library Path');
   if (path) {
-    if (target === 'add') newLibPath.value = path
-    else editLibPath.value = path
+    if (target === 'add') newLibPath.value = path;
+    else editLibPath.value = path;
   }
-}
+};
 ```
 
 - [ ] **步骤 2：修改 Library 列表项，添加编辑按钮**
@@ -182,7 +187,12 @@ const browseDirectory = async (target: 'add' | 'edit') => {
 ```html
 <q-input v-model="newLibPath" label="Library Path" outlined class="q-mb-md">
   <template v-slot:append>
-    <q-icon v-if="window.electronAPI" name="folder_open" class="cursor-pointer" @click="browseDirectory('add')" />
+    <q-icon
+      v-if="window.electronAPI"
+      name="folder_open"
+      class="cursor-pointer"
+      @click="browseDirectory('add')"
+    />
   </template>
 </q-input>
 ```
@@ -190,7 +200,7 @@ const browseDirectory = async (target: 'add' | 'edit') => {
 注意：模板中引用 `window.electronAPI` 需要一个 computed 或直接在模板中用 `!!window.electronAPI`。添加一个 computed：
 
 ```typescript
-const hasElectronAPI = computed(() => !!window.electronAPI)
+const hasElectronAPI = computed(() => !!window.electronAPI);
 ```
 
 模板中用 `v-if="hasElectronAPI"` 替代 `v-if="window.electronAPI"`。
@@ -209,7 +219,12 @@ const hasElectronAPI = computed(() => !!window.electronAPI)
       <q-input v-model="editLibName" label="Library Name" outlined class="q-mb-md" />
       <q-input v-model="editLibPath" label="Library Path" outlined>
         <template v-slot:append>
-          <q-icon v-if="hasElectronAPI" name="folder_open" class="cursor-pointer" @click="browseDirectory('edit')" />
+          <q-icon
+            v-if="hasElectronAPI"
+            name="folder_open"
+            class="cursor-pointer"
+            @click="browseDirectory('edit')"
+          />
         </template>
       </q-input>
     </q-card-section>
@@ -239,6 +254,7 @@ git commit -m "feat: add library edit dialog and directory browse button"
 ### 任务 4：GameDetailPage — 打开目录按钮
 
 **文件：**
+
 - 修改：`src/pages/GameDetailPage.vue`
 
 - [ ] **步骤 1：添加 openDir 函数**
@@ -246,19 +262,19 @@ git commit -m "feat: add library edit dialog and directory browse button"
 在 `<script setup>` 中添加：
 
 ```typescript
-const hasElectronAPI = computed(() => !!window.electronAPI)
+const hasElectronAPI = computed(() => !!window.electronAPI);
 
 const openDir = async () => {
-  if (!game.value?.library?.path || !window.electronAPI) return
-  const fullPath = game.value.library.path + '\\' + game.value.sub_path
-  await window.electronAPI.openPath(fullPath)
-}
+  if (!game.value?.library?.path || !window.electronAPI) return;
+  const fullPath = game.value.library.path + '\\' + game.value.sub_path;
+  await window.electronAPI.openPath(fullPath);
+};
 ```
 
 在 import 中添加 `computed`：
 
 ```typescript
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue';
 ```
 
 - [ ] **步骤 2：修改 Path 显示区域，添加打开按钮**
@@ -266,9 +282,7 @@ import { ref, computed, onMounted } from 'vue'
 将：
 
 ```html
-<div class="text-caption text-grey">
-  Path: {{ game.library?.path }}\{{ game.sub_path }}
-</div>
+<div class="text-caption text-grey">Path: {{ game.library?.path }}\{{ game.sub_path }}</div>
 ```
 
 改为：
@@ -276,7 +290,16 @@ import { ref, computed, onMounted } from 'vue'
 ```html
 <div class="text-caption text-grey">
   Path: {{ game.library?.path }}\{{ game.sub_path }}
-  <q-btn v-if="hasElectronAPI" flat round dense size="sm" icon="folder_open" color="grey-7" @click="openDir">
+  <q-btn
+    v-if="hasElectronAPI"
+    flat
+    round
+    dense
+    size="sm"
+    icon="folder_open"
+    color="grey-7"
+    @click="openDir"
+  >
     <q-tooltip>Open Directory</q-tooltip>
   </q-btn>
 </div>

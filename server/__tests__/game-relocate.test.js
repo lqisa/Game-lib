@@ -8,20 +8,18 @@ import gameRouter from '../routes/game.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
 import { closePool } from '../database/db.js';
-import {
-  getTask,
-  getAllTasks,
-  updateTask,
-  removeTask,
-  createTask,
-} from '../tasks.js';
+import { getTask, getAllTasks, updateTask, removeTask, createTask } from '../tasks.js';
 
 const request = async (method, url, body) => {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   const text = await res.text();
-  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: text }; }
+  try {
+    return { status: res.status, body: JSON.parse(text) };
+  } catch {
+    return { status: res.status, body: text };
+  }
 };
 
 const cleanupTasks = () => {
@@ -42,14 +40,19 @@ const setupGame = async () => {
   fs.mkdirSync(gameDir, { recursive: true });
   fs.writeFileSync(path.join(gameDir, 'data.txt'), 'hello');
 
-  const [id] = await db.knex('library').insert({ name: 'TestLib_' + Date.now(), path: libDir }, ['id']);
+  const [id] = await db
+    .knex('library')
+    .insert({ name: 'TestLib_' + Date.now(), path: libDir }, ['id']);
   const libId = id.id || id;
 
-  const [gid] = await db.knex('game').insert({
-    name: 'TestGame_' + Date.now(),
-    library_id: libId,
-    sub_path: 'TestGame',
-  }, ['id']);
+  const [gid] = await db.knex('game').insert(
+    {
+      name: 'TestGame_' + Date.now(),
+      library_id: libId,
+      sub_path: 'TestGame',
+    },
+    ['id'],
+  );
   const gameId = gid.id || gid;
 
   return { tmpDir, libDir, libId, gameId };
@@ -57,9 +60,21 @@ const setupGame = async () => {
 
 const teardownGame = async (tmpDir, libId, gameId) => {
   cleanupTasks();
-  try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-  await db.knex('game').where({ id: gameId }).del().catch(() => {});
-  await db.knex('library').where({ id: libId }).del().catch(() => {});
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  await db
+    .knex('game')
+    .where({ id: gameId })
+    .del()
+    .catch(() => {});
+  await db
+    .knex('library')
+    .where({ id: libId })
+    .del()
+    .catch(() => {});
 };
 
 describe('Game Relocate Route', () => {
@@ -68,7 +83,9 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId, gameId } = await setupGame(base);
     const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { moveFiles: true });
@@ -82,9 +99,14 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
-    const res = await request('PUT', `${base}/api/games/99999/relocate`, { newPath: 'C:\\x', moveFiles: false });
+    const res = await request('PUT', `${base}/api/games/99999/relocate`, {
+      newPath: 'C:\\x',
+      moveFiles: false,
+    });
     assert.equal(res.status, 404);
     server.close();
   });
@@ -94,11 +116,16 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libDir, libId, gameId } = await setupGame(base);
     const currentPath = path.join(libDir, 'TestGame');
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: currentPath, moveFiles: false });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: currentPath,
+      moveFiles: false,
+    });
     assert.equal(res.status, 400);
     await teardownGame(tmpDir, libId, gameId);
     server.close();
@@ -109,11 +136,16 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId, gameId } = await setupGame(base);
     const newPath = path.join(tmpDir, 'RepoB', 'TestGame');
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath, moveFiles: false });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath,
+      moveFiles: false,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'update_only');
     assert.equal(res.body.taskId, null);
@@ -126,12 +158,17 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId, gameId } = await setupGame(base);
     const destDir = path.join(tmpDir, 'RepoB', 'TestGame');
     fs.mkdirSync(path.join(tmpDir, 'RepoB'), { recursive: true });
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destDir, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'move');
     assert.ok(res.body.taskId);
@@ -148,11 +185,16 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libDir, libId, gameId } = await setupGame(base);
     const destPath = path.join(libDir, 'TestGameRenamed');
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destPath, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destPath,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'move');
     assert.equal(res.body.taskId, null);
@@ -168,13 +210,18 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId, gameId } = await setupGame(base);
     const destDir = path.join(tmpDir, 'RepoB', 'TestGame');
     fs.mkdirSync(destDir, { recursive: true });
     fs.writeFileSync(path.join(destDir, 'existing.txt'), 'x');
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destDir, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+    });
     assert.equal(res.status, 409);
     assert.ok(res.body.conflict);
     await teardownGame(tmpDir, libId, gameId);
@@ -186,12 +233,17 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId, gameId } = await setupGame(base);
     const destDir = path.join(tmpDir, 'RepoB', 'TestGame');
     fs.mkdirSync(destDir, { recursive: true });
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destDir, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.ok(res.body.operation);
     await teardownGame(tmpDir, libId, gameId);
@@ -203,13 +255,19 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId, gameId } = await setupGame(base);
     const destDir = path.join(tmpDir, 'RepoB', 'TestGame');
     fs.mkdirSync(destDir, { recursive: true });
     fs.writeFileSync(path.join(destDir, 'existing.txt'), 'x');
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destDir, moveFiles: true, force: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+      force: true,
+    });
     assert.equal(res.status, 200);
     assert.ok(res.body.operation);
     await teardownGame(tmpDir, libId, gameId);
@@ -221,7 +279,9 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libDir, libId } = await setupGame(base);
 
@@ -230,17 +290,23 @@ describe('Game Relocate Route', () => {
     const archivePath = path.join(archiveDir, 'game.7z');
     fs.writeFileSync(archivePath, 'fake archive');
 
-    const [gid2] = await db.knex('game').insert({
-      name: 'ArchiveGame_' + Date.now(),
-      library_id: libId,
-      sub_path: 'ArchiveGame/game.7z',
-    }, ['id']);
+    const [gid2] = await db.knex('game').insert(
+      {
+        name: 'ArchiveGame_' + Date.now(),
+        library_id: libId,
+        sub_path: 'ArchiveGame/game.7z',
+      },
+      ['id'],
+    );
     const archiveGameId = gid2.id || gid2;
 
     const destDir = path.join(tmpDir, 'RepoB', 'ArchiveGame');
     fs.mkdirSync(path.join(tmpDir, 'RepoB'), { recursive: true });
 
-    const res = await request('PUT', `${base}/api/games/${archiveGameId}/relocate`, { newPath: destDir, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${archiveGameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'extract');
     assert.ok(res.body.taskId);
@@ -259,19 +325,27 @@ describe('Game Relocate Route', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId } = await setupGame(base);
 
-    const [gid2] = await db.knex('game').insert({
-      name: 'GhostGame_' + Date.now(),
-      library_id: libId,
-      sub_path: 'GhostGame',
-    }, ['id']);
+    const [gid2] = await db.knex('game').insert(
+      {
+        name: 'GhostGame_' + Date.now(),
+        library_id: libId,
+        sub_path: 'GhostGame',
+      },
+      ['id'],
+    );
     const ghostGameId = gid2.id || gid2;
 
     const newPath = path.join(tmpDir, 'RepoB', 'GhostGame');
-    const res = await request('PUT', `${base}/api/games/${ghostGameId}/relocate`, { newPath, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${ghostGameId}/relocate`, {
+      newPath,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'update_only');
 
@@ -286,17 +360,26 @@ describe('Game Relocate Route', () => {
     const otherDrives = 'CDEFGH'.split('').filter((d) => d !== drive.toUpperCase());
     if (otherDrives.length === 0) return;
     const otherDrive = otherDrives[0] + ':';
-    try { fs.accessSync(otherDrive); } catch { return; }
+    try {
+      fs.accessSync(otherDrive);
+    } catch {
+      return;
+    }
 
     const app = express();
     app.use(express.json());
     app.use('/api/games', gameRouter);
-    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     const { tmpDir, libId, gameId } = await setupGame(base);
 
     const destDir = path.join(otherDrive, 'gamelib-test-dest', 'TestGame');
-    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, { newPath: destDir, moveFiles: true });
+    const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+      newPath: destDir,
+      moveFiles: true,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.body.operation, 'move');
     assert.ok(res.body.taskId);
@@ -305,7 +388,11 @@ describe('Game Relocate Route', () => {
     assert.ok(task);
     assert.equal(task.type, 'move');
 
-    try { fs.rmSync(path.join(otherDrive, 'gamelib-test-dest'), { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      fs.rmSync(path.join(otherDrive, 'gamelib-test-dest'), { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
     await teardownGame(tmpDir, libId, gameId);
     server.close();
   });

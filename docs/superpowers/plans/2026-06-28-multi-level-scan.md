@@ -12,54 +12,146 @@
 
 ## 文件结构
 
-| 文件 | 操作 | 职责 |
-|------|------|------|
-| `server/constants.js` | 创建 | `NON_GAME_DIRS`、`ARCHIVE_EXTENSIONS`、`VOLUME_PATTERNS` 常量 |
-| `server/scanner.js` | 修改 | 新增 `expandDirectory`、`deduplicateArchives`、`filterGameDirs`；改造 `scanDirectory` 返回压缩包 |
-| `server/routes/game.js` | 修改 | 新增 `POST /scan/expand` 路由；改造 `POST /scan` 和 `POST /scan/add` |
-| `src/components/ScannerDialog.vue` | 修改 | 扩展 `ScanRow` 类型；树形渲染；展开扫描交互；压缩包视觉区分 |
+| 文件                               | 操作 | 职责                                                                                             |
+| ---------------------------------- | ---- | ------------------------------------------------------------------------------------------------ |
+| `server/constants.js`              | 创建 | `NON_GAME_DIRS`、`ARCHIVE_EXTENSIONS`、`VOLUME_PATTERNS` 常量                                    |
+| `server/scanner.js`                | 修改 | 新增 `expandDirectory`、`deduplicateArchives`、`filterGameDirs`；改造 `scanDirectory` 返回压缩包 |
+| `server/routes/game.js`            | 修改 | 新增 `POST /scan/expand` 路由；改造 `POST /scan` 和 `POST /scan/add`                             |
+| `src/components/ScannerDialog.vue` | 修改 | 扩展 `ScanRow` 类型；树形渲染；展开扫描交互；压缩包视觉区分                                      |
 
 ---
 
 ### 任务 1：创建 `server/constants.js`
 
 **文件：**
+
 - 创建：`server/constants.js`
 
 - [ ] **步骤 1：创建常量文件**
 
 ```javascript
 const NON_GAME_DIRS = new Set([
-  'www', 'audio', 'img', 'data', 'js', 'fonts', 'movies', 'save', 'icon', 'css',
-  'graphics', 'system',
-  'savedata', 'bgm', 'se', 'voice', 'vo', 'fg', 'bg', 'rule', 'scenario', 'image',
-  'patch', 'patch2', 'others', 'anim', 'env', 'ubin',
-  'game', 'cache', 'saves', 'tl', 'gui', 'log', 'persistent', 'renpy',
-  'managed', 'plugins', 'resources', 'streamingassets', 'monobleedingedge',
-  'graphic', 'sound',
-  'dat', 'cg',
-  'music', 'me', 'config', 'script', 'plugin', 'mods', 'mod',
-  'temp', 'tmp', 'logs', 'backup', 'screenshot', 'screenshots',
-  'thumbnail', 'thumbnails', 'thumb', 'doc', 'manual', 'readme',
-  'video', 'dlc', 'extra', 'extras', 'bonus',
-  'images', 'font', 'icons', 'update', 'crack', 'dll', 'lib', 'libs',
-  'docs', 'help', 'tool', 'tools', 'sdk', 'assets', 'resource',
-  'locale', 'lang', 'localization', 'i18n', 'conf', 'cfg', 'settings',
-  'profile', 'profiles', 'userdata', 'user', 'meta', 'info',
-  'en', 'zh', 'ja', 'ko', 'cn', 'tw',
+  'www',
+  'audio',
+  'img',
+  'data',
+  'js',
+  'fonts',
+  'movies',
+  'save',
+  'icon',
+  'css',
+  'graphics',
+  'system',
+  'savedata',
+  'bgm',
+  'se',
+  'voice',
+  'vo',
+  'fg',
+  'bg',
+  'rule',
+  'scenario',
+  'image',
+  'patch',
+  'patch2',
+  'others',
+  'anim',
+  'env',
+  'ubin',
+  'game',
+  'cache',
+  'saves',
+  'tl',
+  'gui',
+  'log',
+  'persistent',
+  'renpy',
+  'managed',
+  'plugins',
+  'resources',
+  'streamingassets',
+  'monobleedingedge',
+  'graphic',
+  'sound',
+  'dat',
+  'cg',
+  'music',
+  'me',
+  'config',
+  'script',
+  'plugin',
+  'mods',
+  'mod',
+  'temp',
+  'tmp',
+  'logs',
+  'backup',
+  'screenshot',
+  'screenshots',
+  'thumbnail',
+  'thumbnails',
+  'thumb',
+  'doc',
+  'manual',
+  'readme',
+  'video',
+  'dlc',
+  'extra',
+  'extras',
+  'bonus',
+  'images',
+  'font',
+  'icons',
+  'update',
+  'crack',
+  'dll',
+  'lib',
+  'libs',
+  'docs',
+  'help',
+  'tool',
+  'tools',
+  'sdk',
+  'assets',
+  'resource',
+  'locale',
+  'lang',
+  'localization',
+  'i18n',
+  'conf',
+  'cfg',
+  'settings',
+  'profile',
+  'profiles',
+  'userdata',
+  'user',
+  'meta',
+  'info',
+  'en',
+  'zh',
+  'ja',
+  'ko',
+  'cn',
+  'tw',
 ]);
 
 const ARCHIVE_EXTENSIONS = new Set([
-  '.zip', '.7z', '.rar',
-  '.001', '.002', '.003', '.004', '.005',
-  '.006', '.007', '.008', '.009',
+  '.zip',
+  '.7z',
+  '.rar',
+  '.001',
+  '.002',
+  '.003',
+  '.004',
+  '.005',
+  '.006',
+  '.007',
+  '.008',
+  '.009',
 ]);
 
-const VOLUME_PATTERNS = [
-  /^(.+)\.7z\.\d+$/,
-  /^(.+)\.part\d+\.rar$/i,
-  /^(.+)\.rar\.r\d+$/i,
-];
+const VOLUME_PATTERNS = [/^(.+)\.7z\.\d+$/, /^(.+)\.part\d+\.rar$/i, /^(.+)\.rar\.r\d+$/i];
 
 export { NON_GAME_DIRS, ARCHIVE_EXTENSIONS, VOLUME_PATTERNS };
 ```
@@ -81,6 +173,7 @@ git commit -m "feat: add scanner constants for heuristic filtering and archive r
 ### 任务 2：改造 `server/scanner.js`
 
 **文件：**
+
 - 修改：`server/scanner.js`
 
 - [ ] **步骤 1：重写 scanner.js，添加新函数并改造 scanDirectory**
@@ -181,15 +274,19 @@ git commit -m "feat: extend scanner with archive recognition, dedup, and expand-
 ### 任务 3：改造 `POST /games/scan` 和 `POST /games/scan/add`
 
 **文件：**
+
 - 修改：`server/routes/game.js`
 
 - [ ] **步骤 1：更新 import 语句**
 
 将第 3 行：
+
 ```javascript
 import { scanDirectory } from '../scanner.js';
 ```
+
 改为：
+
 ```javascript
 import { scanDirectory, expandDirectory } from '../scanner.js';
 ```
@@ -199,50 +296,47 @@ import { scanDirectory, expandDirectory } from '../scanner.js';
 将 `router.post('/scan', ...)` 的回调函数体替换为：
 
 ```javascript
-  try {
-    const { libraryId } = req.body;
-    if (!libraryId) {
-      return res.status(400).send({ error: 'libraryId is required' });
-    }
-    const library = await db.knex('library').where({ id: libraryId }).first();
-    if (!library) {
-      return res.status(404).send({ error: 'Library not found' });
-    }
-
-    const { dirs, archives } = scanDirectory(library.path);
-    const blacklist = await getBlacklist();
-    const blacklistSet = new Set(blacklist);
-    const filteredDirs = blacklist.length > 0
-      ? dirs.filter((d) => !blacklistSet.has(d))
-      : dirs;
-    const filteredArchives = blacklist.length > 0
-      ? archives.filter((a) => !blacklistSet.has(a))
-      : archives;
-
-    const existingGames = await db
-      .knex('game')
-      .where({ library_id: libraryId })
-      .select('id', 'name', 'sub_path');
-    const existingPaths = new Set(existingGames.map((g) => g.sub_path));
-
-    const newDirs = filteredDirs.filter((d) => !existingPaths.has(d));
-    const newArchives = filteredArchives.filter((a) => !existingPaths.has(a));
-
-    const allNewEntries = [...newDirs, ...newArchives];
-    const dirSet = new Set(filteredDirs);
-    const archiveSet = new Set(filteredArchives);
-    const allCurrentPaths = new Set([...dirSet, ...archiveSet]);
-    const removedGames = existingGames.filter((g) => !allCurrentPaths.has(g.sub_path));
-
-    res.send({
-      allDirs: filteredDirs,
-      archives: filteredArchives,
-      newDirs: allNewEntries,
-      removedGames,
-    });
-  } catch (err) {
-    next(err);
+try {
+  const { libraryId } = req.body;
+  if (!libraryId) {
+    return res.status(400).send({ error: 'libraryId is required' });
   }
+  const library = await db.knex('library').where({ id: libraryId }).first();
+  if (!library) {
+    return res.status(404).send({ error: 'Library not found' });
+  }
+
+  const { dirs, archives } = scanDirectory(library.path);
+  const blacklist = await getBlacklist();
+  const blacklistSet = new Set(blacklist);
+  const filteredDirs = blacklist.length > 0 ? dirs.filter((d) => !blacklistSet.has(d)) : dirs;
+  const filteredArchives =
+    blacklist.length > 0 ? archives.filter((a) => !blacklistSet.has(a)) : archives;
+
+  const existingGames = await db
+    .knex('game')
+    .where({ library_id: libraryId })
+    .select('id', 'name', 'sub_path');
+  const existingPaths = new Set(existingGames.map((g) => g.sub_path));
+
+  const newDirs = filteredDirs.filter((d) => !existingPaths.has(d));
+  const newArchives = filteredArchives.filter((a) => !existingPaths.has(a));
+
+  const allNewEntries = [...newDirs, ...newArchives];
+  const dirSet = new Set(filteredDirs);
+  const archiveSet = new Set(filteredArchives);
+  const allCurrentPaths = new Set([...dirSet, ...archiveSet]);
+  const removedGames = existingGames.filter((g) => !allCurrentPaths.has(g.sub_path));
+
+  res.send({
+    allDirs: filteredDirs,
+    archives: filteredArchives,
+    newDirs: allNewEntries,
+    removedGames,
+  });
+} catch (err) {
+  next(err);
+}
 ```
 
 - [ ] **步骤 3：改造 `POST /scan/add` 路由**
@@ -250,31 +344,33 @@ import { scanDirectory, expandDirectory } from '../scanner.js';
 将 `router.post('/scan/add', ...)` 的回调函数体替换为：
 
 ```javascript
-  try {
-    const { libraryId, dirs } = req.body;
-    if (!libraryId || !Array.isArray(dirs)) {
-      return res.status(400).send({ error: 'libraryId and dirs are required' });
-    }
-
-    const rows = dirs.map((d) => ({
-      name: d,
-      library_id: libraryId,
-      sub_path: d,
-    }));
-
-    const inserted = [];
-    if (rows.length > 0) {
-      const BATCH_SIZE = 100;
-      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-        const ids = await db.knex('game').insert(rows.slice(i, i + BATCH_SIZE), ['id', 'name', 'sub_path']);
-        inserted.push(...ids);
-      }
-    }
-
-    res.status(201).send({ added: rows.length, games: inserted });
-  } catch (err) {
-    next(err);
+try {
+  const { libraryId, dirs } = req.body;
+  if (!libraryId || !Array.isArray(dirs)) {
+    return res.status(400).send({ error: 'libraryId and dirs are required' });
   }
+
+  const rows = dirs.map((d) => ({
+    name: d,
+    library_id: libraryId,
+    sub_path: d,
+  }));
+
+  const inserted = [];
+  if (rows.length > 0) {
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const ids = await db
+        .knex('game')
+        .insert(rows.slice(i, i + BATCH_SIZE), ['id', 'name', 'sub_path']);
+      inserted.push(...ids);
+    }
+  }
+
+  res.status(201).send({ added: rows.length, games: inserted });
+} catch (err) {
+  next(err);
+}
 ```
 
 注意：`POST /scan/add` 的逻辑不变，因为 `sub_path` 已经是字符串字段，天然支持相对路径格式（如 `合集/游戏C`）。`name` 字段也已经是传入的字符串，压缩包文件名直接传入即可。
@@ -296,6 +392,7 @@ git commit -m "feat: update scan API to include archives and support relative su
 ### 任务 4：新增 `POST /games/scan/expand` API
 
 **文件：**
+
 - 修改：`server/routes/game.js`
 
 - [ ] **步骤 1：在 `POST /scan/add` 路由之后添加新路由**
@@ -330,6 +427,7 @@ router.post('/scan/expand', async (req, res, next) => {
 - [ ] **步骤 2：在文件顶部添加缺失的 import**
 
 确保 `server/routes/game.js` 顶部有：
+
 ```javascript
 import path from 'node:path';
 import fs from 'node:fs';
@@ -354,6 +452,7 @@ git commit -m "feat: add POST /games/scan/expand API for manual expand-scan"
 ### 任务 5：扩展前端 `ScanRow` 类型与树形扁平化
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：扩展 `ScanRow` 接口**
@@ -437,6 +536,7 @@ const sortedResults = computed(() => {
 **位置 1：`loadUnscraped` 函数**（约第 527 行）
 
 将：
+
 ```typescript
 scanResults.value = res.data.map((g: { id: number; name: string; sub_path: string }) => ({
   name: g.name,
@@ -450,7 +550,9 @@ scanResults.value = res.data.map((g: { id: number; name: string; sub_path: strin
   gameId: g.id,
 }));
 ```
+
 改为：
+
 ```typescript
 scanResults.value = res.data.map((g: { id: number; name: string; sub_path: string }) => ({
   name: g.name,
@@ -473,6 +575,7 @@ scanResults.value = res.data.map((g: { id: number; name: string; sub_path: strin
 **位置 2：`scanDir` 函数中的 `scanResults.value.push(`**（约第 573 行）
 
 将：
+
 ```typescript
 scanResults.value.push({
   gameId: g.id,
@@ -486,7 +589,9 @@ scanResults.value.push({
   loading: false,
 });
 ```
+
 改为：
+
 ```typescript
 scanResults.value.push({
   gameId: g.id,
@@ -509,6 +614,7 @@ scanResults.value.push({
 - [ ] **步骤 5：更新 `hasPending`、`adoptedCount`、`staleCount` computed 使其递归遍历树**
 
 将：
+
 ```typescript
 const hasPending = computed(() =>
   scanResults.value.some((r) => r.status === 'pending' || r.status === 'error'),
@@ -516,7 +622,9 @@ const hasPending = computed(() =>
 const adoptedCount = computed(() => scanResults.value.filter((r) => r.status === 'adopted').length);
 const staleCount = computed(() => scanResults.value.filter((r) => r.status === 'stale').length);
 ```
+
 改为：
+
 ```typescript
 const flattenAllRows = (rows: ScanRow[]): ScanRow[] => {
   const result: ScanRow[] = [];
@@ -533,8 +641,12 @@ const flattenAllRows = (rows: ScanRow[]): ScanRow[] => {
 const hasPending = computed(() =>
   flattenAllRows(scanResults.value).some((r) => r.status === 'pending' || r.status === 'error'),
 );
-const adoptedCount = computed(() => flattenAllRows(scanResults.value).filter((r) => r.status === 'adopted').length);
-const staleCount = computed(() => flattenAllRows(scanResults.value).filter((r) => r.status === 'stale').length);
+const adoptedCount = computed(
+  () => flattenAllRows(scanResults.value).filter((r) => r.status === 'adopted').length,
+);
+const staleCount = computed(
+  () => flattenAllRows(scanResults.value).filter((r) => r.status === 'stale').length,
+);
 ```
 
 - [ ] **步骤 6：运行 typecheck**
@@ -554,6 +666,7 @@ git commit -m "feat: extend ScanRow type with tree fields and flatten tree for r
 ### 任务 6：改造 `scanDir` 函数支持压缩包
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：改造 `scanDir` 函数**
@@ -610,8 +723,8 @@ const scanDir = async () => {
           });
         }
       }
-      const newRows = flattenAllRows(scanResults.value).filter(
-        (r) => addedGames.some((g) => g.id === r.gameId),
+      const newRows = flattenAllRows(scanResults.value).filter((r) =>
+        addedGames.some((g) => g.id === r.gameId),
       );
       if (newRows.length > 0) {
         const keywords = newRows.map((r) => r.searchKeyword || r.name);
@@ -626,7 +739,9 @@ const scanDir = async () => {
         }
         const newGameIds = newRows.map((r) => r.gameId);
         try {
-          const adoptRes = await api.get('/cache/adopt', { params: { gameIds: newGameIds.join(',') } });
+          const adoptRes = await api.get('/cache/adopt', {
+            params: { gameIds: newGameIds.join(',') },
+          });
           const entries: AdoptCacheEntry[] = adoptRes.data.entries || [];
           const adoptMap = new Map(entries.map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
           for (const row of newRows) {
@@ -686,6 +801,7 @@ git commit -m "feat: update scanDir to handle archives from scan API response"
 ### 任务 7：添加展开扫描交互
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：添加 `expandRow` 函数**
@@ -778,12 +894,14 @@ const expandRow = async (row: ScanRow) => {
 将 `submitAdopted` 函数中的 `adoptedRows` 和 `staleRows` 提取逻辑改为递归遍历：
 
 找到：
+
 ```typescript
 const adoptedRows = scanResults.value.filter((r) => r.status === 'adopted' && r.adoptData);
 const staleRows = scanResults.value.filter((r) => r.status === 'stale');
 ```
 
 替换为：
+
 ```typescript
 const allRows = flattenAllRows(scanResults.value);
 const adoptedRows = allRows.filter((r) => r.status === 'adopted' && r.adoptData);
@@ -793,43 +911,53 @@ const staleRows = allRows.filter((r) => r.status === 'stale');
 - [ ] **步骤 3：改造 `batchScrape` 函数以递归遍历树**
 
 在 `batchScrape` 函数中，找到：
+
 ```typescript
 const rows = [...scanResults.value].filter((r) => r.status === 'pending' || r.status === 'error');
 ```
 
 替换为：
+
 ```typescript
-const rows = [...flattenAllRows(scanResults.value)].filter((r) => r.status === 'pending' || r.status === 'error');
+const rows = [...flattenAllRows(scanResults.value)].filter(
+  (r) => r.status === 'pending' || r.status === 'error',
+);
 ```
 
 - [ ] **步骤 4：改造 `forceRefresh` 函数以递归遍历树**
 
 在 `forceRefresh` 函数中，找到：
+
 ```typescript
 const keys = scanResults.value.map((r) => `auto:${r.searchKeyword || r.name}`);
 ```
 
 替换为：
+
 ```typescript
 const keys = flattenAllRows(scanResults.value).map((r) => `auto:${r.searchKeyword || r.name}`);
 ```
 
 以及找到：
+
 ```typescript
 const allGameIds = scanResults.value.map((r) => r.gameId);
 ```
 
 替换为：
+
 ```typescript
 const allGameIds = flattenAllRows(scanResults.value).map((r) => r.gameId);
 ```
 
 以及找到：
+
 ```typescript
 for (const row of scanResults.value) {
 ```
 
 替换为：
+
 ```typescript
 for (const row of flattenAllRows(scanResults.value)) {
 ```
@@ -837,6 +965,7 @@ for (const row of flattenAllRows(scanResults.value)) {
 - [ ] **步骤 5：改造 `doSubmit` 中清理逻辑以递归遍历树**
 
 在 `doSubmit` 函数中，找到：
+
 ```typescript
 scanResults.value = scanResults.value.filter((r) => {
   if (r.status === 'stale') return false;
@@ -846,6 +975,7 @@ scanResults.value = scanResults.value.filter((r) => {
 ```
 
 替换为：
+
 ```typescript
 const filterTree = (rows: ScanRow[]): ScanRow[] => {
   return rows
@@ -876,6 +1006,7 @@ git commit -m "feat: add expandRow function and update tree-aware submit/scrape/
 ### 任务 8：改造模板——树形渲染与展开按钮
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：在扫描行模板中添加缩进和展开按钮**
@@ -883,27 +1014,30 @@ git commit -m "feat: add expandRow function and update tree-aware submit/scrape/
 在 `<template v-slot="{ item: row }">` 内部的 `<div class="scan-row ...">` 上添加动态样式绑定：
 
 找到：
+
 ```html
 <div
   class="scan-row q-px-md"
   :class="{ 'scan-row--stale': row.status === 'stale', 'scan-row--compact': compact }"
->
+></div>
 ```
 
 替换为：
+
 ```html
 <div
   class="scan-row q-px-md"
   :class="{ 'scan-row--stale': row.status === 'stale', 'scan-row--compact': compact }"
   :style="{ paddingLeft: `${16 + row.depth * 24}px` }"
->
+></div>
 ```
 
 - [ ] **步骤 2：在封面区域之前添加展开按钮和压缩包图标**
 
 找到封面区域的开始：
+
 ```html
-<div class="scan-row__cover">
+<div class="scan-row__cover"></div>
 ```
 
 在其前面添加展开按钮：
@@ -927,13 +1061,19 @@ git commit -m "feat: add expandRow function and update tree-aware submit/scrape/
 - [ ] **步骤 3：将文件夹图标改为条件渲染**
 
 找到：
+
 ```html
 <q-icon name="folder" :size="compact ? '16px' : '48px'" color="grey" />
 ```
 
 替换为：
+
 ```html
-<q-icon :name="row.isArchive ? 'archive' : 'folder'" :size="compact ? '16px' : '48px'" color="grey" />
+<q-icon
+  :name="row.isArchive ? 'archive' : 'folder'"
+  :size="compact ? '16px' : '48px'"
+  color="grey"
+/>
 ```
 
 - [ ] **步骤 4：添加展开按钮的 CSS**
@@ -966,6 +1106,7 @@ git commit -m "feat: add tree rendering with expand button and archive icon in s
 ### 任务 9：处理展开扫描结果的入库
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：改造 `submitAdopted` 函数，在提交前先将展开扫描结果入库**
@@ -974,7 +1115,8 @@ git commit -m "feat: add tree rendering with expand button and archive icon in s
 
 ```typescript
 const expandRows = flattenAllRows(scanResults.value).filter(
-  (r) => r.gameId === 0 && (r.status === 'adopted' || r.status === 'searched' || r.status === 'pending'),
+  (r) =>
+    r.gameId === 0 && (r.status === 'adopted' || r.status === 'searched' || r.status === 'pending'),
 );
 if (expandRows.length > 0) {
   const addRes = await api.post('/games/scan/add', {
@@ -999,7 +1141,9 @@ const submitAdopted = async () => {
   submitting.value = true;
   try {
     const expandRows = flattenAllRows(scanResults.value).filter(
-      (r) => r.gameId === 0 && (r.status === 'adopted' || r.status === 'searched' || r.status === 'pending'),
+      (r) =>
+        r.gameId === 0 &&
+        (r.status === 'adopted' || r.status === 'searched' || r.status === 'pending'),
     );
     if (expandRows.length > 0) {
       const addRes = await api.post('/games/scan/add', {
@@ -1021,7 +1165,8 @@ const submitAdopted = async () => {
     if (adoptedRows.length > 0) {
       const games: SubmitGame[] = adoptedRows.map((row) => {
         const d = row.adoptData!;
-        const source: SourceType = (d.source && d.source !== ('auto' as string)) ? d.source : 'dlsite';
+        const source: SourceType =
+          d.source && d.source !== ('auto' as string) ? d.source : 'dlsite';
         return {
           gameId: row.gameId,
           sourceType: source,
@@ -1081,6 +1226,7 @@ git commit -m "feat: persist expand-scan results to DB before submit"
 ### 任务 10：端到端验证
 
 **文件：**
+
 - 无文件修改
 
 - [ ] **步骤 1：启动开发服务器**

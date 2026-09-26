@@ -1,5 +1,12 @@
 <template>
-  <q-dialog v-model="show" persistent transition-show="fade" transition-hide="fade" @show="onDialogShow" @keydown.esc="show = false">
+  <q-dialog
+    v-model="show"
+    persistent
+    transition-show="fade"
+    transition-hide="fade"
+    @show="onDialogShow"
+    @keydown.esc="show = false"
+  >
     <q-card class="scrape-dialog-card">
       <q-bar class="bg-primary text-white">
         <div class="text-subtitle1">Scrape: {{ gameName }}</div>
@@ -98,7 +105,10 @@
                           </div>
                         </template>
                       </q-img>
-                      <div v-else class="scrape-cover-placeholder flex flex-center scrape-cover-ratio">
+                      <div
+                        v-else
+                        class="scrape-cover-placeholder flex flex-center scrape-cover-ratio"
+                      >
                         <q-icon name="videogame_asset" size="18px" color="grey" />
                       </div>
                     </div>
@@ -170,10 +180,7 @@
                         >{{ t }}</q-chip
                       >
                     </div>
-                    <div
-                      v-if="detail.description"
-                      class="text-caption q-mt-sm scrape-description"
-                    >
+                    <div v-if="detail.description" class="text-caption q-mt-sm scrape-description">
                       {{ detail.description }}
                     </div>
                   </div>
@@ -191,7 +198,12 @@
       </q-card-section>
       <q-card-actions align="right" class="scrape-actions q-px-md q-py-sm">
         <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-        <q-btn color="positive" label="Adopt" @click="adopt" :disable="!selectedResult || detailLoading || manualFetching" />
+        <q-btn
+          color="positive"
+          label="Adopt"
+          @click="adopt"
+          :disable="!selectedResult || detailLoading || manualFetching"
+        />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -268,7 +280,9 @@ const reportScrapeError = (err: unknown, action: string) => {
  * report nothing. The server hands back a `region` notice when it can tell, and this is
  * the user's only chance to find out they forgot to switch proxy.
  */
-const reportRegionNotice = (region: { isJapan?: boolean | null; message?: string } | null | undefined) => {
+const reportRegionNotice = (
+  region: { isJapan?: boolean | null; message?: string } | null | undefined,
+) => {
   if (!region || region.isJapan !== false || !region.message) return;
   $q.notify({ type: 'warning', message: region.message, timeout: 12000, multiLine: true });
 };
@@ -316,11 +330,15 @@ const doSearch = async () => {
   detail.value = null;
   searched.value = false;
   try {
-    const res = await api.post(`/scraper/${activeSource.value}/search`, {
-      keyword: keyword.value.trim(),
-    }, {
-      signal: currentAbort.signal,
-    });
+    const res = await api.post(
+      `/scraper/${activeSource.value}/search`,
+      {
+        keyword: keyword.value.trim(),
+      },
+      {
+        signal: currentAbort.signal,
+      },
+    );
     const data = res.data;
     results.value = data.results ?? data;
     reportRegionNotice(data.region);
@@ -431,12 +449,14 @@ const fetchById = async () => {
       description: '',
     };
     detail.value = fetched;
-    results.value = [{
-      id: fetched.id || id,
-      name: fetched.title || id,
-      coverUrl: fetched.coverURL || '',
-      makerName: fetched.makers?.join(', ') || '',
-    }];
+    results.value = [
+      {
+        id: fetched.id || id,
+        name: fetched.title || id,
+        coverUrl: fetched.coverURL || '',
+        makerName: fetched.makers?.join(', ') || '',
+      },
+    ];
     selectedIdx.value = 0;
   } catch (err: unknown) {
     reportScrapeError(err, 'fetch');
@@ -501,15 +521,13 @@ const onDialogShow = async () => {
   idInput.value = '';
 
   const searchName = props.gameName;
-  const rawKeyword =
-    props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
+  const rawKeyword = props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
   keyword.value = getCleanedName(rawKeyword);
 
   const validSources: SourceType[] = ['dlsite', 'dmm', 'bangumi', 'vndb', 'steam'];
   const source = props.defaultSource;
-  const tab: SourceType = source && validSources.includes(source)
-    ? source
-    : resolveAutoSource(props.gameName);
+  const tab: SourceType =
+    source && validSources.includes(source) ? source : resolveAutoSource(props.gameName);
 
   skipSourceWatch = true;
   activeSource.value = tab;

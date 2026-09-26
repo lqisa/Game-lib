@@ -7,17 +7,18 @@
 >
 > 本报告推荐并已落地的实现：
 >
-> | 文件 | 改动 |
-> |---|---|
-> | `server/scraper/dmm.js` | 🆕 搜索 + 详情抓取、区域/改版分类、标题清洗、图片升级 |
-> | `server/scraper/match.js` | `SOURCE_TYPES` +`dmm`；`DEFAULT_MATCH_PRIORITY` 三语言 +`dmm`；`extractIdHint`/`detectLanguage` 认 `d_\d{3,}` |
-> | `server/routes/scraper.js` | `searchBySource` +dmm 分支；`POST /dmm/search`、`POST /dmm/fetch`；区域错误返回 **503 + code** |
-> | `server/scraper/cover.js` | `resolveCoverUrl` +dmm 分支；**未**加入 `DETAIL_FETCH_SOURCES` |
-> | `server/database/init.js` | **migration v11**：把 `dmm` 并入存量 `match_priority_*` |
-> | 前端 5 处 | `types/scrape.ts`、`ScrapeDialog.vue`、`GameDetailPage.vue`、`GameLibPage.vue`、`ScannerDialog.vue` |
-> | `server/__tests__/dmm.test.js` | 🆕 31 个纯函数测试（离线） |
+> | 文件                           | 改动                                                                                                          |
+> | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+> | `server/scraper/dmm.js`        | 🆕 搜索 + 详情抓取、区域/改版分类、标题清洗、图片升级                                                         |
+> | `server/scraper/match.js`      | `SOURCE_TYPES` +`dmm`；`DEFAULT_MATCH_PRIORITY` 三语言 +`dmm`；`extractIdHint`/`detectLanguage` 认 `d_\d{3,}` |
+> | `server/routes/scraper.js`     | `searchBySource` +dmm 分支；`POST /dmm/search`、`POST /dmm/fetch`；区域错误返回 **503 + code**                |
+> | `server/scraper/cover.js`      | `resolveCoverUrl` +dmm 分支；**未**加入 `DETAIL_FETCH_SOURCES`                                                |
+> | `server/database/init.js`      | **migration v11**：把 `dmm` 并入存量 `match_priority_*`                                                       |
+> | 前端 5 处                      | `types/scrape.ts`、`ScrapeDialog.vue`、`GameDetailPage.vue`、`GameLibPage.vue`、`ScannerDialog.vue`           |
+> | `server/__tests__/dmm.test.js` | 🆕 31 个纯函数测试（离线）                                                                                    |
 >
 > **实现中新增的两个发现：**
+>
 > 1. **封面图路径含类型段，无法从 id 推导**（`/digital/game/` vs `/digital/comic/`）。
 >    解法：搜索页卡片自带**完整正确 URL**（200x150 缩略图），去掉 `-WxH` 即得 560x420 大图；
 >    详情页用 `og:image`（DMM 自己指定的代表图）。确定性 URL 仅作兜底。
@@ -43,6 +44,7 @@
 > 设置页 Check Exit → 「Exit is Japan (JP)」。
 >
 > **续修三个问题（端到端验证发现）：**
+>
 > 1. **`searchDMM` 缺少编号兜底** —— `searchDLSite` 有「从关键词提取 RJ 码直接查商品页」，
 >    DMM 没有，所以 `[d_216826] some folder` 这种文件夹名**永远搜不到**（DMM 的搜索不理解该串）。
 >    已补上同样的兜底。修复后该关键词 → 1 条结果。
@@ -67,12 +69,12 @@
 > **本文档初版的结论是错的。** 初版所有 FANZA 网页测试都是在**美国出口**下做的，因此得出
 > 「HTML 抓取已失效（地区封锁 + 登录墙 + 选择器全挂）」。**换成日本出口后该结论被推翻**：
 >
-> | 阻塞项             | 美国出口          | 日本出口（东京）            |
-> | --------------- | ------------- | ------------------- |
-> | FANZA 搜索页       | ❌ 307 地区封锁    | ✅ **200，正常返回结果**    |
-> | FANZA 详情页       | ❌ 302 → 登录墙   | ✅ **200，完整商品页**     |
-> | 详情页 Playnite 选择器 | 0 命中（拿到的是登录页） | ✅ **全部命中，字段可正常提取**  |
-> | 搜索页 `.tmb` 选择器  | —             | ❌ **真失效**（已改版为 Tailwind） |
+> | 阻塞项                 | 美国出口                 | 日本出口（东京）                   |
+> | ---------------------- | ------------------------ | ---------------------------------- |
+> | FANZA 搜索页           | ❌ 307 地区封锁          | ✅ **200，正常返回结果**           |
+> | FANZA 详情页           | ❌ 302 → 登录墙          | ✅ **200，完整商品页**             |
+> | 详情页 Playnite 选择器 | 0 命中（拿到的是登录页） | ✅ **全部命中，字段可正常提取**    |
+> | 搜索页 `.tmb` 选择器   | —                        | ❌ **真失效**（已改版为 Tailwind） |
 >
 > **教训**：初版把「在美国 IP 下被拦截」误判成「方案本身失效」。同一个 URL、同一份代码，
 > 仅因出口 IP 不同就得出相反结论 —— 测网络方案时**必须先确认出口地**，否则整个调研结论无效。
@@ -81,17 +83,17 @@
 
 ## 一、结论摘要（已更正）
 
-| 项             | 结论                                                                          |
-| ------------- | --------------------------------------------------------------------------- |
-| 是否可行          | ✅ **可行**。两条路线都通，取决于愿意付哪种成本                                                  |
-| **前置条件**      | 无论哪条路线，**都需要日本出口 IP**（已实测：美国 IP 直接吃地区封锁）                                     |
-| 路线 A：官方 API   | 需申请 `api_id` + `affiliate_id`（DMM アフィリエイト账号）；结构化、稳定；字段较少                   |
-| 路线 B：HTML 抓取  | **加日本代理后可用**；详情页字段最全；但搜索页已改版为 Tailwind，选择器需重写                               |
-| 推荐            | **路线 B（HTML 抓取）+ 日本代理** —— 不必申请 affiliate 账号，字段最全；API 可作可选增强              |
-| 最大阻碍          | ① **日本出口 IP**（必需且需长期稳定）② 搜索页 Tailwind 选择器需重写                                |
-| 实测亮点          | 详情页 6 类字段全部可提取；封面有确定性 URL；搜索页结果在 HTML 里（60 链接 / 10 个 cid）                     |
-| 实测坑点          | 搜索页已从语义类名（`.tmb`）迁移到 Tailwind 工具类，旧选择器**真失效**                                |
-| ⚠️ 顺带发现        | **DLsite 同样按作品做 IP 限制**（非 DMM 独有），而本项目对此**零处理、静默失败** —— 见 §6.7              |
+| 项                | 结论                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| 是否可行          | ✅ **可行**。两条路线都通，取决于愿意付哪种成本                                             |
+| **前置条件**      | 无论哪条路线，**都需要日本出口 IP**（已实测：美国 IP 直接吃地区封锁）                       |
+| 路线 A：官方 API  | 需申请 `api_id` + `affiliate_id`（DMM アフィリエイト账号）；结构化、稳定；字段较少          |
+| 路线 B：HTML 抓取 | **加日本代理后可用**；详情页字段最全；但搜索页已改版为 Tailwind，选择器需重写               |
+| 推荐              | **路线 B（HTML 抓取）+ 日本代理** —— 不必申请 affiliate 账号，字段最全；API 可作可选增强    |
+| 最大阻碍          | ① **日本出口 IP**（必需且需长期稳定）② 搜索页 Tailwind 选择器需重写                         |
+| 实测亮点          | 详情页 6 类字段全部可提取；封面有确定性 URL；搜索页结果在 HTML 里（60 链接 / 10 个 cid）    |
+| 实测坑点          | 搜索页已从语义类名（`.tmb`）迁移到 Tailwind 工具类，旧选择器**真失效**                      |
+| ⚠️ 顺带发现       | **DLsite 同样按作品做 IP 限制**（非 DMM 独有），而本项目对此**零处理、静默失败** —— 见 §6.7 |
 
 ---
 
@@ -101,24 +103,24 @@
 
 ### 2.1 后端
 
-| 文件                         | 需要做的事                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------- |
-| `server/scraper/dmm.js`    | 🆕 新建，实现 `searchDMM()` / `fetchDMMDetail()`                                                 |
-| `server/scraper/match.js`  | `SOURCE_TYPES` 加 `'dmm'`；`DEFAULT_MATCH_PRIORITY` 三个语言各加 `'dmm'`；`extractIdHint` 支持 DMM cid |
-| `server/routes/scraper.js` | import；`searchBySource()` 加分支；新增 `/dmm/search`、`/dmm/fetch` 路由                              |
-| `server/scraper/cover.js`  | 把 DMM 封面做成确定性 URL（**不要**加进 `DETAIL_FETCH_SOURCES`，原因见 §6.3）                                 |
-| `server/database/init.js`  | ⚠️ **新增 migration，把 `'dmm'` 追加进已有的 `match_priority_*` 设置**（见 §6.5，漏了会导致 DMM 永远不被尝试）         |
+| 文件                       | 需要做的事                                                                                                     |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `server/scraper/dmm.js`    | 🆕 新建，实现 `searchDMM()` / `fetchDMMDetail()`                                                               |
+| `server/scraper/match.js`  | `SOURCE_TYPES` 加 `'dmm'`；`DEFAULT_MATCH_PRIORITY` 三个语言各加 `'dmm'`；`extractIdHint` 支持 DMM cid         |
+| `server/routes/scraper.js` | import；`searchBySource()` 加分支；新增 `/dmm/search`、`/dmm/fetch` 路由                                       |
+| `server/scraper/cover.js`  | 把 DMM 封面做成确定性 URL（**不要**加进 `DETAIL_FETCH_SOURCES`，原因见 §6.3）                                  |
+| `server/database/init.js`  | ⚠️ **新增 migration，把 `'dmm'` 追加进已有的 `match_priority_*` 设置**（见 §6.5，漏了会导致 DMM 永远不被尝试） |
 
 ### 2.2 前端
 
-| 文件                                 | 需要做的事                                                |
-| ---------------------------------- | ---------------------------------------------------- |
-| `src/types/scrape.ts`              | `SourceType` 加 `'dmm'`                               |
+| 文件                               | 需要做的事                                                         |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| `src/types/scrape.ts`              | `SourceType` 加 `'dmm'`                                            |
 | `src/components/ScrapeDialog.vue`  | 加 `<q-tab name="dmm">`、id 输入提示、`validSources`、默认源启发式 |
-| `src/pages/GameDetailPage.vue`     | `scrapeDefaultSource`、`sourceColor`、`getSourceUrl`   |
-| `src/pages/GameLibPage.vue`        | `getSourceUrl`                                       |
-| `src/components/ScannerDialog.vue` | `sourceColor`、`getSourceUrl`                         |
-| `src/pages/SettingPage.vue`        | 数据源优先级配置界面（若为硬编码则需同步）                                |
+| `src/pages/GameDetailPage.vue`     | `scrapeDefaultSource`、`sourceColor`、`getSourceUrl`               |
+| `src/pages/GameLibPage.vue`        | `getSourceUrl`                                                     |
+| `src/components/ScannerDialog.vue` | `sourceColor`、`getSourceUrl`                                      |
+| `src/pages/SettingPage.vue`        | 数据源优先级配置界面（若为硬编码则需同步）                         |
 
 ### 2.3 现有接口契约（新数据源必须对齐）
 
@@ -137,7 +139,6 @@ fetchXxxDetail(id) -> Promise<{
 ---
 
 ## 三、网上方案调研
-
 
 ### 3.1 Playnite：`erri120/Playnite.Extensions` 的 Fanza Provider（主要参考）
 
@@ -173,17 +174,17 @@ IconUrlFormat = "https://doujin-assets.dmm.co.jp/digital/game/d_{0}/d_{0}pt.jpg"
 
 **字段提取（CSS 选择器）：**
 
-| 目标       | 选择器                                                                    | 备注                                      |
-| -------- | ---------------------------------------------------------------------- | --------------------------------------- |
-| 标题       | `.productTitle__txt` (h1)                                              | 需剥掉 `.productTitle__txt--campaign` 促销前缀 |
-| 社团/厂商    | `.circleName__txt`                                                     | → Playnite Developers                   |
-| 预览图      | `.productPreview` → `li.productPreview__item` → `a.fn-colorbox` 的 href |                                         |
-| 评分       | `.userReview__item` → `a` 内 `u-common__ico--review{00,05..50}`         | class 名直接编码 0.5 星档位                     |
-| 发行日      | `.informationList__ttl == 配信開始日`                                       | 格式 `yyyy/MM/dd HH:mm`，需切掉时间             |
-| 游戏类型(主题) | `.informationList__ttl == ゲームジャンル`                                     | 如 "RPG"，单独一个字段                          |
-| 系列       | `.informationList__ttl == シリーズ`                                        | `----` 视为空                              |
-| 类型/标签    | `.informationList__ttl == ジャンル` → `.genreTag__txt`                     | 多个                                      |
-| 搜索结果     | `.tmb` (p) → `a` → `.txt` 为名称，href 取 id                                |                                         |
+| 目标           | 选择器                                                                  | 备注                                           |
+| -------------- | ----------------------------------------------------------------------- | ---------------------------------------------- |
+| 标题           | `.productTitle__txt` (h1)                                               | 需剥掉 `.productTitle__txt--campaign` 促销前缀 |
+| 社团/厂商      | `.circleName__txt`                                                      | → Playnite Developers                          |
+| 预览图         | `.productPreview` → `li.productPreview__item` → `a.fn-colorbox` 的 href |                                                |
+| 评分           | `.userReview__item` → `a` 内 `u-common__ico--review{00,05..50}`         | class 名直接编码 0.5 星档位                    |
+| 发行日         | `.informationList__ttl == 配信開始日`                                   | 格式 `yyyy/MM/dd HH:mm`，需切掉时间            |
+| 游戏类型(主题) | `.informationList__ttl == ゲームジャンル`                               | 如 "RPG"，单独一个字段                         |
+| 系列           | `.informationList__ttl == シリーズ`                                     | `----` 视为空                                  |
+| 类型/标签      | `.informationList__ttl == ジャンル` → `.genreTag__txt`                  | 多个                                           |
+| 搜索结果       | `.tmb` (p) → `a` → `.txt` 为名称，href 取 id                            |                                                |
 
 **ID 提取逻辑：**
 
@@ -206,37 +207,36 @@ public static string? GetIdFromLink(string link) {
 > ✅ **它的抓取路线在日本出口下仍然可用** —— 详情页选择器 2022→2026 未变，实测全部命中（见 §4.2 #11/#12）。
 > ⚠️ 但**搜索页已改版**：`.tmb` 语义类名被 Tailwind 工具类取代，需重新推导选择器（见 §4.2 #13~#16）。
 
-
 ### 3.2 DMM 官方 Affiliate Web API v3（可选增强路线）
 
 **基址：** `https://api.dmm.com/affiliate/v3`
 
 **可用端点：**
 
-| 端点              | 用途   | 对本项目的价值                     |
-| --------------- | ---- | --------------------------- |
-| `ItemList`      | 商品搜索 | ★ 核心：搜索                     |
+| 端点            | 用途     | 对本项目的价值                         |
+| --------------- | -------- | -------------------------------------- |
+| `ItemList`      | 商品搜索 | ★ 核心：搜索                           |
 | `FloorList`     | 楼层清单 | ★ 运行时发现 service/floor，避免硬编码 |
-| `MakerSearch`   | 厂商搜索 | ★ 可用于补 `makers`             |
-| `GenreSearch`   | 类型搜索 | ★ 可用于补 `genres`             |
-| `SeriesSearch`  | 系列搜索 | 可选                          |
-| `AuthorSearch`  | 作者搜索 | 可选                          |
-| `ActressSearch` | 演员搜索 | 不适用                         |
+| `MakerSearch`   | 厂商搜索 | ★ 可用于补 `makers`                    |
+| `GenreSearch`   | 类型搜索 | ★ 可用于补 `genres`                    |
+| `SeriesSearch`  | 系列搜索 | 可选                                   |
+| `AuthorSearch`  | 作者搜索 | 可选                                   |
+| `ActressSearch` | 演员搜索 | 不适用                                 |
 
 **`ItemList` 参数：**
 
-| 参数             | 必需 | 说明                                     |
-| -------------- | -- | -------------------------------------- |
-| `api_id`       | ✅  | 申请获得                                   |
-| `affiliate_id` | ✅  | 申请获得                                   |
-| `site`         | ✅  | `FANZA`（成人）或 `DMM.com`（一般）             |
+| 参数           | 必需 | 说明                                    |
+| -------------- | ---- | --------------------------------------- |
+| `api_id`       | ✅   | 申请获得                                |
+| `affiliate_id` | ✅   | 申请获得                                |
+| `site`         | ✅   | `FANZA`（成人）或 `DMM.com`（一般）     |
 | `service`      | 推荐 | 如 `doujin`                             |
 | `floor`        | 推荐 | 如 `digital_doujin`                     |
-| `keyword`      |    | 关键词（需 URL 编码）                          |
-| `hits`         |    | 每页条数（1-100）                            |
-| `offset`       |    | 分页偏移                                   |
-| `sort`         |    | `rank` / `date` / `review` / `price` 等 |
-| `output`       |    | `json`（本项目用 JSON）                      |
+| `keyword`      |      | 关键词（需 URL 编码）                   |
+| `hits`         |      | 每页条数（1-100）                       |
+| `offset`       |      | 分页偏移                                |
+| `sort`         |      | `rank` / `date` / `review` / `price` 等 |
+| `output`       |      | `json`（本项目用 JSON）                 |
 
 **响应结构：**
 
@@ -258,27 +258,26 @@ public static string? GetIdFromLink(string link) {
 
 **FANZA 楼层（来自社区 FloorList 导出，用于确定 `service`/`floor` 取值）：**
 
-| service   | floor             | floor id | 名称        | 相关性             |
-| --------- | ----------------- | -------- | --------- | --------------- |
-| `doujin`  | `digital_doujin`  | 81       | 同人        | ★★★ **同人游戏主战场** |
-| `pcgame`  | `digital_pcgame`  | 80       | アダルトPCゲーム | ★★★ 商业 eroge    |
-| `mono`    | `doujin`          | 79       | 同人（通販）    | ★ 实体同人          |
-| `mono`    | `pcgame`          | 77       | PCゲーム（通販） | ★ 实体            |
-| `digital` | `anime`           | 46       | アニメ動画     | ✗               |
-| `ebook`   | `comic` / `novel` | 82/83    | 漫画/小说     | ✗               |
+| service   | floor             | floor id | 名称             | 相关性                 |
+| --------- | ----------------- | -------- | ---------------- | ---------------------- |
+| `doujin`  | `digital_doujin`  | 81       | 同人             | ★★★ **同人游戏主战场** |
+| `pcgame`  | `digital_pcgame`  | 80       | アダルトPCゲーム | ★★★ 商业 eroge         |
+| `mono`    | `doujin`          | 79       | 同人（通販）     | ★ 实体同人             |
+| `mono`    | `pcgame`          | 77       | PCゲーム（通販） | ★ 实体                 |
+| `digital` | `anime`           | 46       | アニメ動画       | ✗                      |
+| `ebook`   | `comic` / `novel` | 82/83    | 漫画/小说        | ✗                      |
 
 > 本项目应主要使用 `site=FANZA&service=doujin&floor=digital_doujin`，次要 `service=pcgame&floor=digital_pcgame`。
 
 ### 3.3 其他实现
 
-| 项目                        | 语言     | 路线           | 参考价值           |
-| ------------------------- | ------ | ------------ | -------------- |
+| 项目                      | 语言   | 路线             | 参考价值                 |
+| ------------------------- | ------ | ---------------- | ------------------------ |
 | `miya/dmm-search3`        | Python | 官方 API v3 封装 | ★★★ 确认了端点与参数签名 |
-| `zeroAlcBeer/dmm-scraper` | Python | 抓取（影片向）      | ★ 非游戏向，参考价值低   |
-| Playnite 官方 IGDB 插件       | C#     | 官方 API       | 参考架构分层         |
+| `zeroAlcBeer/dmm-scraper` | Python | 抓取（影片向）   | ★ 非游戏向，参考价值低   |
+| Playnite 官方 IGDB 插件   | C#     | 官方 API         | 参考架构分层             |
 
 ---
-
 
 ## 四、实测验证（本节全部是真实请求结果）
 
@@ -290,45 +289,45 @@ public static string? GetIdFromLink(string link) {
 
 > 出口：直连 `103.62.49.138` 前为 **US / California**（AS46997 Black Mesa）
 
-| # | 测试项                                                                    | 实测结果                                                                                                                                             | 结论                                                           |
-| - | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| 1 | FANZA 搜索页 `dmm.co.jp/search/=/searchstr=…`                             | `302` → `special.fanza.jp/not-available-in-your-region/`，`.tmb` 命中 **0**                                                                         | ❌ **地区封锁**                                                   |
-| 2 | 同人详情页 `…/dc/doujin/-/detail/=/cid=d_216826/`                           | `302` → `accounts.dmm.co.jp/service/login/password?path=…`；Playnite 全部 10 个选择器命中 **0**                                                           | ❌ 拿到的是登录页，**不是**「选择器失效」                                      |
-| 3 | 一般站 `www.dmm.com`                                                      | `200`                                                                                                                                            | ✅ 封锁**仅针对 FANZA 成人内容**                                       |
-| 4 | `api.dmm.com/affiliate/v3/ItemList`（dummy 凭证）                          | `400` + 结构化 JSON：`{"result":{"status":400,"errors":{"api_id":"Invalid Request Error","affiliate_id":"Invalid Request Error"}}}`；**加代理与不加代理结果相同** | ✅ **API 不受地区封锁**                                             |
-| 5 | API 参数校验顺序                                                             | 合法 floor `digital_doujin` 与故意伪造的 floor **返回完全相同的错误**                                                                                             | ⚠️ **API 先校验凭证并短路**，因此**不能**由 #4 推断 doujin floor 可用（自我更正，见下） |
-| 6 | 确定性封面 URL `doujin-assets.dmm.co.jp/digital/game/d_{cid}/d_{cid}pt.jpg` | 有效 id → `206` `image/jpeg`；无效 id → `302` `application/xml`                                                                                       | ✅ **封面有确定性 URL，不受地区封锁，且能区分有效/无效 id**                         |
-| 7 | 封面 URL 走代理                                                             | `206` `image/jpeg`                                                                                                                               | ✅ 封面走不走代理都行                                                  |
+| #   | 测试项                                                                      | 实测结果                                                                                                                                                          | 结论                                                                                    |
+| --- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 1   | FANZA 搜索页 `dmm.co.jp/search/=/searchstr=…`                               | `302` → `special.fanza.jp/not-available-in-your-region/`，`.tmb` 命中 **0**                                                                                       | ❌ **地区封锁**                                                                         |
+| 2   | 同人详情页 `…/dc/doujin/-/detail/=/cid=d_216826/`                           | `302` → `accounts.dmm.co.jp/service/login/password?path=…`；Playnite 全部 10 个选择器命中 **0**                                                                   | ❌ 拿到的是登录页，**不是**「选择器失效」                                               |
+| 3   | 一般站 `www.dmm.com`                                                        | `200`                                                                                                                                                             | ✅ 封锁**仅针对 FANZA 成人内容**                                                        |
+| 4   | `api.dmm.com/affiliate/v3/ItemList`（dummy 凭证）                           | `400` + 结构化 JSON：`{"result":{"status":400,"errors":{"api_id":"Invalid Request Error","affiliate_id":"Invalid Request Error"}}}`；**加代理与不加代理结果相同** | ✅ **API 不受地区封锁**                                                                 |
+| 5   | API 参数校验顺序                                                            | 合法 floor `digital_doujin` 与故意伪造的 floor **返回完全相同的错误**                                                                                             | ⚠️ **API 先校验凭证并短路**，因此**不能**由 #4 推断 doujin floor 可用（自我更正，见下） |
+| 6   | 确定性封面 URL `doujin-assets.dmm.co.jp/digital/game/d_{cid}/d_{cid}pt.jpg` | 有效 id → `206` `image/jpeg`；无效 id → `302` `application/xml`                                                                                                   | ✅ **封面有确定性 URL，不受地区封锁，且能区分有效/无效 id**                             |
+| 7   | 封面 URL 走代理                                                             | `206` `image/jpeg`                                                                                                                                                | ✅ 封面走不走代理都行                                                                   |
 
 ### 4.2 第二轮：日本出口（推翻初版结论）
 
 > 出口：`103.62.49.138` → **Japan / Tokyo**（GSL Networks）
 
-| #  | 测试项                              | 实测结果                                                                                          | 结论                                    |
-| -- | -------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------- |
-| 9  | FANZA 搜索页                         | `200`，`<title>忍法の検索結果 - FANZA</title>`，无地区封锁                                              | ✅ **地区封锁消失**                          |
-| 10 | 同人详情页 `cid=d_216826`              | `200`，完整商品页（491KB），**无登录墙**                                                                   | ✅ **登录墙消失**（说明它本就是地区拦截的表现，不是真的需要登录）    |
-| 11 | 详情页 Playnite 选择器                 | `productTitle__txt`×3 / `circleName__txt`×1 / `informationList`×28 / `genreTag__txt`×13 / `productPreview`×17 | ✅ **选择器全部存活**                         |
-| 12 | **用 cheerio 真实解析详情页**            | 见下表 —— 6 类字段全部成功提取                                                                            | ✅ **字段可用**                            |
-| 13 | 搜索页 `.tmb` 选择器                   | 命中 **0**                                                                                      | ❌ **真失效**（页面已改版为 Tailwind）             |
-| 14 | 搜索页结果是否在 HTML 里                  | `a[href*="/detail/=/cid="]` → **60 个 anchor / 10 个唯一 cid**                                     | ✅ 结果**是**服务端渲染的，可抓                     |
-| 15 | 搜索页标题选择器                         | `p.text-sm.font-bold.line-clamp-2`（徽章是兄弟节点 `div.space-x-1`）                                    | 🟡 可提取，但依赖 Tailwind 类名                  |
-| 16 | 搜索页页面框架                          | 出现 `div.tailwind-scope`、`flex py-1.5 pl-3` 等工具类                                               | ⚠️ **已从语义类名迁移到 Tailwind**             |
+| #   | 测试项                        | 实测结果                                                                                                      | 结论                                                              |
+| --- | ----------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 9   | FANZA 搜索页                  | `200`，`<title>忍法の検索結果 - FANZA</title>`，无地区封锁                                                    | ✅ **地区封锁消失**                                               |
+| 10  | 同人详情页 `cid=d_216826`     | `200`，完整商品页（491KB），**无登录墙**                                                                      | ✅ **登录墙消失**（说明它本就是地区拦截的表现，不是真的需要登录） |
+| 11  | 详情页 Playnite 选择器        | `productTitle__txt`×3 / `circleName__txt`×1 / `informationList`×28 / `genreTag__txt`×13 / `productPreview`×17 | ✅ **选择器全部存活**                                             |
+| 12  | **用 cheerio 真实解析详情页** | 见下表 —— 6 类字段全部成功提取                                                                                | ✅ **字段可用**                                                   |
+| 13  | 搜索页 `.tmb` 选择器          | 命中 **0**                                                                                                    | ❌ **真失效**（页面已改版为 Tailwind）                            |
+| 14  | 搜索页结果是否在 HTML 里      | `a[href*="/detail/=/cid="]` → **60 个 anchor / 10 个唯一 cid**                                                | ✅ 结果**是**服务端渲染的，可抓                                   |
+| 15  | 搜索页标题选择器              | `p.text-sm.font-bold.line-clamp-2`（徽章是兄弟节点 `div.space-x-1`）                                          | 🟡 可提取，但依赖 Tailwind 类名                                   |
+| 16  | 搜索页页面框架                | 出现 `div.tailwind-scope`、`flex py-1.5 pl-3` 等工具类                                                        | ⚠️ **已从语义类名迁移到 Tailwind**                                |
 
 **详情页 cheerio 解析实测结果（#12）：**
 
-| 字段        | 提取到的值                                          |
-| --------- | ---------------------------------------------- |
-| title     | `爆乳忍法チチシノビ`（⚠️ 剥促销前缀后需再 `.trim()`，Playnite 有做） |
-| circle    | `みかん畑`                                         |
-| previews  | 10 张（`…/d_216826pr.jpg` 确定性路径）                 |
-| rating    | `u-common__ico--review40` → 4.0 星               |
-| 配信開始日     | `2021/12/25 00:00`                             |
-| 作品形式      | `ゲーム`                                          |
-| ゲームジャンル   | `ロールプレイング`                                     |
-| 題材        | `オリジナル`                                        |
-| ジャンル      | 13 个标签（映射到 tag）                                |
-| ファイル容量    | `1.16GB`                                       |
+| 字段           | 提取到的值                                                           |
+| -------------- | -------------------------------------------------------------------- |
+| title          | `爆乳忍法チチシノビ`（⚠️ 剥促销前缀后需再 `.trim()`，Playnite 有做） |
+| circle         | `みかん畑`                                                           |
+| previews       | 10 张（`…/d_216826pr.jpg` 确定性路径）                               |
+| rating         | `u-common__ico--review40` → 4.0 星                                   |
+| 配信開始日     | `2021/12/25 00:00`                                                   |
+| 作品形式       | `ゲーム`                                                             |
+| ゲームジャンル | `ロールプレイング`                                                   |
+| 題材           | `オリジナル`                                                         |
+| ジャンル       | 13 个标签（映射到 tag）                                              |
+| ファイル容量   | `1.16GB`                                                             |
 
 ### ⚠️ 自我更正（#5）
 
@@ -348,27 +347,29 @@ public static string? GetIdFromLink(string link) {
 
 ## 五、方案对比与推荐（已更正）
 
-| 维度     | A. 官方 Affiliate API                | B. HTML 抓取（Playnite 路线）        | C. A+B 混合                    |
-| ------ | ---------------------------------- | ----------------------------- | ---------------------------- |
-| 前置条件   | 申请 `api_id`+`affiliate_id`         | **日本出口 IP** + `age_check_done=1` cookie | 日本 IP + 凭证                  |
-| 地区限制   | ✅ 不受限                              | ✅ 日本 IP 下不受限（实测 #9/#10）       | ✅                            |
-| 稳定性    | ✅ 官方接口                             | 🟡 详情页稳（BEM 语义类）；搜索页脆（Tailwind） | 🟡                           |
-| 字段完整度  | 🟡 title/date/price/图；genres 需 `GenreSearch` 补 | 🟢 **最全**：系列/主题/评分/预览图/容量     | 🟢                           |
-| 维护成本   | 🟢 低                               | 🔴 中高（搜索页选择器需重写、且会再变）         | 🔴 高（两套都要维护）                 |
-| 评分字段   | 🔴 无                               | 🟢 有（0.5 星档）                  | 🟢                           |
-| 系列字段   | 🟡 需 `SeriesSearch`                | 🟢 有                          | 🟢                           |
-| 申请门槛   | 🔴 需 DMM アフィリエイト账号                 | 🟢 无需账号                       | 🔴                           |
-| 本项目契合度 | ★★                                 | **★★★（推荐）**                  | ★★                           |
+| 维度         | A. 官方 Affiliate API                              | B. HTML 抓取（Playnite 路线）                   | C. A+B 混合           |
+| ------------ | -------------------------------------------------- | ----------------------------------------------- | --------------------- |
+| 前置条件     | 申请 `api_id`+`affiliate_id`                       | **日本出口 IP** + `age_check_done=1` cookie     | 日本 IP + 凭证        |
+| 地区限制     | ✅ 不受限                                          | ✅ 日本 IP 下不受限（实测 #9/#10）              | ✅                    |
+| 稳定性       | ✅ 官方接口                                        | 🟡 详情页稳（BEM 语义类）；搜索页脆（Tailwind） | 🟡                    |
+| 字段完整度   | 🟡 title/date/price/图；genres 需 `GenreSearch` 补 | 🟢 **最全**：系列/主题/评分/预览图/容量         | 🟢                    |
+| 维护成本     | 🟢 低                                              | 🔴 中高（搜索页选择器需重写、且会再变）         | 🔴 高（两套都要维护） |
+| 评分字段     | 🔴 无                                              | 🟢 有（0.5 星档）                               | 🟢                    |
+| 系列字段     | 🟡 需 `SeriesSearch`                               | 🟢 有                                           | 🟢                    |
+| 申请门槛     | 🔴 需 DMM アフィリエイト账号                       | 🟢 无需账号                                     | 🔴                    |
+| 本项目契合度 | ★★                                                 | **★★★（推荐）**                                 | ★★                    |
 
 ### 推荐：方案 B（HTML 抓取）+ 日本代理
 
 理由：
+
 1. **不需要申请 affiliate 账号** —— 这是最大的摩擦点，省掉。
 2. **字段最全**，尤其评分、系列、作品形式、容量这些 API 未必给的字段。
 3. 详情页结构稳定（BEM 语义类名，2022→2026 未变），**搜索页是唯一需要重写选择器的部分**。
 4. 封面走确定性 URL，与现有 `buildDlsiteCoverUrl` 模式一致。
 
 **实施要点：**
+
 - 详情页直接照搬 Playnite 的选择器（已验证存活）。
 - 搜索页改用结构性选择器（`a[href*="/detail/=/cid="]` 取 id，`p.font-bold` 取标题），**不要**再依赖 `.tmb` 这类语义类名。
 - 复用本项目的 `scraperAxios` 代理机制（`proxy_enabled` / `proxy_host` / `proxy_port` 设置），这样日本代理可以直接用你已有的代理配置，无需改代码。
@@ -414,7 +415,7 @@ source_id 存:  d_216826
 const extractIdHint = (name) => {
   const rj = (name || '').match(/RJ\d+/i);
   if (rj) return rj[0].toLowerCase();
-  const dmm = (name || '').match(/\bd_\d{5,}\b/i);   // 🆕
+  const dmm = (name || '').match(/\bd_\d{5,}\b/i); // 🆕
   return dmm ? dmm[0].toLowerCase() : null;
 };
 ```
@@ -427,40 +428,40 @@ const extractIdHint = (name) => {
 
 **详情页** `https://www.dmm.co.jp/dc/doujin/-/detail/=/cid={cid}/`
 
-| 本项目字段         | DMM 来源                                                    | 实测提取值示例            |
-| ------------- | --------------------------------------------------------- | ------------------ |
-| `title`       | `h1.productTitle__txt`（剥 `.productTitle__txt--campaign` 前缀后 `.trim()`） | `爆乳忍法チチシノビ`        |
-| `makers`      | `.circleName__txt`                                        | `みかん畑`             |
-| `coverURL`    | 确定性 URL（首选，见 6.3）→ 详情页预览图（兜底）                              | `…/d_216826pt.jpg` |
-| `genres`      | `informationList` 中 `ゲームジャンル`（作品形式/主题）                     | `ロールプレイング`         |
-| `tags`        | `informationList` 中 `ジャンル` → `.genreTag__txt`             | 13 个标签             |
-| `description` | ⚠️ **实测 informationList 里没有简介字段**                        | 可能需留空，或另找位置        |
-| `source_type` | `'dmm'`                                                   |                    |
-| `source_id`   | `d_216826`                                                |                    |
-| `source_url`  | 详情页 URL                                                   |                    |
+| 本项目字段    | DMM 来源                                                                     | 实测提取值示例         |
+| ------------- | ---------------------------------------------------------------------------- | ---------------------- |
+| `title`       | `h1.productTitle__txt`（剥 `.productTitle__txt--campaign` 前缀后 `.trim()`） | `爆乳忍法チチシノビ`   |
+| `makers`      | `.circleName__txt`                                                           | `みかん畑`             |
+| `coverURL`    | 确定性 URL（首选，见 6.3）→ 详情页预览图（兜底）                             | `…/d_216826pt.jpg`     |
+| `genres`      | `informationList` 中 `ゲームジャンル`（作品形式/主题）                       | `ロールプレイング`     |
+| `tags`        | `informationList` 中 `ジャンル` → `.genreTag__txt`                           | 13 个标签              |
+| `description` | ⚠️ **实测 informationList 里没有简介字段**                                   | 可能需留空，或另找位置 |
+| `source_type` | `'dmm'`                                                                      |                        |
+| `source_id`   | `d_216826`                                                                   |                        |
+| `source_url`  | 详情页 URL                                                                   |                        |
 
 **额外可采（其它数据源没有，值得考虑是否入库）**
 
-| 字段      | 来源选择器                                   | 实测值                |
-| ------- | --------------------------------------- | ------------------ |
-| 评分      | `.userReview__item` → `u-common__ico--review{00..50}` | `review40` → 4.0 星 |
-| 发行日     | `informationList` 中 `配信開始日`            | `2021/12/25`       |
-| 作品形式    | `informationList` 中 `作品形式`              | `ゲーム`             |
-| 题材      | `informationList` 中 `題材`                | `オリジナル`           |
-| 容量      | `informationList` 中 `ファイル容量`            | `1.16GB`           |
-| 预览图     | `.productPreview__item a.fn-colorbox` 的 href | 10 张               |
-| 系列      | `informationList` 中 `シリーズ`              | —                  |
+| 字段     | 来源选择器                                            | 实测值              |
+| -------- | ----------------------------------------------------- | ------------------- |
+| 评分     | `.userReview__item` → `u-common__ico--review{00..50}` | `review40` → 4.0 星 |
+| 发行日   | `informationList` 中 `配信開始日`                     | `2021/12/25`        |
+| 作品形式 | `informationList` 中 `作品形式`                       | `ゲーム`            |
+| 题材     | `informationList` 中 `題材`                           | `オリジナル`        |
+| 容量     | `informationList` 中 `ファイル容量`                   | `1.16GB`            |
+| 预览图   | `.productPreview__item a.fn-colorbox` 的 href         | 10 张               |
+| 系列     | `informationList` 中 `シリーズ`                       | —                   |
 
 > 当前 schema 没有「评分 / 容量」字段。建议**先不入库**，只取 title / cover / makers / genres / tags / description 六项对齐现有契约；额外字段留待以后需要时再加列。
 
 **搜索页** `https://www.dmm.co.jp/search/=/searchstr={keyword}/`
 
-| 输出            | 选择器                                                       | 备注                        |
-| ------------- | --------------------------------------------------------- | ------------------------- |
-| `id`          | `a[href*="/detail/=/cid="]` 的 href 中 `cid=(d_\d+)`         | ✅ 实测 60 anchor → 10 个唯一 cid |
-| `name`        | 该结果卡片内 `p.text-sm.font-bold.line-clamp-2`                | 🟡 依赖 Tailwind 类名          |
-| `makerName`   | 同卡片内 `-サークル：XXX` 文本                                       | 🟡 需从 `660円-サークル：CAISSON` 里切 |
-| `coverUrl`    | `buildDmmCoverUrl(cid)`                                   | ✅ 确定性                    |
+| 输出        | 选择器                                               | 备注                                   |
+| ----------- | ---------------------------------------------------- | -------------------------------------- |
+| `id`        | `a[href*="/detail/=/cid="]` 的 href 中 `cid=(d_\d+)` | ✅ 实测 60 anchor → 10 个唯一 cid      |
+| `name`      | 该结果卡片内 `p.text-sm.font-bold.line-clamp-2`      | 🟡 依赖 Tailwind 类名                  |
+| `makerName` | 同卡片内 `-サークル：XXX` 文本                       | 🟡 需从 `660円-サークル：CAISSON` 里切 |
+| `coverUrl`  | `buildDmmCoverUrl(cid)`                              | ✅ 确定性                              |
 
 > ⚠️ 搜索页的卡片结构：`div.flex.py-1.5.pl-3` → `a`(图) + `div.flex-auto.flex.flex-col` → `a`(标题) + `a`(价格/社团)。标题锚点内是 `div.mr-3` → `div.space-x-1`(格式徽章) + `p.font-bold`(标题)。**徽章与标题是两个兄弟节点**，所以标题可干净提取。
 
@@ -489,7 +490,6 @@ ja: ['dlsite', 'bangumi', 'dmm', 'steam', 'vndb'],   // 同人领域 DMM 补 DLs
 zh: ['steam', 'bangumi', 'dlsite', 'vndb', 'dmm'],
 ```
 
-
 ### 6.5 ⚠️ 必须做的迁移（否则 DMM 永远不生效）
 
 `server/routes/scraper.js` 的 `getMatchConfig()` 逻辑是：
@@ -499,7 +499,7 @@ if (priorityRaw) {
   const parsed = JSON.parse(priorityRaw);
   if (Array.isArray(parsed)) {
     const valid = parsed.filter((s) => SOURCE_TYPES.includes(s));
-    if (valid.length > 0) priority = valid;   // ← 已存的旧数组会直接胜出
+    if (valid.length > 0) priority = valid; // ← 已存的旧数组会直接胜出
   }
 }
 ```
@@ -519,9 +519,13 @@ if (!v11) {
       const arr = JSON.parse(row.value);
       if (Array.isArray(arr) && !arr.includes('dmm')) {
         arr.push('dmm');
-        await knex('setting').where({ key }).update({ value: JSON.stringify(arr) });
+        await knex('setting')
+          .where({ key })
+          .update({ value: JSON.stringify(arr) });
       }
-    } catch { /* malformed: leave as is, getMatchConfig will fall back */ }
+    } catch {
+      /* malformed: leave as is, getMatchConfig will fall back */
+    }
   }
   await knex('setting').insert({ key: 'migration_v11', value: '1' }).onConflict('key').ignore();
   console.log(' * Migration v11 done.');
@@ -532,12 +536,12 @@ if (!v11) {
 
 方案 B（HTML 抓取）**不需要 API 凭证**，但需要日本出口 IP。
 
-| 设置项             | 存储          | 说明                                       |
-| --------------- | ----------- | ---------------------------------------- |
-| `dmm_enabled`   | `setting` 表 | 是否启用该数据源                                 |
-| `dmm_use_proxy` | `setting` 表 | DMM 是否走代理（默认继承全局 `proxy_enabled`，但允许单独覆盖） |
-| `dmm_api_id`    | `setting` 表 | **可选**：仅在启用「API 搜索」增强时需要                 |
-| `dmm_affiliate_id` | `setting` 表 | **可选**：同上                                |
+| 设置项             | 存储         | 说明                                                           |
+| ------------------ | ------------ | -------------------------------------------------------------- |
+| `dmm_enabled`      | `setting` 表 | 是否启用该数据源                                               |
+| `dmm_use_proxy`    | `setting` 表 | DMM 是否走代理（默认继承全局 `proxy_enabled`，但允许单独覆盖） |
+| `dmm_api_id`       | `setting` 表 | **可选**：仅在启用「API 搜索」增强时需要                       |
+| `dmm_affiliate_id` | `setting` 表 | **可选**：同上                                                 |
 
 **为什么建议给 DMM 单独的代理开关**：日本出口是这个数据源的**硬依赖**，代理一关 DMM 就静默失效。单独开关至少让意图显式。
 
@@ -549,6 +553,7 @@ if (!v11) {
 **未配置/代理不可用时的行为**：`searchDMM()` / `fetchDMMDetail()` 返回空并 `console.warn` 写明原因（「DMM 需要日本出口 IP」），**不能**抛异常中断 `auto/search` 的循环（该循环已有 `catch { continue }`，但返回空数组语义更清晰）。
 
 **必须区分的两种失败**（否则用户无法诊断）：
+
 - 「地区封锁」→ 说明代理没生效或不是日本出口
 - 「选择器未命中」→ 说明 DMM 又改版了，需要更新选择器
 
@@ -558,21 +563,21 @@ SettingPage 需给出「DMM 需要日本出口 IP」的明确提示。
 
 **已确认的事实：**
 
-| 来源                                             | 结论                                                  |
-| ---------------------------------------------- | --------------------------------------------------- |
-| 用户反馈                                           | DLSite 也有很多游戏封禁非日本 IP                                |
-| DLsite 2025-02 公告                              | 「DLsite將對特定國家地區的用戶實施限制，**部分作品可能無法顯示或購買**」            |
-| 社区经验                                           | 「部分商品是有 ip 限制的，建议尽量挂日本」；「DLsite部分作品**搜不到**，转日区或解决搜索问题」 |
+| 来源                | 结论                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| 用户反馈            | DLSite 也有很多游戏封禁非日本 IP                                                               |
+| DLsite 2025-02 公告 | 「DLsite將對特定國家地區的用戶實施限制，**部分作品可能無法顯示或購買**」                       |
+| 社区经验            | 「部分商品是有 ip 限制的，建议尽量挂日本」；「DLsite部分作品**搜不到**，转日区或解决搜索问题」 |
 
 **关键点：限制是「按作品」的，不是整站封锁。** 同一站点里，A 作品能搜到能买、B 作品直接不显示。
 
 **实测（DLsite 搜索 API，255 个字段）：**
 
-| 检查项                        | 结果                                              |
-| -------------------------- | ----------------------------------------------- |
-| 是否有 `area` / `region` 类字段  | ❌ **没有**。`limit_*` 系列字段全是库存/促销限制，与地域无关         |
-| `work_attributes` 里的 `JPN` | 50/50 都有 —— 但 `ENG`(7) / `CHI`(8) 同时存在，说明这是**语言**标记，不是地域标记 |
-| 商品页（日本出口）里的地域限制标记          | 0 命中（`お住まいの地域` / `地域制限` / `ご利用いただけません` 全为 0）   |
+| 检查项                             | 结果                                                                              |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| 是否有 `area` / `region` 类字段    | ❌ **没有**。`limit_*` 系列字段全是库存/促销限制，与地域无关                      |
+| `work_attributes` 里的 `JPN`       | 50/50 都有 —— 但 `ENG`(7) / `CHI`(8) 同时存在，说明这是**语言**标记，不是地域标记 |
+| 商品页（日本出口）里的地域限制标记 | 0 命中（`お住まいの地域` / `地域制限` / `ご利用いただけません` 全为 0）           |
 
 **结论：区域限制是「靠缺席实现的」，没有字段可以检测。** 被限制的作品在搜索结果里**根本不出现**，
 API 不会告诉你「这个作品被限制了」。所以：
@@ -601,11 +606,11 @@ API 不会告诉你「这个作品被限制了」。所以：
    → X-Geo-Country-Code: JP
    ```
 
-   | 检查项                              | 结果                                        |
-   | -------------------------------- | ----------------------------------------- |
-   | `maniax/api/` 端点（项目在用）          | ✅ 返回 `X-Geo-Country-Code: JP`             |
-   | 站点根 `https://www.dlsite.com/`     | ❌ 不返回该头                                   |
-   | DMM 详情页 / 搜索页                     | ❌ 不返回任何 geo 头                             |
+   | 检查项                           | 结果                             |
+   | -------------------------------- | -------------------------------- |
+   | `maniax/api/` 端点（项目在用）   | ✅ 返回 `X-Geo-Country-Code: JP` |
+   | 站点根 `https://www.dlsite.com/` | ❌ 不返回该头                    |
+   | DMM 详情页 / 搜索页              | ❌ 不返回任何 geo 头             |
 
    **这意味着 DLsite 的区域预检是免费的** —— 该头就在 app 已经在调的那次响应里，
    **不需要任何额外请求**。只要读一下 header，不是 `JP` 就提示用户即可。
@@ -728,44 +733,44 @@ API 不会告诉你「这个作品被限制了」。所以：
 
 ## 八、风险与待验证项（已更正）
 
-| 级别   | 项                          | 影响                                            | 处置                                                   |
-| ---- | -------------------------- | --------------------------------------------- | ---------------------------------------------------- |
-| 🔴 高 | **日本出口成为硬依赖**              | 代理挂 / 出口非日本 → DMM 抓取全挂。**但注意：这不是 DMM 独有** —— DLsite 同样按作品做 IP 限制（见 §6.7）          | 做成**跨数据源**的「日本出口代理」配置（DLsite/DMM 共用）；失败时给出可诊断报错（区分地区封锁 vs 选择器失效）     |
-| 🔴 高 | **DLsite 区域限制静默失败**             | 区域限制「靠缺席实现」，无字段可检测；`dlsite.js` 现在零处理 → 出口不对时受限作品静默消失，用户无从察觉（用户一直靠手动切代理规避） | ✅ **有低成本解法**：读 `X-Geo-Country-Code` 响应头（已在现有响应里，零额外请求）；含 `RJ\d+` 却 0 结果时给提示。见 §6.7 / 任务 8           |
-| 🔴 高 | **搜索页选择器基于 Tailwind 工具类**  | Tailwind 类名比 BEM 语义类名**脆弱得多**，DMM 改版即失效      | 优先用结构性选择器（`a[href*=cid]`、兄弟/父子位置关系）而非纯类名；写好失效告警      |
-| 🟡 中 | **批量抓取可能触发限流/封禁**          | 2032 个游戏的批量抓取量不小                              | 任务 7 步骤 5 先测阈值；复用 `retryGet` 退避；批量限流                |
-| 🟡 中 | **封面路径可能因内容类型而异**          | 实测 `digital/game/` 有效、`digital/comic/` 返回 302 | 按类型判断，或用详情页里的预览图/`og:image` 兜底                       |
-| 🟡 中 | **本地目录名不含 DMM cid**         | 自动匹配命中率低于 DLsite（RJ 码有目录名惯例）                   | 依赖搜索 + 阈值；UI 给足手动挑选入口；支持手动粘贴 DMM 链接                  |
-| 🟡 中 | **详情页无 description 字段**    | 实测 informationList 里没有简介，只有结构化属性               | 需确认页面别处是否有；若确实没有，接受该字段为空（其它源会补）                      |
-| 🟢 低 | 地区封锁本身                     | 已验证日本 IP 下消失                                   | 无需额外处理，但需在 UI 说明                                      |
-| 🟢 低 | 年龄门 cookie                | `age_check_done=1` 已足够（实测）                    | 硬编码该 cookie 即可                                        |
+| 级别  | 项                                   | 影响                                                                                                                                | 处置                                                                                                                              |
+| ----- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 🔴 高 | **日本出口成为硬依赖**               | 代理挂 / 出口非日本 → DMM 抓取全挂。**但注意：这不是 DMM 独有** —— DLsite 同样按作品做 IP 限制（见 §6.7）                           | 做成**跨数据源**的「日本出口代理」配置（DLsite/DMM 共用）；失败时给出可诊断报错（区分地区封锁 vs 选择器失效）                     |
+| 🔴 高 | **DLsite 区域限制静默失败**          | 区域限制「靠缺席实现」，无字段可检测；`dlsite.js` 现在零处理 → 出口不对时受限作品静默消失，用户无从察觉（用户一直靠手动切代理规避） | ✅ **有低成本解法**：读 `X-Geo-Country-Code` 响应头（已在现有响应里，零额外请求）；含 `RJ\d+` 却 0 结果时给提示。见 §6.7 / 任务 8 |
+| 🔴 高 | **搜索页选择器基于 Tailwind 工具类** | Tailwind 类名比 BEM 语义类名**脆弱得多**，DMM 改版即失效                                                                            | 优先用结构性选择器（`a[href*=cid]`、兄弟/父子位置关系）而非纯类名；写好失效告警                                                   |
+| 🟡 中 | **批量抓取可能触发限流/封禁**        | 2032 个游戏的批量抓取量不小                                                                                                         | 任务 7 步骤 5 先测阈值；复用 `retryGet` 退避；批量限流                                                                            |
+| 🟡 中 | **封面路径可能因内容类型而异**       | 实测 `digital/game/` 有效、`digital/comic/` 返回 302                                                                                | 按类型判断，或用详情页里的预览图/`og:image` 兜底                                                                                  |
+| 🟡 中 | **本地目录名不含 DMM cid**           | 自动匹配命中率低于 DLsite（RJ 码有目录名惯例）                                                                                      | 依赖搜索 + 阈值；UI 给足手动挑选入口；支持手动粘贴 DMM 链接                                                                       |
+| 🟡 中 | **详情页无 description 字段**        | 实测 informationList 里没有简介，只有结构化属性                                                                                     | 需确认页面别处是否有；若确实没有，接受该字段为空（其它源会补）                                                                    |
+| 🟢 低 | 地区封锁本身                         | 已验证日本 IP 下消失                                                                                                                | 无需额外处理，但需在 UI 说明                                                                                                      |
+| 🟢 低 | 年龄门 cookie                        | `age_check_done=1` 已足够（实测）                                                                                                   | 硬编码该 cookie 即可                                                                                                              |
 
 ---
 
 ## 九、工作量估算（已更正）
 
-| 任务             | 预估                  |
-| -------------- | ------------------- |
+| 任务                         | 预估                             |
+| ---------------------------- | -------------------------------- |
 | 1. 后端核心模块（HTML 抓取） | 60 min（搜索页选择器需现场推导） |
-| 2. match.js 扩展 | 15 min              |
-| 3. 路由接入        | 15 min              |
-| 4. 数据库迁移       | 15 min              |
-| 5. 封面接入        | 20 min              |
-| 6. 前端 11 处     | 40 min              |
-| 7. 端到端验证       | ~40 min（需日本代理）      |
-| **合计**         | **~3.5 小时**         |
+| 2. match.js 扩展             | 15 min                           |
+| 3. 路由接入                  | 15 min                           |
+| 4. 数据库迁移                | 15 min                           |
+| 5. 封面接入                  | 20 min                           |
+| 6. 前端 11 处                | 40 min                           |
+| 7. 端到端验证                | ~40 min（需日本代理）            |
+| **合计**                     | **~3.5 小时**                    |
 
 ---
 
 ## 十、参考
 
-| 来源                                                           | 用途                                   |
-| ------------------------------------------------------------ | ------------------------------------ |
-| `erri120/Playnite.Extensions` → `src/FanzaMetadata/`         | 主要参考：字段映射、选择器、ID 提取、评分档位             |
+| 来源                                                             | 用途                                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `erri120/Playnite.Extensions` → `src/FanzaMetadata/`             | 主要参考：字段映射、选择器、ID 提取、评分档位                 |
 | DMM Web API v3 官方文档 `affiliate.dmm.com/api/v3/itemlist.html` | API 规范（⚠️ 该站点对非日本 IP 返回地区封锁，需另寻途径查阅） |
-| `miya/dmm-search3`                                           | 确认 API 端点与参数签名                       |
-| DMM FloorList 社区导出（ytakeuchi.jp）                             | FANZA service/floor 取值表              |
-| 本项目 `docs/superpowers/plans/2026-06-28-steam-datasource.md`  | 实现计划格式模板                             |
+| `miya/dmm-search3`                                               | 确认 API 端点与参数签名                                       |
+| DMM FloorList 社区导出（ytakeuchi.jp）                           | FANZA service/floor 取值表                                    |
+| 本项目 `docs/superpowers/plans/2026-06-28-steam-datasource.md`   | 实现计划格式模板                                              |
 
 ---
 
@@ -819,7 +824,10 @@ const circle = $('.circleName__txt').first().text().trim();
 const info = {};
 $('.informationList').each((_, el) => {
   const k = $(el).find('.informationList__ttl').first().text().trim();
-  const tags = $(el).find('.genreTag__txt').map((_, t) => $(t).text().trim()).get();
+  const tags = $(el)
+    .find('.genreTag__txt')
+    .map((_, t) => $(t).text().trim())
+    .get();
   if (k) info[k] = tags.length ? tags : $(el).find('.informationList__txt').first().text().trim();
 });
 // 搜索页

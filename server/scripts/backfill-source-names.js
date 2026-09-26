@@ -27,8 +27,7 @@ const pLimit = (concurrency) => {
 };
 
 const main = async () => {
-  const bangumiToken =
-    (await knex('setting').where({ key: 'bangumi_token' }).first())?.value || '';
+  const bangumiToken = (await knex('setting').where({ key: 'bangumi_token' }).first())?.value || '';
 
   const sources = await knex('game_source')
     .whereNull('name')

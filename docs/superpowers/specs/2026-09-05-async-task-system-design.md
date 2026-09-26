@@ -41,11 +41,11 @@ In-memory task manager. Tasks live only during the application session (not pers
 
 **API:**
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/tasks` | List all tasks |
+| Endpoint                | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `GET /api/tasks`        | List all tasks                                        |
 | `DELETE /api/tasks/:id` | Cancel (extract only) or remove completed/failed task |
-| `GET /api/tasks/events` | SSE stream — pushes task state changes in real-time |
+| `GET /api/tasks/events` | SSE stream — pushes task state changes in real-time   |
 
 **SSE behavior:**
 
@@ -89,16 +89,17 @@ In-memory task manager. Tasks live only during the application session (not pers
 
 **Tool selection by format:**
 
-| Format | Priority |
-|--------|----------|
-| `.rar` | UnRAR.exe > 7z.exe |
-| `.zip` | UnRAR.exe > 7z.exe |
-| `.7z` | 7z.exe or 7z-zstd |
-| `.zst` / zstd volumes | 7z-zstd only |
+| Format                | Priority           |
+| --------------------- | ------------------ |
+| `.rar`                | UnRAR.exe > 7z.exe |
+| `.zip`                | UnRAR.exe > 7z.exe |
+| `.7z`                 | 7z.exe or 7z-zstd  |
+| `.zst` / zstd volumes | 7z-zstd only       |
 
 **Tool auto-detection** (`GET /api/settings/detect-tools`):
 
 Scans common install paths:
+
 - UnRAR.exe: `C:\Program Files\WinRAR\UnRAR.exe`, `C:\Program Files (x86)\WinRAR\UnRAR.exe`
 - 7z.exe: `C:\Program Files\7-Zip\7z.exe`, `C:\Program Files (x86)\7-Zip\7z.exe`
 - 7z-zstd: `C:\Program Files\7-Zip-ZStandard\7z.exe`, `%LOCALAPPDATA%\Programs\7-Zip-ZStandard\7z.exe`
@@ -130,6 +131,7 @@ Returns found paths. Users can override in Settings (stored in `setting.extract_
 **After** (async): Returns immediately with a task ID.
 
 **Request:**
+
 ```json
 {
   "newPath": "D:\\GAL\\SomeGame",
@@ -139,6 +141,7 @@ Returns found paths. Users can override in Settings (stored in `setting.extract_
 ```
 
 **Response:**
+
 ```json
 {
   "taskId": "uuid-xxx",
@@ -160,11 +163,11 @@ These paths are excluded from scan results alongside the existing `blacklist`.
 
 **API:**
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/settings/archived-archives` | Get list |
-| `POST /api/settings/archived-archives` | Add entry `{ path }` |
-| `DELETE /api/settings/archived-archives/:index` | Remove entry |
+| Endpoint                                        | Description          |
+| ----------------------------------------------- | -------------------- |
+| `GET /api/settings/archived-archives`           | Get list             |
+| `POST /api/settings/archived-archives`          | Add entry `{ path }` |
+| `DELETE /api/settings/archived-archives/:index` | Remove entry         |
 
 **Settings page UI**: Separate section from blacklist. Each row shows path + "Copy Path" button + "Remove from list" button.
 
@@ -225,19 +228,19 @@ These paths are excluded from scan results alongside the existing `blacklist`.
 
 ## Files to Modify/Create
 
-| File | Change |
-|------|--------|
-| `server/tasks.js` | **New** — Task manager, SSE, robocopy/extract execution |
-| `server/routes/game.js` | Modify relocate route to create async tasks |
-| `server/routes/setting.js` | Add archived-archives, archive-passwords, detect-tools endpoints |
-| `server/routes/index.js` | Mount task routes |
-| `server/constants.js` | Add tool detection paths, format-to-tool mapping |
-| `src/stores/taskStore.ts` | **New** — Pinia store for SSE connection and task state |
-| `src/components/TaskPanel.vue` | **New** — Task panel dialog component |
-| `src/layouts/MainLayout.vue` | Add task FAB button + badge + TaskPanel |
-| `src/pages/GameDetailPage.vue` | Modify relocate flow to async |
-| `src/pages/SettingPage.vue` | Add archive passwords, extraction tools, archived archives sections |
-| `src-electron/electron-main.ts` | Add before-quit and powerMonitor shutdown handlers |
+| File                            | Change                                                              |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `server/tasks.js`               | **New** — Task manager, SSE, robocopy/extract execution             |
+| `server/routes/game.js`         | Modify relocate route to create async tasks                         |
+| `server/routes/setting.js`      | Add archived-archives, archive-passwords, detect-tools endpoints    |
+| `server/routes/index.js`        | Mount task routes                                                   |
+| `server/constants.js`           | Add tool detection paths, format-to-tool mapping                    |
+| `src/stores/taskStore.ts`       | **New** — Pinia store for SSE connection and task state             |
+| `src/components/TaskPanel.vue`  | **New** — Task panel dialog component                               |
+| `src/layouts/MainLayout.vue`    | Add task FAB button + badge + TaskPanel                             |
+| `src/pages/GameDetailPage.vue`  | Modify relocate flow to async                                       |
+| `src/pages/SettingPage.vue`     | Add archive passwords, extraction tools, archived archives sections |
+| `src-electron/electron-main.ts` | Add before-quit and powerMonitor shutdown handlers                  |
 
 ## Scan Exclusion Integration
 

@@ -43,11 +43,11 @@ await d('game_source')
     source_type: sourceType,
     source_id: sourceId,
     source_url: sourceUrl || null,
-    name: name || null,          // 新增
+    name: name || null, // 新增
     raw_data: null,
   })
   .onConflict(['game_id', 'source_type', 'source_id'])
-  .merge(['source_url', 'name', 'raw_data']);  // name 加入 merge
+  .merge(['source_url', 'name', 'raw_data']); // name 加入 merge
 ```
 
 ### 3. 搜索优先爬取名
@@ -75,17 +75,17 @@ ScrapeDialog / 批量搜索时，优先使用 `game_source.name`：
 
 ### 6. 影响范围
 
-| 文件 | 变更 |
-|------|------|
-| `server/database/schema.js` | 新增 `name` 列 |
-| `server/database/init.js` | 迁移 v3 |
-| `server/routes/scraper.js` | `adoptOne` 写入 + merge name |
-| `server/database/db.js` | `getGameDetail` 返回 sources 时包含 name |
-| `src/components/ScrapeDialog.vue` | 搜索时优先用爬取名 |
-| `src/components/ScannerDialog.vue` | 批量搜索时优先用爬取名 |
-| `src/pages/GameLibPage.vue` | 卡片显示爬取名 |
-| `src/pages/GameDetailPage.vue` | 详情页显示爬取名 |
-| 新增脚本 | 存量数据回填 |
+| 文件                               | 变更                                     |
+| ---------------------------------- | ---------------------------------------- |
+| `server/database/schema.js`        | 新增 `name` 列                           |
+| `server/database/init.js`          | 迁移 v3                                  |
+| `server/routes/scraper.js`         | `adoptOne` 写入 + merge name             |
+| `server/database/db.js`            | `getGameDetail` 返回 sources 时包含 name |
+| `src/components/ScrapeDialog.vue`  | 搜索时优先用爬取名                       |
+| `src/components/ScannerDialog.vue` | 批量搜索时优先用爬取名                   |
+| `src/pages/GameLibPage.vue`        | 卡片显示爬取名                           |
+| `src/pages/GameDetailPage.vue`     | 详情页显示爬取名                         |
+| 新增脚本                           | 存量数据回填                             |
 
 ## 不做
 

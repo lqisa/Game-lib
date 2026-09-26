@@ -15,27 +15,28 @@
 
 ```typescript
 interface ScanRow {
-  gameId: number
-  name: string          // 原始目录名
-  subPath: string
-  status: 'pending' | 'searching' | 'searched' | 'adopted' | 'error'
-  searchResult: null | SearchResult
-  loading: boolean
+  gameId: number;
+  name: string; // 原始目录名
+  subPath: string;
+  status: 'pending' | 'searching' | 'searched' | 'adopted' | 'error';
+  searchResult: null | SearchResult;
+  loading: boolean;
 }
 
 interface SearchResult {
-  rjcode: string
-  name: string
-  makerName: string
-  coverUrl: string      // 从 JSON API 的 work_image 字段获取
-  detail?: {            // fetchDetail 后填充
-    title: string
-    coverURL: string
-    makers: string[]
-    genres: string[]
-    tags: string[]
-    description: string
-  }
+  rjcode: string;
+  name: string;
+  makerName: string;
+  coverUrl: string; // 从 JSON API 的 work_image 字段获取
+  detail?: {
+    // fetchDetail 后填充
+    title: string;
+    coverURL: string;
+    makers: string[];
+    genres: string[];
+    tags: string[];
+    description: string;
+  };
 }
 ```
 

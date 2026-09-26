@@ -1,7 +1,8 @@
 // Archive suffix, including split volumes: game.7z.001, game.part1.rar, game.rar.r00,
 // game.rar.001, or a plain game.rar / game.zip / game.7z.
 // Single source of truth - ScannerDialog used to keep its own (slightly different) copies.
-const ARCHIVE_EXT_RE = /\.(?:7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(?:\.(?:r\d+|\d+))?$|\.(?:zip|7z)$/i;
+const ARCHIVE_EXT_RE =
+  /\.(?:7z|zip)\.\d+$|\.part\d+\.rar$|\.rar(?:\.(?:r\d+|\d+))?$|\.(?:zip|7z)$/i;
 
 const getCleanedName = (name: string) =>
   name

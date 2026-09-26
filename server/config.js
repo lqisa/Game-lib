@@ -41,7 +41,9 @@ export const getSseToken = () => {
     if (fs.existsSync(tokenFile)) {
       return fs.readFileSync(tokenFile, 'utf-8').trim();
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return null;
 };
 

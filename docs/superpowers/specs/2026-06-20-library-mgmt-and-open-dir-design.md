@@ -3,6 +3,7 @@
 ## Overview
 
 Three enhancements to the game-lib Electron app:
+
 1. Library rename/edit via dialog
 2. Directory selection using Electron native dialog
 3. Open game directory from detail page
@@ -13,12 +14,13 @@ Three enhancements to the game-lib Electron app:
 
 Register two IPC handlers:
 
-| Channel | Params | Returns | Purpose |
-|---------|--------|---------|---------|
-| `dialog:openDirectory` | `{ title: string }` | `string \| null` | System folder picker |
-| `shell:openPath` | `{ path: string }` | `void` | Open directory in file manager |
+| Channel                | Params              | Returns          | Purpose                        |
+| ---------------------- | ------------------- | ---------------- | ------------------------------ |
+| `dialog:openDirectory` | `{ title: string }` | `string \| null` | System folder picker           |
+| `shell:openPath`       | `{ path: string }`  | `void`           | Open directory in file manager |
 
 Implementation:
+
 - `dialog:openDirectory`: calls `dialog.showOpenDialog({ properties: ['openDirectory'], title })`, returns selected path or null
 - `shell:openPath`: calls `shell.openPath(path)`, no return value needed
 
@@ -29,8 +31,8 @@ Expose via `contextBridge.exposeInMainWorld('electronAPI', { ... })`:
 ```typescript
 window.electronAPI = {
   openDirectory: (title: string) => Promise<string | null>,
-  openPath: (path: string) => Promise<void>
-}
+  openPath: (path: string) => Promise<void>,
+};
 ```
 
 ### Type declaration
@@ -39,12 +41,12 @@ Add `src/types/electron.d.ts` for TypeScript support:
 
 ```typescript
 interface ElectronAPI {
-  openDirectory(title: string): Promise<string | null>
-  openPath(path: string): Promise<void>
+  openDirectory(title: string): Promise<string | null>;
+  openPath(path: string): Promise<void>;
 }
 
 interface Window {
-  electronAPI?: ElectronAPI
+  electronAPI?: ElectronAPI;
 }
 ```
 
@@ -84,10 +86,10 @@ Path separator: use `path.join` equivalent on frontend or simply `library.path +
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `src-electron/electron-main.ts` | Add ipcMain handlers for dialog:openDirectory, shell:openPath |
-| `src-electron/electron-preload.ts` | Expose electronAPI via contextBridge |
-| `src/types/electron.d.ts` | New: TypeScript declarations for window.electronAPI |
-| `src/pages/SettingPage.vue` | Add edit dialog, Browse buttons |
-| `src/pages/GameDetailPage.vue` | Add folder_open button next to path |
+| File                               | Change                                                        |
+| ---------------------------------- | ------------------------------------------------------------- |
+| `src-electron/electron-main.ts`    | Add ipcMain handlers for dialog:openDirectory, shell:openPath |
+| `src-electron/electron-preload.ts` | Expose electronAPI via contextBridge                          |
+| `src/types/electron.d.ts`          | New: TypeScript declarations for window.electronAPI           |
+| `src/pages/SettingPage.vue`        | Add edit dialog, Browse buttons                               |
+| `src/pages/GameDetailPage.vue`     | Add folder_open button next to path                           |

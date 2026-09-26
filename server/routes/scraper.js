@@ -50,9 +50,10 @@ const getMatchConfig = async (lang) => {
   const threshold = Number(thresholdRaw);
   return {
     priority,
-    threshold: Number.isFinite(threshold) && threshold > 0 && threshold <= 1
-      ? threshold
-      : DEFAULT_MATCH_THRESHOLD,
+    threshold:
+      Number.isFinite(threshold) && threshold > 0 && threshold <= 1
+        ? threshold
+        : DEFAULT_MATCH_THRESHOLD,
   };
 };
 
@@ -118,7 +119,9 @@ router.post('/dlsite/fetch', async (req, res, next) => {
     // A not-found product is ambiguous (absent vs region-filtered); pass the region
     // hint through so the UI can say which one to check.
     if (err?.code === 'DLSITE_NOT_FOUND') {
-      return res.status(404).send({ error: err.message, code: err.code, region: err.region || null });
+      return res
+        .status(404)
+        .send({ error: err.message, code: err.code, region: err.region || null });
     }
     next(err);
   }
@@ -331,28 +334,19 @@ router.post('/dlsite/batch', async (req, res, next) => {
 });
 
 const adoptOne = async (data, trx, predownloadedCover) => {
-  const {
-    gameId,
-    sourceType,
-    sourceId,
-    sourceUrl,
-    name,
-    makers,
-    genres,
-    tags,
-    description,
-  } = data;
+  const { gameId, sourceType, sourceId, sourceUrl, name, makers, genres, tags, description } = data;
 
-  const coverPath = predownloadedCover !== undefined ? predownloadedCover : await downloadCover(data.coverUrl, sourceType, sourceId);
+  const coverPath =
+    predownloadedCover !== undefined
+      ? predownloadedCover
+      : await downloadCover(data.coverUrl, sourceType, sourceId);
 
   const d = trx || db.knex;
   await d('game')
     .where({ id: gameId })
     .update({ description, cover_path: coverPath, updated_at: db.knex.fn.now() });
 
-  await d('game_source')
-    .where({ game_id: gameId })
-    .del();
+  await d('game_source').where({ game_id: gameId }).del();
 
   await d('game_source')
     .insert({
@@ -475,7 +469,11 @@ router.post('/adopt/batch', async (req, res, next) => {
       games.map((game) =>
         coverLimit(async () => {
           if (!game.gameId || !game.sourceType || !game.sourceId) {
-            return { gameId: game.gameId || null, coverPath: null, error: 'gameId, sourceType, sourceId required' };
+            return {
+              gameId: game.gameId || null,
+              coverPath: null,
+              error: 'gameId, sourceType, sourceId required',
+            };
           }
           try {
             const coverPath = await downloadCover(game.coverUrl, game.sourceType, game.sourceId);
@@ -499,7 +497,11 @@ router.post('/adopt/batch', async (req, res, next) => {
           const coverResult = coverMap.get(gameId);
 
           if (!gameId || !sourceType || !sourceId) {
-            return { gameId: gameId || null, success: false, error: 'gameId, sourceType, sourceId required' };
+            return {
+              gameId: gameId || null,
+              success: false,
+              error: 'gameId, sourceType, sourceId required',
+            };
           }
           if (coverResult?.error === 'gameId, sourceType, sourceId required') {
             return { gameId, success: false, error: coverResult.error };
@@ -514,9 +516,7 @@ router.post('/adopt/batch', async (req, res, next) => {
                 .where({ id: gameId })
                 .update({ description, cover_path: coverPath, updated_at: db.knex.fn.now() });
 
-              await trx('game_source')
-                .where({ game_id: gameId })
-                .del();
+              await trx('game_source').where({ game_id: gameId }).del();
 
               await trx('game_source')
                 .insert({
@@ -538,7 +538,9 @@ router.post('/adopt/batch', async (req, res, next) => {
                 const makerIds = await insertMakersTrx(makers, trx);
                 await trx('game_maker').where({ game_id: gameId }).del();
                 if (makerIds.length > 0) {
-                  await trx('game_maker').insert(makerIds.map((m) => ({ game_id: gameId, maker_id: m })));
+                  await trx('game_maker').insert(
+                    makerIds.map((m) => ({ game_id: gameId, maker_id: m })),
+                  );
                 }
               }
 
@@ -546,7 +548,9 @@ router.post('/adopt/batch', async (req, res, next) => {
                 const genreIds = await insertNamesTrx('genre', genres, trx);
                 await trx('game_genre').where({ game_id: gameId }).del();
                 if (genreIds.length > 0) {
-                  await trx('game_genre').insert(genreIds.map((g) => ({ game_id: gameId, genre_id: g })));
+                  await trx('game_genre').insert(
+                    genreIds.map((g) => ({ game_id: gameId, genre_id: g })),
+                  );
                 }
               }
 

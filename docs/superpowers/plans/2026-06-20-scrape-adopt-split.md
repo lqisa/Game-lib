@@ -12,18 +12,19 @@
 
 ## 文件结构
 
-| 文件 | 操作 | 职责 |
-|------|------|------|
-| `server/scraper/dlsite.js` | 修改 | searchDLSite 返回 coverUrl 字段 |
-| `src/components/ScrapeDialog.vue` | 创建 | 单个游戏采集弹窗：搜索/重选/采纳 |
+| 文件                               | 操作 | 职责                                       |
+| ---------------------------------- | ---- | ------------------------------------------ |
+| `server/scraper/dlsite.js`         | 修改 | searchDLSite 返回 coverUrl 字段            |
+| `src/components/ScrapeDialog.vue`  | 创建 | 单个游戏采集弹窗：搜索/重选/采纳           |
 | `src/components/ScannerDialog.vue` | 重写 | 列表展示未采集游戏 + 封面缩略图 + 提交入库 |
-| `src/pages/GameDetailPage.vue` | 修改 | 添加"重新采集"按钮 |
+| `src/pages/GameDetailPage.vue`     | 修改 | 添加"重新采集"按钮                         |
 
 ---
 
 ### 任务 1：后端 searchDLSite 返回封面 URL
 
 **文件：**
+
 - 修改：`server/scraper/dlsite.js`
 
 - [ ] **步骤 1：修改 searchDLSite 返回 coverUrl**
@@ -33,20 +34,22 @@
 修改 `server/scraper/dlsite.js` 第 18-26 行的 map 回调：
 
 ```javascript
-  return items.map(item => {
-    const workno = item.workno || ''
-    const rjcode = workno.replace('RJ', '')
-    let coverUrl = item.main_image || ''
+return items
+  .map((item) => {
+    const workno = item.workno || '';
+    const rjcode = workno.replace('RJ', '');
+    let coverUrl = item.main_image || '';
     if (coverUrl && coverUrl.startsWith('//')) {
-      coverUrl = `https:${coverUrl}`
+      coverUrl = `https:${coverUrl}`;
     }
     return {
       rjcode,
       name: item.work_name || '',
       makerName: item.maker_name || '',
-      coverUrl
-    }
-  }).filter(r => r.rjcode)
+      coverUrl,
+    };
+  })
+  .filter((r) => r.rjcode);
 ```
 
 - [ ] **步骤 2：验证**
@@ -65,6 +68,7 @@ git commit -m "feat: searchDLSite returns coverUrl from JSON API"
 ### 任务 2：创建 ScrapeDialog 弹窗组件
 
 **文件：**
+
 - 创建：`src/components/ScrapeDialog.vue`
 
 - [ ] **步骤 1：创建 ScrapeDialog.vue**
@@ -105,11 +109,7 @@ git commit -m "feat: searchDLSite returns coverUrl from JSON API"
               class="col-6 col-sm-4 cursor-pointer"
               @click="selectResult(idx)"
             >
-              <q-card
-                :class="{ 'bg-blue-1': selectedIdx === idx }"
-                flat
-                bordered
-              >
+              <q-card :class="{ 'bg-blue-1': selectedIdx === idx }" flat bordered>
                 <q-img
                   v-if="r.coverUrl"
                   :src="r.coverUrl"
@@ -122,7 +122,11 @@ git commit -m "feat: searchDLSite returns coverUrl from JSON API"
                     </div>
                   </template>
                 </q-img>
-                <div v-else class="bg-grey-3 flex flex-center" style="aspect-ratio: 3/4; max-height: 160px;">
+                <div
+                  v-else
+                  class="bg-grey-3 flex flex-center"
+                  style="aspect-ratio: 3/4; max-height: 160px;"
+                >
                   <q-icon name="videogame_asset" size="32px" color="grey" />
                 </div>
                 <q-card-section class="q-pa-xs">
@@ -153,19 +157,41 @@ git commit -m "feat: searchDLSite returns coverUrl from JSON API"
               />
             </div>
             <div class="col-8">
-              <div class="text-body2"><span class="text-grey">RJ:</span> RJ{{ selectedResult.rjcode }}</div>
-              <div class="text-body2"><span class="text-grey">Maker:</span> {{ selectedResult.makerName }}</div>
+              <div class="text-body2">
+                <span class="text-grey">RJ:</span> RJ{{ selectedResult.rjcode }}
+              </div>
+              <div class="text-body2">
+                <span class="text-grey">Maker:</span> {{ selectedResult.makerName }}
+              </div>
               <div v-if="detailLoading" class="text-center q-pa-sm">
                 <q-spinner-dots size="24px" />
               </div>
               <div v-if="detail">
                 <div v-if="detail.genres?.length" class="q-mt-xs">
-                  <q-chip v-for="g in detail.genres" :key="g" dense size="sm" color="blue" text-color="white">{{ g }}</q-chip>
+                  <q-chip
+                    v-for="g in detail.genres"
+                    :key="g"
+                    dense
+                    size="sm"
+                    color="blue"
+                    text-color="white"
+                    >{{ g }}</q-chip
+                  >
                 </div>
                 <div v-if="detail.tags?.length" class="q-mt-xs">
-                  <q-chip v-for="t in detail.tags" :key="t" dense size="sm" color="teal" text-color="white">{{ t }}</q-chip>
+                  <q-chip
+                    v-for="t in detail.tags"
+                    :key="t"
+                    dense
+                    size="sm"
+                    color="teal"
+                    text-color="white"
+                    >{{ t }}</q-chip
+                  >
                 </div>
-                <div v-if="detail.description" class="text-caption q-mt-sm ellipsis-3-lines">{{ detail.description }}</div>
+                <div v-if="detail.description" class="text-caption q-mt-sm ellipsis-3-lines">
+                  {{ detail.description }}
+                </div>
               </div>
             </div>
           </div>
@@ -179,119 +205,122 @@ git commit -m "feat: searchDLSite returns coverUrl from JSON API"
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import api from '../composables/useApi'
+import { ref, computed, watch } from 'vue';
+import api from '../composables/useApi';
 
 interface SearchResult {
-  rjcode: string
-  name: string
-  makerName: string
-  coverUrl: string
+  rjcode: string;
+  name: string;
+  makerName: string;
+  coverUrl: string;
 }
 
 interface DetailResult {
-  title: string
-  coverURL: string
-  makers: string[]
-  genres: string[]
-  tags: string[]
-  description: string
+  title: string;
+  coverURL: string;
+  makers: string[];
+  genres: string[];
+  tags: string[];
+  description: string;
 }
 
 interface AdoptData {
-  rjcode: string
-  name: string
-  makerName: string
-  coverUrl: string
-  detail: DetailResult
+  rjcode: string;
+  name: string;
+  makerName: string;
+  coverUrl: string;
+  detail: DetailResult;
 }
 
 const props = defineProps<{
-  modelValue: boolean
-  gameName: string
-  gameId: number
-  defaultKeyword?: string
-}>()
+  modelValue: boolean;
+  gameName: string;
+  gameId: number;
+  defaultKeyword?: string;
+}>();
 
 const emit = defineEmits<{
-  'update:modelValue': [val: boolean]
-  adopted: [data: AdoptData]
-}>()
+  'update:modelValue': [val: boolean];
+  adopted: [data: AdoptData];
+}>();
 
 const show = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
-})
+  set: (val) => emit('update:modelValue', val),
+});
 
-const keyword = ref('')
-const results = ref<SearchResult[]>([])
-const selectedIdx = ref(-1)
-const searching = ref(false)
-const searched = ref(false)
-const detail = ref<DetailResult | null>(null)
-const detailLoading = ref(false)
+const keyword = ref('');
+const results = ref<SearchResult[]>([]);
+const selectedIdx = ref(-1);
+const searching = ref(false);
+const searched = ref(false);
+const detail = ref<DetailResult | null>(null);
+const detailLoading = ref(false);
 
 const selectedResult = computed(() => {
   if (selectedIdx.value >= 0 && selectedIdx.value < results.value.length) {
-    return results.value[selectedIdx.value]
+    return results.value[selectedIdx.value];
   }
-  return null
-})
+  return null;
+});
 
 const doSearch = async () => {
-  if (!keyword.value.trim()) return
-  searching.value = true
-  results.value = []
-  selectedIdx.value = -1
-  detail.value = null
-  searched.value = false
+  if (!keyword.value.trim()) return;
+  searching.value = true;
+  results.value = [];
+  selectedIdx.value = -1;
+  detail.value = null;
+  searched.value = false;
   try {
-    const res = await api.post('/scraper/dlsite/search', { keyword: keyword.value.trim() })
-    results.value = res.data
-    searched.value = true
+    const res = await api.post('/scraper/dlsite/search', { keyword: keyword.value.trim() });
+    results.value = res.data;
+    searched.value = true;
   } finally {
-    searching.value = false
+    searching.value = false;
   }
-}
+};
 
 const selectResult = async (idx: number) => {
-  selectedIdx.value = idx
-  detail.value = null
-  const r = results.value[idx]
-  if (!r) return
-  detailLoading.value = true
+  selectedIdx.value = idx;
+  detail.value = null;
+  const r = results.value[idx];
+  if (!r) return;
+  detailLoading.value = true;
   try {
-    const res = await api.post('/scraper/dlsite/fetch', { rjcode: r.rjcode })
-    detail.value = res.data
+    const res = await api.post('/scraper/dlsite/fetch', { rjcode: r.rjcode });
+    detail.value = res.data;
   } catch {
-    detail.value = null
+    detail.value = null;
   } finally {
-    detailLoading.value = false
+    detailLoading.value = false;
   }
-}
+};
 
 const adopt = () => {
-  if (!selectedResult.value || !detail.value) return
+  if (!selectedResult.value || !detail.value) return;
   emit('adopted', {
     rjcode: selectedResult.value.rjcode,
     name: selectedResult.value.name,
     makerName: selectedResult.value.makerName,
     coverUrl: selectedResult.value.coverUrl,
-    detail: detail.value
-  })
-  show.value = false
-}
+    detail: detail.value,
+  });
+  show.value = false;
+};
 
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    keyword.value = props.defaultKeyword || props.gameName.match(/RJ\d+/)?.[0] || props.gameName
-    results.value = []
-    selectedIdx.value = -1
-    detail.value = null
-    searched.value = false
-    void doSearch()
-  }
-})
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (val) {
+      keyword.value = props.defaultKeyword || props.gameName.match(/RJ\d+/)?.[0] || props.gameName;
+      results.value = [];
+      selectedIdx.value = -1;
+      detail.value = null;
+      searched.value = false;
+      void doSearch();
+    }
+  },
+);
 </script>
 ```
 
@@ -307,6 +336,7 @@ git commit -m "feat: add ScrapeDialog component with search/select/adopt flow"
 ### 任务 3：重写 ScannerDialog — 列表暂存 + 提交入库
 
 **文件：**
+
 - 重写：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：重写 ScannerDialog.vue**
@@ -336,7 +366,13 @@ git commit -m "feat: add ScrapeDialog component with search/select/adopt flow"
             style="min-width: 200px"
             @update:model-value="onLibraryChange"
           />
-          <q-btn color="primary" label="Scan" @click="scanDir" :disable="!selectedLibrary" :loading="scanning" />
+          <q-btn
+            color="primary"
+            label="Scan"
+            @click="scanDir"
+            :disable="!selectedLibrary"
+            :loading="scanning"
+          />
           <q-btn color="secondary" label="Scrape All" @click="batchScrape" :disable="!hasPending" />
           <q-btn
             color="positive"
@@ -345,7 +381,9 @@ git commit -m "feat: add ScrapeDialog component with search/select/adopt flow"
             :disable="adoptedCount === 0"
             :loading="submitting"
           >
-            <q-badge v-if="adoptedCount > 0" color="white" text-color="positive" floating>{{ adoptedCount }}</q-badge>
+            <q-badge v-if="adoptedCount > 0" color="white" text-color="positive" floating>{{
+              adoptedCount
+            }}</q-badge>
           </q-btn>
           <q-badge v-if="scanResults.length > 0" color="grey-7" class="text-body2">
             {{ scanResults.length }} unscraped
@@ -391,7 +429,9 @@ git commit -m "feat: add ScrapeDialog component with search/select/adopt flow"
           <template v-slot:body-cell-status="props">
             <q-td :props="props">
               <q-badge v-if="props.row.status === 'adopted'" color="positive">Adopted</q-badge>
-              <q-badge v-else-if="props.row.status === 'searching'" color="warning">Searching...</q-badge>
+              <q-badge v-else-if="props.row.status === 'searching'" color="warning"
+                >Searching...</q-badge
+              >
               <q-badge v-else-if="props.row.status === 'error'" color="negative">Failed</q-badge>
               <q-badge v-else-if="props.row.status === 'searched'" color="blue">Searched</q-badge>
               <q-badge v-else color="grey">Pending</q-badge>
@@ -402,7 +442,9 @@ git commit -m "feat: add ScrapeDialog component with search/select/adopt flow"
               <q-btn
                 size="sm"
                 color="primary"
-                :label="props.row.status === 'pending' || props.row.status === 'error' ? 'Scrape' : '重选'"
+                :label="
+                  props.row.status === 'pending' || props.row.status === 'error' ? 'Scrape' : '重选'
+                "
                 @click="openScrapeDialog(props.row)"
               />
             </q-td>
@@ -415,65 +457,69 @@ git commit -m "feat: add ScrapeDialog component with search/select/adopt flow"
       v-model="showScrapeDialog"
       :game-name="scrapingRow?.name || ''"
       :game-id="scrapingRow?.gameId || 0"
-      :default-keyword="scrapingRow?.searchResult?.rjcode ? `RJ${scrapingRow.searchResult.rjcode}` : undefined"
+      :default-keyword="
+        scrapingRow?.searchResult?.rjcode ? `RJ${scrapingRow.searchResult.rjcode}` : undefined
+      "
       @adopted="onAdopted"
     />
   </q-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import api from '../composables/useApi'
-import ScrapeDialog from './ScrapeDialog.vue'
+import { ref, computed, watch } from 'vue';
+import api from '../composables/useApi';
+import ScrapeDialog from './ScrapeDialog.vue';
 
 interface SearchResult {
-  rjcode: string
-  name: string
-  makerName: string
-  coverUrl: string
+  rjcode: string;
+  name: string;
+  makerName: string;
+  coverUrl: string;
 }
 
 interface DetailResult {
-  title: string
-  coverURL: string
-  makers: string[]
-  genres: string[]
-  tags: string[]
-  description: string
+  title: string;
+  coverURL: string;
+  makers: string[];
+  genres: string[];
+  tags: string[];
+  description: string;
 }
 
 interface AdoptData {
-  rjcode: string
-  name: string
-  makerName: string
-  coverUrl: string
-  detail: DetailResult
+  rjcode: string;
+  name: string;
+  makerName: string;
+  coverUrl: string;
+  detail: DetailResult;
 }
 
 interface ScanRow {
-  gameId: number
-  name: string
-  subPath: string
-  status: 'pending' | 'searching' | 'searched' | 'adopted' | 'error'
-  searchResult: SearchResult | null
-  adoptData: AdoptData | null
-  loading: boolean
+  gameId: number;
+  name: string;
+  subPath: string;
+  status: 'pending' | 'searching' | 'searched' | 'adopted' | 'error';
+  searchResult: SearchResult | null;
+  adoptData: AdoptData | null;
+  loading: boolean;
 }
 
-const modelValue = defineModel<boolean | null>({ default: false })
-const emit = defineEmits<{ done: [] }>()
+const modelValue = defineModel<boolean | null>({ default: false });
+const emit = defineEmits<{ done: [] }>();
 
-const libraries = ref<{ id: number; name: string; path: string }[]>([])
-const selectedLibrary = ref<number | null>(null)
-const scanResults = ref<ScanRow[]>([])
-const scanning = ref(false)
-const submitting = ref(false)
+const libraries = ref<{ id: number; name: string; path: string }[]>([]);
+const selectedLibrary = ref<number | null>(null);
+const scanResults = ref<ScanRow[]>([]);
+const scanning = ref(false);
+const submitting = ref(false);
 
-const showScrapeDialog = ref(false)
-const scrapingRow = ref<ScanRow | null>(null)
+const showScrapeDialog = ref(false);
+const scrapingRow = ref<ScanRow | null>(null);
 
-const hasPending = computed(() => scanResults.value.some(r => r.status === 'pending' || r.status === 'error'))
-const adoptedCount = computed(() => scanResults.value.filter(r => r.status === 'adopted').length)
+const hasPending = computed(() =>
+  scanResults.value.some((r) => r.status === 'pending' || r.status === 'error'),
+);
+const adoptedCount = computed(() => scanResults.value.filter((r) => r.status === 'adopted').length);
 
 const columns = [
   { name: 'cover', label: 'Cover', field: 'cover', align: 'center' as const, style: 'width: 60px' },
@@ -481,19 +527,19 @@ const columns = [
   { name: 'matched', label: 'Matched', field: 'matched', align: 'left' as const },
   { name: 'status', label: 'Status', field: 'status', align: 'center' as const },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center' as const },
-]
+];
 
 const fetchLibraries = async () => {
-  const res = await api.get('/libraries')
-  libraries.value = res.data
-}
+  const res = await api.get('/libraries');
+  libraries.value = res.data;
+};
 
 const loadUnscraped = async () => {
   if (!selectedLibrary.value) {
-    scanResults.value = []
-    return
+    scanResults.value = [];
+    return;
   }
-  const res = await api.get('/games/unscraped', { params: { libraryId: selectedLibrary.value } })
+  const res = await api.get('/games/unscraped', { params: { libraryId: selectedLibrary.value } });
   scanResults.value = res.data.map((g: { id: number; name: string; sub_path: string }) => ({
     name: g.name,
     subPath: g.sub_path,
@@ -502,77 +548,77 @@ const loadUnscraped = async () => {
     adoptData: null,
     loading: false,
     gameId: g.id,
-  }))
-}
+  }));
+};
 
 const onLibraryChange = () => {
-  void loadUnscraped()
-}
+  void loadUnscraped();
+};
 
 const scanDir = async () => {
-  if (!selectedLibrary.value) return
-  scanning.value = true
+  if (!selectedLibrary.value) return;
+  scanning.value = true;
   try {
-    const res = await api.post('/games/scan', { libraryId: selectedLibrary.value })
-    const newDirs: string[] = res.data.newDirs
+    const res = await api.post('/games/scan', { libraryId: selectedLibrary.value });
+    const newDirs: string[] = res.data.newDirs;
     if (newDirs.length > 0) {
       await api.post('/games/scan/add', {
         libraryId: selectedLibrary.value,
         dirs: newDirs,
-      })
+      });
     }
-    await loadUnscraped()
+    await loadUnscraped();
   } finally {
-    scanning.value = false
+    scanning.value = false;
   }
-}
+};
 
 const openScrapeDialog = (row: ScanRow) => {
-  scrapingRow.value = row
-  showScrapeDialog.value = true
-}
+  scrapingRow.value = row;
+  showScrapeDialog.value = true;
+};
 
 const onAdopted = (data: AdoptData) => {
-  if (!scrapingRow.value) return
+  if (!scrapingRow.value) return;
   scrapingRow.value.searchResult = {
     rjcode: data.rjcode,
     name: data.name,
     makerName: data.makerName,
     coverUrl: data.coverUrl,
-  }
-  scrapingRow.value.adoptData = data
-  scrapingRow.value.status = 'adopted'
-}
+  };
+  scrapingRow.value.adoptData = data;
+  scrapingRow.value.status = 'adopted';
+};
 
 const batchScrape = async () => {
   for (const row of [...scanResults.value]) {
-    if (row.status !== 'pending' && row.status !== 'error') continue
-    row.status = 'searching'
-    row.loading = true
+    if (row.status !== 'pending' && row.status !== 'error') continue;
+    row.status = 'searching';
+    row.loading = true;
     try {
-      const keyword = row.name.match(/RJ\d+/)?.[0] || row.name
-      const searchRes = await api.post('/scraper/dlsite/search', { keyword })
-      const results = searchRes.data
+      const keyword = row.name.match(/RJ\d+/)?.[0] || row.name;
+      const searchRes = await api.post('/scraper/dlsite/search', { keyword });
+      const results = searchRes.data;
       if (results.length > 0) {
-        row.searchResult = results[0]
-        row.status = 'searched'
+        row.searchResult = results[0];
+        row.status = 'searched';
       } else {
-        row.status = 'error'
+        row.status = 'error';
       }
     } catch {
-      row.status = 'error'
+      row.status = 'error';
     } finally {
-      row.loading = false
+      row.loading = false;
     }
   }
-}
+};
 
 const submitAdopted = async () => {
-  submitting.value = true
-  const adoptedRows = scanResults.value.filter(r => r.status === 'adopted' && r.adoptData)
+  submitting.value = true;
+  const adoptedRows = scanResults.value.filter((r) => r.status === 'adopted' && r.adoptData);
   try {
     for (const row of adoptedRows) {
-      const d = row.adoptData!
+      const d = row.adoptData!;
       await api.post('/scraper/adopt', {
         gameId: row.gameId,
         sourceType: 'dlsite',
@@ -584,21 +630,21 @@ const submitAdopted = async () => {
         genres: d.detail.genres,
         tags: d.detail.tags,
         description: d.detail.description,
-      })
+      });
     }
-    scanResults.value = scanResults.value.filter(r => r.status !== 'adopted')
-    emit('done')
+    scanResults.value = scanResults.value.filter((r) => r.status !== 'adopted');
+    emit('done');
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
-}
+};
 
 watch(modelValue, (val) => {
   if (val) {
-    void fetchLibraries()
-    void loadUnscraped()
+    void fetchLibraries();
+    void loadUnscraped();
   }
-})
+});
 </script>
 ```
 
@@ -614,6 +660,7 @@ git commit -m "feat: rewrite ScannerDialog with scrape/adopt split and submit fl
 ### 任务 4：GameDetailPage 添加"重新采集"按钮
 
 **文件：**
+
 - 修改：`src/pages/GameDetailPage.vue`
 
 - [ ] **步骤 1：在详情页添加重新采集按钮**
@@ -638,12 +685,12 @@ git commit -m "feat: rewrite ScannerDialog with scrape/adopt split and submit fl
 在 `<script setup>` 中添加：
 
 ```typescript
-import ScrapeDialog from '../components/ScrapeDialog.vue'
+import ScrapeDialog from '../components/ScrapeDialog.vue';
 
-const showScrapeDialog = ref(false)
+const showScrapeDialog = ref(false);
 
 const onReScrape = async (data: any) => {
-  if (!game.value) return
+  if (!game.value) return;
   await api.post('/scraper/adopt', {
     gameId: game.value.id,
     sourceType: 'dlsite',
@@ -655,10 +702,10 @@ const onReScrape = async (data: any) => {
     genres: data.detail.genres,
     tags: data.detail.tags,
     description: data.detail.description,
-  })
-  const res = await api.get(`/games/${game.value.id}`)
-  game.value = res.data
-}
+  });
+  const res = await api.get(`/games/${game.value.id}`);
+  game.value = res.data;
+};
 ```
 
 - [ ] **步骤 2：Commit**

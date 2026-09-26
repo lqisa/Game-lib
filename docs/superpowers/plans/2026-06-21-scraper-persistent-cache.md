@@ -12,13 +12,13 @@
 
 ## 文件结构
 
-| 文件 | 职责 |
-|---|---|
-| `server/database/schema.js` | 新建数据库时创建 search_cache 表 |
-| `server/database/init.js` | 已有数据库迁移时创建 search_cache 表 |
-| `server/database/db.js` | search_cache 的 CRUD 函数 |
-| `server/routes/cache.js` | search_cache 的 REST API 路由 |
-| `server/routes/index.js` | 注册 cache 路由 |
+| 文件                               | 职责                                        |
+| ---------------------------------- | ------------------------------------------- |
+| `server/database/schema.js`        | 新建数据库时创建 search_cache 表            |
+| `server/database/init.js`          | 已有数据库迁移时创建 search_cache 表        |
+| `server/database/db.js`            | search_cache 的 CRUD 函数                   |
+| `server/routes/cache.js`           | search_cache 的 REST API 路由               |
+| `server/routes/index.js`           | 注册 cache 路由                             |
 | `src/components/ScannerDialog.vue` | 前端缓存集成（预加载、读写、Force Refresh） |
 
 ---
@@ -26,6 +26,7 @@
 ### 任务 1：数据库层 — search_cache 表定义
 
 **文件：**
+
 - 修改：`server/database/schema.js`
 - 修改：`server/database/init.js`
 
@@ -51,14 +52,15 @@
 在 `TABLE_DDL` 对象中添加：
 
 ```javascript
-search_cache: (knex) => knex.schema.createTable('search_cache', (table) => {
-  table.string('key').primary()
-  table.string('source').notNullable()
-  table.string('keyword').notNullable()
-  table.text('results').notNullable()
-  table.dateTime('created_at').defaultTo(knex.fn.now())
-  table.dateTime('updated_at').defaultTo(knex.fn.now())
-})
+search_cache: (knex) =>
+  knex.schema.createTable('search_cache', (table) => {
+    table.string('key').primary();
+    table.string('source').notNullable();
+    table.string('keyword').notNullable();
+    table.text('results').notNullable();
+    table.dateTime('created_at').defaultTo(knex.fn.now());
+    table.dateTime('updated_at').defaultTo(knex.fn.now());
+  });
 ```
 
 - [ ] **步骤 3：启动后端验证表创建**
@@ -79,6 +81,7 @@ git commit -m "feat: add search_cache table to schema and migration"
 ### 任务 2：数据库层 — search_cache CRUD 函数
 
 **文件：**
+
 - 修改：`server/database/db.js`
 
 - [ ] **步骤 1：添加 search_cache CRUD 函数**
@@ -87,10 +90,10 @@ git commit -m "feat: add search_cache table to schema and migration"
 
 ```javascript
 const getSearchCache = async (key) => {
-  const row = await db('search_cache').where({ key }).first()
-  if (!row) return null
-  return { ...row, results: JSON.parse(row.results) }
-}
+  const row = await db('search_cache').where({ key }).first();
+  if (!row) return null;
+  return { ...row, results: JSON.parse(row.results) };
+};
 
 const setSearchCache = async ({ key, source, keyword, results }) => {
   const data = {
@@ -98,10 +101,10 @@ const setSearchCache = async ({ key, source, keyword, results }) => {
     source,
     keyword,
     results: JSON.stringify(results),
-    updated_at: db.fn.now()
-  }
-  await db('search_cache').insert(data).onConflict('key').merge()
-}
+    updated_at: db.fn.now(),
+  };
+  await db('search_cache').insert(data).onConflict('key').merge();
+};
 
 const batchSetSearchCache = async (items) => {
   for (const item of items) {
@@ -110,32 +113,28 @@ const batchSetSearchCache = async (items) => {
       source: item.source,
       keyword: item.keyword,
       results: JSON.stringify(item.results),
-      updated_at: db.fn.now()
-    }
-    await db('search_cache').insert(data).onConflict('key').merge()
+      updated_at: db.fn.now(),
+    };
+    await db('search_cache').insert(data).onConflict('key').merge();
   }
-}
+};
 
 const deleteSearchCache = async (keys) => {
-  if (keys.length === 0) return
-  await db('search_cache').whereIn('key', keys).del()
-}
+  if (keys.length === 0) return;
+  await db('search_cache').whereIn('key', keys).del();
+};
 
 const getSearchCacheByKeywords = async (keywords) => {
-  if (keywords.length === 0) return []
-  const rows = await db('search_cache').whereIn('keyword', keywords)
-  return rows.map(r => ({ ...r, results: JSON.parse(r.results) }))
-}
+  if (keywords.length === 0) return [];
+  const rows = await db('search_cache').whereIn('keyword', keywords);
+  return rows.map((r) => ({ ...r, results: JSON.parse(r.results) }));
+};
 ```
 
 在 export 列表中添加：
 
 ```javascript
-getSearchCache,
-setSearchCache,
-batchSetSearchCache,
-deleteSearchCache,
-getSearchCacheByKeywords
+(getSearchCache, setSearchCache, batchSetSearchCache, deleteSearchCache, getSearchCacheByKeywords);
 ```
 
 - [ ] **步骤 2：验证无语法错误**
@@ -156,87 +155,88 @@ git commit -m "feat: add search_cache CRUD functions to db module"
 ### 任务 3：后端 API — cache 路由
 
 **文件：**
+
 - 创建：`server/routes/cache.js`
 - 修改：`server/routes/index.js`
 
 - [ ] **步骤 1：创建 cache.js 路由文件**
 
 ```javascript
-import express from 'express'
-import * as db from '../database/db.js'
+import express from 'express';
+import * as db from '../database/db.js';
 
-const router = express.Router()
+const router = express.Router();
 
 router.get('/search', async (req, res, next) => {
   try {
-    const { key } = req.query
+    const { key } = req.query;
     if (!key) {
-      return res.status(400).send({ error: 'key is required' })
+      return res.status(400).send({ error: 'key is required' });
     }
-    const cached = await db.getSearchCache(key)
+    const cached = await db.getSearchCache(key);
     if (!cached) {
-      return res.send({ hit: false })
+      return res.send({ hit: false });
     }
-    res.send({ hit: true, data: cached })
+    res.send({ hit: true, data: cached });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/search', async (req, res, next) => {
   try {
-    const { key, source, keyword, results } = req.body
+    const { key, source, keyword, results } = req.body;
     if (!key || !source || !keyword || !results) {
-      return res.status(400).send({ error: 'key, source, keyword, results are required' })
+      return res.status(400).send({ error: 'key, source, keyword, results are required' });
     }
-    await db.setSearchCache({ key, source, keyword, results })
-    res.send({ ok: true })
+    await db.setSearchCache({ key, source, keyword, results });
+    res.send({ ok: true });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/search/batch', async (req, res, next) => {
   try {
-    const { items } = req.body
+    const { items } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).send({ error: 'items array is required' })
+      return res.status(400).send({ error: 'items array is required' });
     }
-    await db.batchSetSearchCache(items)
-    res.send({ ok: true })
+    await db.batchSetSearchCache(items);
+    res.send({ ok: true });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.delete('/search', async (req, res, next) => {
   try {
-    const { keys } = req.query
+    const { keys } = req.query;
     if (!keys) {
-      return res.status(400).send({ error: 'keys is required' })
+      return res.status(400).send({ error: 'keys is required' });
     }
-    const keyArray = String(keys).split(',')
-    await db.deleteSearchCache(keyArray)
-    res.send({ ok: true })
+    const keyArray = String(keys).split(',');
+    await db.deleteSearchCache(keyArray);
+    res.send({ ok: true });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.post('/search/preload', async (req, res, next) => {
   try {
-    const { keywords } = req.body
+    const { keywords } = req.body;
     if (!Array.isArray(keywords)) {
-      return res.status(400).send({ error: 'keywords array is required' })
+      return res.status(400).send({ error: 'keywords array is required' });
     }
-    const entries = await db.getSearchCacheByKeywords(keywords)
-    res.send({ entries })
+    const entries = await db.getSearchCacheByKeywords(keywords);
+    res.send({ entries });
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
-export default router
+export default router;
 ```
 
 - [ ] **步骤 2：在 index.js 中注册 cache 路由**
@@ -244,13 +244,13 @@ export default router
 在 `server/routes/index.js` 中添加 import 和注册：
 
 ```javascript
-import cacheRoutes from './cache.js'
+import cacheRoutes from './cache.js';
 ```
 
 在路由注册区域添加：
 
 ```javascript
-router.use('/cache', cacheRoutes)
+router.use('/cache', cacheRoutes);
 ```
 
 - [ ] **步骤 3：验证 API 可访问**
@@ -277,6 +277,7 @@ git commit -m "feat: add search_cache REST API routes"
 ### 任务 4：前端 — ScannerDialog 集成缓存预加载
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：添加 preloadCache 函数**
@@ -285,18 +286,18 @@ git commit -m "feat: add search_cache REST API routes"
 
 ```typescript
 const preloadCache = async () => {
-  if (scanResults.value.length === 0) return
-  const keywords = scanResults.value.map(r => r.searchKeyword || r.name)
+  if (scanResults.value.length === 0) return;
+  const keywords = scanResults.value.map((r) => r.searchKeyword || r.name);
   try {
-    const res = await api.post('/cache/search/preload', { keywords })
-    const entries = res.data.entries || []
+    const res = await api.post('/cache/search/preload', { keywords });
+    const entries = res.data.entries || [];
     for (const entry of entries) {
-      searchCache.set(entry.key, entry.results)
+      searchCache.set(entry.key, entry.results);
     }
   } catch {
     // preload failure is non-critical
   }
-}
+};
 ```
 
 - [ ] **步骤 2：在 loadUnscraped 末尾调用 preloadCache**
@@ -304,7 +305,7 @@ const preloadCache = async () => {
 在 `loadUnscraped` 函数末尾，`segmentsCache.set` 循环之后添加：
 
 ```typescript
-await preloadCache()
+await preloadCache();
 ```
 
 - [ ] **步骤 3：验证预加载工作**
@@ -325,6 +326,7 @@ git commit -m "feat: preload search_cache from DB on ScannerDialog open"
 ### 任务 5：前端 — batchScrape 集成 DB 缓存读写
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：修改 batchScrape 中的缓存逻辑**
@@ -334,13 +336,13 @@ git commit -m "feat: preload search_cache from DB on ScannerDialog open"
 替换 `batchScrape` 函数中 `const cached = searchCache.get(autoKey)` 及其后续分支为：
 
 ```typescript
-let cached = searchCache.get(autoKey)
+let cached = searchCache.get(autoKey);
 if (!cached) {
   try {
-    const dbRes = await api.get('/cache/search', { params: { key: autoKey } })
+    const dbRes = await api.get('/cache/search', { params: { key: autoKey } });
     if (dbRes.data.hit) {
-      cached = dbRes.data.data.results
-      searchCache.set(autoKey, cached)
+      cached = dbRes.data.data.results;
+      searchCache.set(autoKey, cached);
     }
   } catch {
     // DB lookup failure is non-critical
@@ -348,53 +350,53 @@ if (!cached) {
 }
 if (cached) {
   if (cached.length > 0) {
-    row.searchResult = cached[0] ?? null
+    row.searchResult = cached[0] ?? null;
     if (row.searchResult && row.searchResult.name === row.name) {
-      row.status = 'searched'
-      await quickAdopt(row)
+      row.status = 'searched';
+      await quickAdopt(row);
     } else {
-      row.status = 'searched'
+      row.status = 'searched';
     }
   } else {
-    row.status = 'error'
+    row.status = 'error';
   }
 } else {
-  const searchRes = await api.post('/scraper/auto/search', { keyword, name: row.name })
-  const data = searchRes.data
-  const results: SearchResult[] = data.results ?? []
-  row.source = data.source || null
-  searchCache.set(autoKey, results)
+  const searchRes = await api.post('/scraper/auto/search', { keyword, name: row.name });
+  const data = searchRes.data;
+  const results: SearchResult[] = data.results ?? [];
+  row.source = data.source || null;
+  searchCache.set(autoKey, results);
   if (data.source) {
-    searchCache.set(`${data.source}:${keyword}`, results)
+    searchCache.set(`${data.source}:${keyword}`, results);
   }
   try {
     await api.post('/cache/search', {
       key: autoKey,
       source: data.source || 'auto',
       keyword,
-      results
-    })
+      results,
+    });
     if (data.source) {
       await api.post('/cache/search', {
         key: `${data.source}:${keyword}`,
         source: data.source,
         keyword,
-        results
-      })
+        results,
+      });
     }
   } catch {
     // cache write failure is non-critical
   }
   if (results.length > 0) {
-    row.searchResult = results[0] ?? null
+    row.searchResult = results[0] ?? null;
     if (row.searchResult && row.searchResult.name === row.name) {
-      row.status = 'searched'
-      await quickAdopt(row)
+      row.status = 'searched';
+      await quickAdopt(row);
     } else {
-      row.status = 'searched'
+      row.status = 'searched';
     }
   } else {
-    row.status = 'error'
+    row.status = 'error';
   }
 }
 ```
@@ -416,6 +418,7 @@ git commit -m "feat: integrate DB cache read/write in batchScrape"
 ### 任务 6：前端 — onSearched 写入 DB 缓存
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：修改 onSearched 回调，同时写 DB**
@@ -424,10 +427,10 @@ git commit -m "feat: integrate DB cache read/write in batchScrape"
 
 ```typescript
 const onSearched = (source: SourceType, keyword: string, results: SearchResult[]) => {
-  const key = `${source}:${keyword}`
-  searchCache.set(key, results)
-  api.post('/cache/search', { key, source, keyword, results }).catch(() => {})
-}
+  const key = `${source}:${keyword}`;
+  searchCache.set(key, results);
+  api.post('/cache/search', { key, source, keyword, results }).catch(() => {});
+};
 ```
 
 - [ ] **步骤 2：验证手动搜索也写缓存**
@@ -446,6 +449,7 @@ git commit -m "feat: persist search results to DB on manual search"
 ### 任务 7：前端 — Force Refresh 按钮
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：在模板中添加 Force Refresh 按钮**
@@ -453,7 +457,12 @@ git commit -m "feat: persist search results to DB on manual search"
 在 `Scrape All` 按钮之后添加：
 
 ```html
-<q-btn color="warning" label="Force Refresh" @click="forceRefresh" :disable="scanResults.length === 0" />
+<q-btn
+  color="warning"
+  label="Force Refresh"
+  @click="forceRefresh"
+  :disable="scanResults.length === 0"
+/>
 ```
 
 - [ ] **步骤 2：添加 forceRefresh 函数**
@@ -462,24 +471,24 @@ git commit -m "feat: persist search results to DB on manual search"
 
 ```typescript
 const forceRefresh = async () => {
-  const keys = scanResults.value.map(r => `auto:${r.searchKeyword || r.name}`)
-  searchCache.clear()
-  detailCache.clear()
+  const keys = scanResults.value.map((r) => `auto:${r.searchKeyword || r.name}`);
+  searchCache.clear();
+  detailCache.clear();
   try {
     if (keys.length > 0) {
-      await api.delete('/cache/search', { params: { keys: keys.join(',') } })
+      await api.delete('/cache/search', { params: { keys: keys.join(',') } });
     }
   } catch {
     // cache delete failure is non-critical
   }
   for (const row of scanResults.value) {
     if (row.status === 'searched' || row.status === 'error') {
-      row.status = 'pending'
-      row.searchResult = null
-      row.source = null
+      row.status = 'pending';
+      row.searchResult = null;
+      row.source = null;
     }
   }
-}
+};
 ```
 
 - [ ] **步骤 3：验证 Force Refresh**
@@ -501,6 +510,7 @@ git commit -m "feat: add Force Refresh button to clear cache and re-scrape"
 ### 任务 8：前端 — 对话框关闭时保留 DB 缓存
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：修改 watch 中的关闭逻辑**
@@ -525,6 +535,7 @@ git commit -m "feat: add Force Refresh button to clear cache and re-scrape"
 ## 自检
 
 **1. 规格覆盖度：**
+
 - ✅ search_cache 表结构 → 任务 1
 - ✅ detail_cache 仅内存 → 当前代码已满足，无需修改
 - ✅ L1 Map + L2 DB 两级缓存 → 任务 4、5
@@ -541,6 +552,7 @@ git commit -m "feat: add Force Refresh button to clear cache and re-scrape"
 **2. 占位符扫描：** 无 TODO/TBD/待定。
 
 **3. 类型一致性：**
+
 - `SearchResult` 接口在 ScannerDialog 中定义，与缓存存储的 JSON 结构一致
 - `cacheKey` 格式 `source:keyword` 与 DB 的 `key` 字段一致
 - `autoKey` 格式 `auto:keyword` 与设计文档一致

@@ -16,12 +16,23 @@ const request = async (method, path, body) => {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   const text = await res.text();
-  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: text }; }
+  try {
+    return { status: res.status, body: JSON.parse(text) };
+  } catch {
+    return { status: res.status, body: text };
+  }
 };
 
 const TEST_KEYS = [
-  'test_foo', 'test_upkey', 'test_newkey', 'test_noval', 'test_delkey', 'test_nonexistent',
-  'archived_archives', 'archive_passwords', 'extract_tools',
+  'test_foo',
+  'test_upkey',
+  'test_newkey',
+  'test_noval',
+  'test_delkey',
+  'test_nonexistent',
+  'archived_archives',
+  'archive_passwords',
+  'extract_tools',
 ];
 
 const cleanupDb = async () => {
@@ -104,13 +115,17 @@ describe('Setting Routes', () => {
     });
 
     it('PUT /archive-passwords/save should save passwords', async () => {
-      const res = await request('PUT', '/api/settings/archive-passwords/save', { passwords: ['abc', '123'] });
+      const res = await request('PUT', '/api/settings/archive-passwords/save', {
+        passwords: ['abc', '123'],
+      });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, ['abc', '123']);
     });
 
     it('PUT /archive-passwords/save should reject non-array', async () => {
-      const res = await request('PUT', '/api/settings/archive-passwords/save', { passwords: 'not-array' });
+      const res = await request('PUT', '/api/settings/archive-passwords/save', {
+        passwords: 'not-array',
+      });
       assert.equal(res.status, 400);
     });
 
@@ -130,14 +145,18 @@ describe('Setting Routes', () => {
     });
 
     it('POST /archived-archives/add should add an archive', async () => {
-      const res = await request('POST', '/api/settings/archived-archives/add', { path: 'C:\\game.rar' });
+      const res = await request('POST', '/api/settings/archived-archives/add', {
+        path: 'C:\\game.rar',
+      });
       assert.equal(res.status, 200);
       assert.ok(res.body.includes('C:\\game.rar'));
     });
 
     it('POST /archived-archives/add should not duplicate', async () => {
       await request('POST', '/api/settings/archived-archives/add', { path: 'C:\\game.rar' });
-      const res = await request('POST', '/api/settings/archived-archives/add', { path: 'C:\\game.rar' });
+      const res = await request('POST', '/api/settings/archived-archives/add', {
+        path: 'C:\\game.rar',
+      });
       assert.equal(res.body.length, 1);
     });
 

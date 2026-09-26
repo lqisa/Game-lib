@@ -13,6 +13,7 @@
 ### 任务 1：数据库迁移 — 新增 `name` 列
 
 **文件：**
+
 - 修改：`server/database/schema.js:65-73`
 - 修改：`server/database/init.js:148-157`
 
@@ -60,9 +61,9 @@ game_source: (knex) =>
 const v3 = await knex('setting').where({ key: 'migration_v3' }).first();
 if (!v3) {
   console.log(' * Running migration v3: add name column to game_source...');
-  const hasName = await knex.raw("PRAGMA table_info('game_source')").then(
-    (r) => r.some((col) => col.name === 'name')
-  );
+  const hasName = await knex
+    .raw("PRAGMA table_info('game_source')")
+    .then((r) => r.some((col) => col.name === 'name'));
   if (!hasName) {
     await knex.raw('ALTER TABLE game_source ADD COLUMN name TEXT');
   }
@@ -86,6 +87,7 @@ npm run dev
 ### 任务 2：Adopt 时写入 `name`
 
 **文件：**
+
 - 修改：`server/routes/scraper.js:212-220`
 
 - [ ] **步骤 1：修改 `adoptOne` 的 insert 和 merge**
@@ -119,6 +121,7 @@ npm run typecheck
 ### 任务 3：`getGameDetail` 和 `getGames` 返回 `name`
 
 **文件：**
+
 - 修改：`server/database/db.js:46-48`
 
 - [ ] **步骤 1：`getGameDetail` 的 sources 查询加上 `name`**
@@ -154,6 +157,7 @@ npm run typecheck
 ### 任务 4：`getGameDetail` 返回完整的 `game_source` 用于前端搜索
 
 **文件：**
+
 - 修改：`server/database/db.js:24-70`
 
 - [ ] **步骤 1：确认 `getGameDetail` 已返回 sources 含 name**
@@ -167,7 +171,8 @@ npm run typecheck
 ```js
 router.get('/:id/sources', async (req, res, next) => {
   try {
-    const sources = await db.knex('game_source')
+    const sources = await db
+      .knex('game_source')
       .where('game_id', req.params.id)
       .select('id', 'source_type', 'source_id', 'source_url', 'name');
     res.send(sources);
@@ -190,6 +195,7 @@ npm run typecheck
 ### 任务 5：ScrapeDialog 搜索时优先用爬取名
 
 **文件：**
+
 - 修改：`src/components/ScrapeDialog.vue`
 
 - [ ] **步骤 1：添加 props 接收已有 sources**
@@ -213,8 +219,7 @@ const onDialogShow = async () => {
 
   // 优先使用爬取名
   const searchName = props.sourceName || props.gameName;
-  const rawKeyword =
-    props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
+  const rawKeyword = props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
   keyword.value = getCleanedName(rawKeyword);
 
   // ... 其余不变
@@ -226,10 +231,7 @@ const onDialogShow = async () => {
 在 `ScannerDialog.vue` 中，`ScrapeDialog` 组件调用处添加 prop：
 
 ```vue
-<ScrapeDialog
-  ...
-  :source-name="scrapingRow?.sourceName ?? null"
-/>
+<ScrapeDialog ... :source-name="scrapingRow?.sourceName ?? null" />
 ```
 
 同时 `ScanRow` 接口中新增 `sourceName: string | null`。
@@ -247,6 +249,7 @@ npm run typecheck
 ### 任务 6：ScannerDialog 批量搜索时优先用爬取名
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：`loadUnscraped` 时获取已有 source name**
@@ -260,7 +263,9 @@ const loadUnscraped = async () => {
   // 获取已有 source name 用于搜索
   const gameIds = scanResults.value.map((r) => r.gameId);
   if (gameIds.length > 0) {
-    const sourcesRes = await api.get('/games/sources/batch', { params: { ids: gameIds.join(',') } });
+    const sourcesRes = await api.get('/games/sources/batch', {
+      params: { ids: gameIds.join(',') },
+    });
     const sourceMap = new Map<string, string | null>();
     for (const s of sourcesRes.data || []) {
       // 每个 game 取第一个有 name 的 source
@@ -299,7 +304,8 @@ router.get('/sources/batch', async (req, res, next) => {
   try {
     const ids = (req.query.ids || '').split(',').map(Number).filter(Boolean);
     if (ids.length === 0) return res.send([]);
-    const sources = await db.knex('game_source')
+    const sources = await db
+      .knex('game_source')
       .whereIn('game_id', ids)
       .select('game_id', 'name')
       .orderBy('id');
@@ -323,6 +329,7 @@ npm run typecheck
 ### 任务 7：GameCard 显示爬取名
 
 **文件：**
+
 - 修改：`src/components/GameCard.vue`
 
 - [ ] **步骤 1：扩展 Game 接口添加 `sourceName`**
@@ -390,6 +397,7 @@ npm run typecheck
 ### 任务 8：GameDetailPage 详情页显示爬取名
 
 **文件：**
+
 - 修改：`src/pages/GameDetailPage.vue`
 
 - [ ] **步骤 1：获取 sources 中的 name**
@@ -427,6 +435,7 @@ npm run typecheck
 ### 任务 9：存量数据回填脚本
 
 **文件：**
+
 - 创建：`server/scripts/backfill-source-names.js`
 
 - [ ] **步骤 1：创建回填脚本**

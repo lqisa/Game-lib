@@ -32,16 +32,18 @@ export const useTaskStore = defineStore('task', () => {
   let eventSource: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const runningCount = computed(() =>
-    [...tasks.value.values()].filter((t) => t.status === 'running' || t.status === 'pending').length
+  const runningCount = computed(
+    () =>
+      [...tasks.value.values()].filter((t) => t.status === 'running' || t.status === 'pending')
+        .length,
   );
 
   const hasRunningMoveTasks = computed(() =>
-    [...tasks.value.values()].some((t) => t.status === 'running' && t.type === 'move')
+    [...tasks.value.values()].some((t) => t.status === 'running' && t.type === 'move'),
   );
 
   const hasRunningTasks = computed(() =>
-    [...tasks.value.values()].some((t) => t.status === 'running')
+    [...tasks.value.values()].some((t) => t.status === 'running'),
   );
 
   // Games that currently have a relocate-style task in flight. Derived from the task list
@@ -64,7 +66,10 @@ export const useTaskStore = defineStore('task', () => {
   const taskFor = (gameId: number | undefined | null): Task | undefined => {
     if (typeof gameId !== 'number') return undefined;
     for (const task of tasks.value.values()) {
-      if (task.meta?.gameId === gameId && (task.status === 'pending' || task.status === 'running')) {
+      if (
+        task.meta?.gameId === gameId &&
+        (task.status === 'pending' || task.status === 'running')
+      ) {
         return task;
       }
     }
@@ -91,7 +96,9 @@ export const useTaskStore = defineStore('task', () => {
         } else if (data.type === 'update') {
           tasks.value.set(data.task.id, data.task);
         }
-      } catch { /* ignore SSE parse errors */ }
+      } catch {
+        /* ignore SSE parse errors */
+      }
     };
 
     eventSource.onerror = () => {

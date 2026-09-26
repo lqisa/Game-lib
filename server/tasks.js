@@ -17,7 +17,10 @@ const createTask = (type, meta) => {
     id: randomUUID(),
     type,
     status: 'pending',
-    label: type === 'move' ? `Moving: ${meta.source.split('\\').pop()}` : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
+    label:
+      type === 'move'
+        ? `Moving: ${meta.source.split('\\').pop()}`
+        : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
     progress: 0,
     detail: 'Waiting...',
     error: null,
@@ -67,7 +70,8 @@ const removeTask = (id) => {
   tasks.delete(id);
 };
 
-const hasRunningMoveTasks = () => [...tasks.values()].some((t) => t.status === 'running' && t.type === 'move');
+const hasRunningMoveTasks = () =>
+  [...tasks.values()].some((t) => t.status === 'running' && t.type === 'move');
 const hasRunningTasks = () => [...tasks.values()].some((t) => t.status === 'running');
 
 // Anything that is queued or in flight. Quitting during an extract/compress loses just as much
@@ -93,14 +97,28 @@ const attachChildProcess = (id, child) => {
 const countFilesWithRobocopy = (source, dest) => {
   return new Promise((resolve, reject) => {
     const child = spawn('robocopy', [
-      source, dest,
-      '/L', '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP',
+      source,
+      dest,
+      '/L',
+      '/NFL',
+      '/NDL',
+      '/NJH',
+      '/NJS',
+      '/NC',
+      '/NS',
+      '/NP',
     ]);
     let output = '';
-    child.stdout.on('data', (data) => { output += data.toString(); });
-    child.stderr.on('data', (data) => { output += data.toString(); });
+    child.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    child.stderr.on('data', (data) => {
+      output += data.toString();
+    });
     child.on('close', () => {
-      const match = output.match(/Total\s+Copied\s+Skipped\s+Mismatch\s+FAIL\s+Extras\s+[\r\n]+\s+Files\s*:\s*(\d+)/);
+      const match = output.match(
+        /Total\s+Copied\s+Skipped\s+Mismatch\s+FAIL\s+Extras\s+[\r\n]+\s+Files\s*:\s*(\d+)/,
+      );
       if (match) {
         resolve(parseInt(match[1], 10));
       } else {
@@ -114,7 +132,7 @@ const countFilesWithRobocopy = (source, dest) => {
 
 const updateGameAfterMove = async (gameId, newLibraryId, newSubPath, taskId) => {
   try {
-    const db = (await import('./database/db.js'));
+    const db = await import('./database/db.js');
     await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
   } catch (err) {
     // The files are already at their new location, so this is not a failed move.
@@ -126,7 +144,12 @@ const updateGameAfterMove = async (gameId, newLibraryId, newSubPath, taskId) => 
     });
     return;
   }
-  updateTask(taskId, { status: 'completed', progress: 100, detail: 'Move completed', completedAt: new Date() });
+  updateTask(taskId, {
+    status: 'completed',
+    progress: 100,
+    detail: 'Move completed',
+    completedAt: new Date(),
+  });
 };
 
 const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSubPath) => {
@@ -135,7 +158,11 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
 
   if (sourceDrive === destDrive) {
     if (fs.existsSync(dest)) {
-      updateTask(taskId, { status: 'failed', error: 'Target already exists', detail: 'Rename failed' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: 'Target already exists',
+        detail: 'Rename failed',
+      });
       return;
     }
     updateTask(taskId, { status: 'running', detail: 'Renaming...', progress: 50 });
@@ -156,21 +183,34 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
   if (destExists) {
     const files = fs.readdirSync(dest);
     if (files.length > 0) {
-      updateTask(taskId, { status: 'failed', error: 'Target already exists and is not empty', detail: 'Move failed' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: 'Target already exists and is not empty',
+        detail: 'Move failed',
+      });
       return;
     }
   }
 
   try {
     const totalFiles = await countFilesWithRobocopy(source, dest);
-    updateTask(taskId, { meta: { ...getTask(taskId).meta, totalFiles }, detail: `Found ${totalFiles} files` });
+    updateTask(taskId, {
+      meta: { ...getTask(taskId).meta, totalFiles },
+      detail: `Found ${totalFiles} files`,
+    });
 
     const logFile = path.join(os.tmpdir(), `robocopy-${taskId}.log`);
     if (fs.existsSync(logFile)) fs.unlinkSync(logFile);
 
     const child = spawn('robocopy', [
-      source, dest,
-      '/E', '/COPY:DAT', '/MT:8', '/R:3', '/W:5', '/NP',
+      source,
+      dest,
+      '/E',
+      '/COPY:DAT',
+      '/MT:8',
+      '/R:3',
+      '/W:5',
+      '/NP',
       `/LOG+:${logFile}`,
     ]);
 
@@ -187,7 +227,8 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
           const newFileCount = (content.match(/New File/g) || []).length;
           if (newFileCount > copiedFiles) {
             copiedFiles = newFileCount;
-            const progress = totalFiles > 0 ? Math.min(99, Math.round((copiedFiles / totalFiles) * 100)) : 0;
+            const progress =
+              totalFiles > 0 ? Math.min(99, Math.round((copiedFiles / totalFiles) * 100)) : 0;
             updateTask(taskId, {
               progress,
               detail: `Copying ${copiedFiles}/${totalFiles}`,
@@ -195,29 +236,54 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
             });
           }
         }
-      } catch { /* log file may not exist yet */ }
+      } catch {
+        /* log file may not exist yet */
+      }
     }, 1000);
 
     child.on('close', (code) => {
       clearInterval(pollInterval);
-      try { fs.unlinkSync(logFile); } catch { /* ignore cleanup error */ }
+      try {
+        fs.unlinkSync(logFile);
+      } catch {
+        /* ignore cleanup error */
+      }
 
       if (code <= 7) {
         updateTask(taskId, { progress: 99, detail: 'Deleting source...' });
-        fs.promises.rm(source, { recursive: true, force: true })
+        fs.promises
+          .rm(source, { recursive: true, force: true })
           .then(() => updateGameAfterMove(gameId, newLibraryId, newSubPath, taskId))
-          .catch((err) => updateTask(taskId, { status: 'failed', error: `Source deletion failed: ${err.message}`, detail: 'Move completed but source deletion failed' }));
+          .catch((err) =>
+            updateTask(taskId, {
+              status: 'failed',
+              error: `Source deletion failed: ${err.message}`,
+              detail: 'Move completed but source deletion failed',
+            }),
+          );
       } else {
-        updateTask(taskId, { status: 'failed', error: `robocopy exited with code ${code}`, detail: 'Move failed' });
+        updateTask(taskId, {
+          status: 'failed',
+          error: `robocopy exited with code ${code}`,
+          detail: 'Move failed',
+        });
         if (fs.existsSync(dest)) {
-          try { fs.rmSync(dest, { recursive: true, force: true }); } catch { /* ignore cleanup error */ }
+          try {
+            fs.rmSync(dest, { recursive: true, force: true });
+          } catch {
+            /* ignore cleanup error */
+          }
         }
       }
     });
 
     child.on('error', (err) => {
       clearInterval(pollInterval);
-      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start robocopy' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: err.message,
+        detail: 'Failed to start robocopy',
+      });
     });
   } catch (err) {
     updateTask(taskId, { status: 'failed', error: err.message, detail: 'Scan failed' });
@@ -238,7 +304,7 @@ const detectExtractTools = () => {
 };
 
 const getEffectiveTools = async () => {
-  const db = (await import('./database/db.js'));
+  const db = await import('./database/db.js');
   const savedStr = await db.getSetting('extract_tools');
   if (savedStr) {
     try {
@@ -247,7 +313,9 @@ const getEffectiveTools = async () => {
       if (saved && Object.keys(saved).length > 0) {
         return saved;
       }
-    } catch { /* invalid JSON, fall through to detect */ }
+    } catch {
+      /* invalid JSON, fall through to detect */
+    }
   }
   return detectExtractTools();
 };
@@ -281,11 +349,18 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
     attachChildProcess(taskId, child);
 
     // Timeout: 10 minutes max per password attempt
-    const timeout = setTimeout(() => {
-      child.kill('SIGTERM');
-      updateTask(taskId, { status: 'failed', error: 'Extraction timeout', detail: 'Extraction timed out' });
-      resolve('error');
-    }, 10 * 60 * 1000);
+    const timeout = setTimeout(
+      () => {
+        child.kill('SIGTERM');
+        updateTask(taskId, {
+          status: 'failed',
+          error: 'Extraction timeout',
+          detail: 'Extraction timed out',
+        });
+        resolve('error');
+      },
+      10 * 60 * 1000,
+    );
 
     let lastProgress = 0;
     child.stdout.on('data', (data) => {
@@ -313,7 +388,10 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
       console.log(`[extract:${taskId}] exit code: ${code}, stderr: ${stderrText.trim()}`);
       if (code === 0 || (tool.name === 'unrar' && code === 1)) {
         resolve('success');
-      } else if ((tool.name === 'unrar' && (code === 2 || code === 12)) || (tool.name !== 'unrar' && code === 2)) {
+      } else if (
+        (tool.name === 'unrar' && (code === 2 || code === 12)) ||
+        (tool.name !== 'unrar' && code === 2)
+      ) {
         // unrar: 2=wrong password/CRC, 12=password required (no password provided)
         resolve('wrong_password');
       } else {
@@ -322,14 +400,22 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
           resolve('error');
           return;
         }
-        updateTask(taskId, { status: 'failed', error: `Exit code ${code}: ${stderrText}`, detail: 'Extraction failed' });
+        updateTask(taskId, {
+          status: 'failed',
+          error: `Exit code ${code}: ${stderrText}`,
+          detail: 'Extraction failed',
+        });
         resolve('error');
       }
     });
 
     child.on('error', (err) => {
       clearTimeout(timeout);
-      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start extraction tool' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: err.message,
+        detail: 'Failed to start extraction tool',
+      });
       resolve('error');
     });
   });
@@ -342,23 +428,33 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
     const tool = selectTool(ext, tools);
 
     if (!tool) {
-      updateTask(taskId, { status: 'failed', error: `No extraction tool found for ${ext}`, detail: 'No tool available' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: `No extraction tool found for ${ext}`,
+        detail: 'No tool available',
+      });
       return;
     }
 
-    const db = (await import('./database/db.js'));
+    const db = await import('./database/db.js');
     const passwordsStr = await db.getSetting('archive_passwords');
     const passwords = passwordsStr ? JSON.parse(passwordsStr) : [];
     const allPasswords = [null, ...passwords];
 
-    updateTask(taskId, { status: 'running', detail: `Extracting with ${tool.name}...`, progress: 0 });
+    updateTask(taskId, {
+      status: 'running',
+      detail: `Extracting with ${tool.name}...`,
+      progress: 0,
+    });
 
     const cleanupDest = async () => {
       try {
         if (fs.existsSync(dest)) {
           await fs.promises.rm(dest, { recursive: true, force: true });
         }
-      } catch { /* ignore cleanup errors */ }
+      } catch {
+        /* ignore cleanup errors */
+      }
     };
 
     for (const pwd of allPasswords) {
@@ -379,7 +475,12 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
           }
         }
         await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
-        updateTask(taskId, { status: 'completed', progress: 100, detail: 'Extraction completed', completedAt: new Date() });
+        updateTask(taskId, {
+          status: 'completed',
+          progress: 100,
+          detail: 'Extraction completed',
+          completedAt: new Date(),
+        });
         return;
       }
       if (result === 'error') {
@@ -389,7 +490,11 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
     }
 
     await cleanupDest();
-    updateTask(taskId, { status: 'failed', error: 'All passwords failed', detail: 'No matching password found' });
+    updateTask(taskId, {
+      status: 'failed',
+      error: 'All passwords failed',
+      detail: 'No matching password found',
+    });
   } catch (err) {
     updateTask(taskId, { status: 'failed', error: err.message, detail: 'Extraction task crashed' });
   }
@@ -409,7 +514,7 @@ const detectCompressTools = () => {
 };
 
 const getEffectiveCompressTools = async () => {
-  const db = (await import('./database/db.js'));
+  const db = await import('./database/db.js');
   const savedStr = await db.getSetting('compress_tools');
   if (savedStr) {
     try {
@@ -418,7 +523,9 @@ const getEffectiveCompressTools = async () => {
       if (saved && Object.keys(saved).length > 0) {
         return saved;
       }
-    } catch { /* invalid JSON, fall through to detect */ }
+    } catch {
+      /* invalid JSON, fall through to detect */
+    }
   }
   return detectCompressTools();
 };
@@ -431,12 +538,14 @@ const selectCompressTool = (tools) => {
 const tryCompress = (taskId, tool, sourceDir, destArchive) => {
   return new Promise((resolve) => {
     const args = ['a', '-r', '-ep1', '-idq', destArchive, `${sourceDir}\\*`];
-    
+
     const child = spawn(tool.path, args);
     attachChildProcess(taskId, child);
 
     let stderrText = '';
-    child.stderr.on('data', (data) => { stderrText += data.toString(); });
+    child.stderr.on('data', (data) => {
+      stderrText += data.toString();
+    });
 
     child.on('close', (code) => {
       if (code === 0) {
@@ -447,13 +556,21 @@ const tryCompress = (taskId, tool, sourceDir, destArchive) => {
           resolve('error');
           return;
         }
-        updateTask(taskId, { status: 'failed', error: `Exit code ${code}: ${stderrText}`, detail: 'Compression failed' });
+        updateTask(taskId, {
+          status: 'failed',
+          error: `Exit code ${code}: ${stderrText}`,
+          detail: 'Compression failed',
+        });
         resolve('error');
       }
     });
 
     child.on('error', (err) => {
-      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start compression tool' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: err.message,
+        detail: 'Failed to start compression tool',
+      });
       resolve('error');
     });
   });
@@ -462,56 +579,86 @@ const tryCompress = (taskId, tool, sourceDir, destArchive) => {
 const tryTestArchive = (taskId, tool, archivePath) => {
   return new Promise((resolve) => {
     const args = ['t', '-idq', archivePath];
-    
+
     const child = spawn(tool.path, args);
     attachChildProcess(taskId, child);
 
     let stderrText = '';
-    child.stderr.on('data', (data) => { stderrText += data.toString(); });
+    child.stderr.on('data', (data) => {
+      stderrText += data.toString();
+    });
 
     child.on('close', (code) => {
       if (code === 0) {
         resolve('success');
       } else {
-        updateTask(taskId, { status: 'failed', error: `Archive test failed (exit ${code}): ${stderrText}`, detail: 'Archive integrity test failed' });
+        updateTask(taskId, {
+          status: 'failed',
+          error: `Archive test failed (exit ${code}): ${stderrText}`,
+          detail: 'Archive integrity test failed',
+        });
         resolve('error');
       }
     });
 
     child.on('error', (err) => {
-      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start archive test' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: err.message,
+        detail: 'Failed to start archive test',
+      });
       resolve('error');
     });
   });
 };
 
-const executeCompressTask = async (taskId, sourceDir, destArchive, gameId, newLibraryId, newSubPath, sourceSubPath) => {
+const executeCompressTask = async (
+  taskId,
+  sourceDir,
+  destArchive,
+  gameId,
+  newLibraryId,
+  newSubPath,
+  sourceSubPath,
+) => {
   try {
     const tools = await getEffectiveCompressTools();
     const tool = selectCompressTool(tools);
 
     if (!tool) {
-      updateTask(taskId, { status: 'failed', error: 'No compression tool found (WinRAR rar.exe required)', detail: 'No tool available' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: 'No compression tool found (WinRAR rar.exe required)',
+        detail: 'No tool available',
+      });
       return;
     }
 
-    const db = (await import('./database/db.js'));
+    const db = await import('./database/db.js');
 
-    updateTask(taskId, { status: 'running', detail: `Compressing with ${tool.name}...`, progress: 0 });
+    updateTask(taskId, {
+      status: 'running',
+      detail: `Compressing with ${tool.name}...`,
+      progress: 0,
+    });
 
     // Delete existing destination file if it exists (route handles conflict check when force=false)
     try {
       if (fs.existsSync(destArchive)) {
         await fs.promises.rm(destArchive, { force: true });
       }
-    } catch { /* ignore cleanup errors */ }
+    } catch {
+      /* ignore cleanup errors */
+    }
 
     const cleanupDest = async () => {
       try {
         if (fs.existsSync(destArchive)) {
           await fs.promises.rm(destArchive, { force: true });
         }
-      } catch { /* ignore cleanup errors */ }
+      } catch {
+        /* ignore cleanup errors */
+      }
     };
 
     const compressResult = await tryCompress(taskId, tool, sourceDir, destArchive);
@@ -538,9 +685,18 @@ const executeCompressTask = async (taskId, sourceDir, destArchive, gameId, newLi
     }
 
     await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
-    updateTask(taskId, { status: 'completed', progress: 100, detail: 'Compression completed', completedAt: new Date() });
+    updateTask(taskId, {
+      status: 'completed',
+      progress: 100,
+      detail: 'Compression completed',
+      completedAt: new Date(),
+    });
   } catch (err) {
-    updateTask(taskId, { status: 'failed', error: err.message, detail: 'Compression task crashed' });
+    updateTask(taskId, {
+      status: 'failed',
+      error: err.message,
+      detail: 'Compression task crashed',
+    });
   }
 };
 

@@ -26,10 +26,13 @@ const createApp = (frontendDir) => {
   if (!fs.existsSync(coversDir)) {
     fs.mkdirSync(coversDir, { recursive: true });
   }
-  app.use('/covers', express.static(coversDir, {
-    maxAge: '1h',
-    etag: true,
-  }));
+  app.use(
+    '/covers',
+    express.static(coversDir, {
+      maxAge: '1h',
+      etag: true,
+    }),
+  );
 
   if (frontendDir) {
     app.use(express.static(frontendDir));

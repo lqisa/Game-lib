@@ -33,23 +33,21 @@ Allow multiple games to share the same source by changing the unique constraint,
 Called BEFORE submitting adopt. Takes a list of sources about to be adopted, returns which ones conflict with existing games.
 
 Request:
+
 ```json
 {
-  "sources": [
-    { "gameId": 2134, "sourceType": "bangumi", "sourceId": "269859" }
-  ]
+  "sources": [{ "gameId": 2134, "sourceType": "bangumi", "sourceId": "269859" }]
 }
 ```
 
 Response (empty if no conflicts):
+
 ```json
 [
   {
     "sourceType": "bangumi",
     "sourceId": "269859",
-    "games": [
-      { "gameId": 1820, "name": "我和她（女护士）的诊察日志" }
-    ]
+    "games": [{ "gameId": 1820, "name": "我和她（女护士）的诊察日志" }]
   }
 ]
 ```

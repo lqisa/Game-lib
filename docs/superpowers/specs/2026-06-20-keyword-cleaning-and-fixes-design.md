@@ -3,6 +3,7 @@
 ## Overview
 
 Three small fixes:
+
 1. Strip Chinese brackets `【】` `（）` and version suffixes from search keywords at Scan time, pre-cache segments
 2. Fix DLSite fetch route to accept `id` parameter (not just `rjcode`)
 3. Add folder icon to GameCard for quick directory access
@@ -16,12 +17,12 @@ Add bracket stripping before version stripping:
 ```js
 const splitKeyword = (name) => {
   let cleaned = name
-    .replace(/【.*?】/g, '')     // strip 【...】
-    .replace(/（.*?）/g, '')     // strip （...）
-    .replace(/\s*v\d+[\d.]*\s*$/i, '')  // strip version suffix
-    .trim()
+    .replace(/【.*?】/g, '') // strip 【...】
+    .replace(/（.*?）/g, '') // strip （...）
+    .replace(/\s*v\d+[\d.]*\s*$/i, '') // strip version suffix
+    .trim();
   // ... rest unchanged (RJ match, CJK/alphanumeric tokenization)
-}
+};
 ```
 
 ### ScannerDialog pre-processing
@@ -35,7 +36,7 @@ ScrapeDialog receives cleaned keyword as `default-keyword` and cached segments a
 `POST /dlsite/fetch` currently only accepts `rjcode`. Change to accept `id` as fallback:
 
 ```js
-const code = req.body.rjcode || req.body.id
+const code = req.body.rjcode || req.body.id;
 ```
 
 ## 3. GameCard Folder Icon
@@ -46,9 +47,9 @@ Requires `hasElectronAPI` computed and `openDir` function.
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `server/scraper/dlsite.js` | Add bracket stripping to splitKeyword |
-| `server/routes/scraper.js` | DLSite fetch accept `id` parameter |
-| `src/components/ScannerDialog.vue` | Pre-process segments at scan time |
-| `src/components/GameCard.vue` | Add folder icon button |
+| File                               | Change                                |
+| ---------------------------------- | ------------------------------------- |
+| `server/scraper/dlsite.js`         | Add bracket stripping to splitKeyword |
+| `server/routes/scraper.js`         | DLSite fetch accept `id` parameter    |
+| `src/components/ScannerDialog.vue` | Pre-process segments at scan time     |
+| `src/components/GameCard.vue`      | Add folder icon button                |

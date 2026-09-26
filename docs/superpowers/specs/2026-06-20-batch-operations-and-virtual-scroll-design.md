@@ -3,6 +3,7 @@
 ## Overview
 
 Three performance optimizations for the ScannerDialog:
+
 1. Batch segments API call instead of N sequential requests
 2. Batch adopt API call instead of N sequential requests
 3. Replace q-table with q-virtual-scroll for large lists
@@ -45,7 +46,7 @@ No table columns, no header row. Fixed height container with virtual scroll for 
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `server/routes/scraper.js` | Add batch segments and batch adopt endpoints |
+| File                               | Change                                                |
+| ---------------------------------- | ----------------------------------------------------- |
+| `server/routes/scraper.js`         | Add batch segments and batch adopt endpoints          |
 | `src/components/ScannerDialog.vue` | Replace q-table with q-virtual-scroll, use batch APIs |

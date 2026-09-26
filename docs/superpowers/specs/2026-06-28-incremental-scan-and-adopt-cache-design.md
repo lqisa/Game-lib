@@ -53,12 +53,12 @@ adopt_cache (
 
 ### 3. Backend API for adopt_cache
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/cache/adopt?gameIds=1,2,3` | Batch query adopt status |
-| `POST` | `/api/cache/adopt` | Save adopt decision `{ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }` |
-| `DELETE` | `/api/cache/adopt?gameIds=1,2,3` | Delete after submit or discard |
-| `POST` | `/api/cache/adopt/batch` | Batch save (for auto-adopt during Scrape All) |
+| Method   | Path                             | Purpose                                                                                                              |
+| -------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/cache/adopt?gameIds=1,2,3` | Batch query adopt status                                                                                             |
+| `POST`   | `/api/cache/adopt`               | Save adopt decision `{ gameId, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }` |
+| `DELETE` | `/api/cache/adopt?gameIds=1,2,3` | Delete after submit or discard                                                                                       |
+| `POST`   | `/api/cache/adopt/batch`         | Batch save (for auto-adopt during Scrape All)                                                                        |
 
 ### 4. Frontend flow changes
 

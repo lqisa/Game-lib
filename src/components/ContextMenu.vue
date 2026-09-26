@@ -6,26 +6,38 @@
     class="m3-context-menu"
     @hide="$emit('close')"
   >
-    <q-list dense style="min-width: 180px; padding: 8px 0;">
+    <q-list dense style="min-width: 180px; padding: 8px 0">
       <template v-if="favoritesMode">
         <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('unfavorite', game.id)">
           <q-item-section avatar>
-            <q-icon name="heart_broken" style="color: var(--m3-error);" />
+            <q-icon name="heart_broken" style="color: var(--m3-error)" />
           </q-item-section>
           <q-item-section>Unfavorite</q-item-section>
         </q-item>
       </template>
       <template v-else>
-        <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('toggle-favorite', game.id)">
+        <q-item
+          clickable
+          v-close-popup
+          class="m3-menu-item"
+          @click="$emit('toggle-favorite', game.id)"
+        >
           <q-item-section avatar>
-            <q-icon :name="game.is_favorite ? 'star' : 'star_border'" :style="{ color: game.is_favorite ? 'var(--m3-error)' : 'var(--m3-on-surface-variant)' }" />
+            <q-icon
+              :name="game.is_favorite ? 'star' : 'star_border'"
+              :style="{
+                color: game.is_favorite ? 'var(--m3-error)' : 'var(--m3-on-surface-variant)',
+              }"
+            />
           </q-item-section>
-          <q-item-section>{{ game.is_favorite ? 'Remove from Favorites' : 'Add to Favorites' }}</q-item-section>
+          <q-item-section>{{
+            game.is_favorite ? 'Remove from Favorites' : 'Add to Favorites'
+          }}</q-item-section>
         </q-item>
         <q-separator />
         <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('delete-game', game.id)">
           <q-item-section avatar>
-            <q-icon name="delete" style="color: var(--m3-error);" />
+            <q-icon name="delete" style="color: var(--m3-error)" />
           </q-item-section>
           <q-item-section>Delete Game</q-item-section>
         </q-item>

@@ -3,6 +3,7 @@
 ## Overview
 
 Extend the game library scanner to support:
+
 1. **Manual expand-scan** — scan sub-directories on demand, one level at a time
 2. **Archive recognition** — identify compressed game files (.zip, .7z, .rar) with volume deduplication
 3. **Heuristic filtering** — automatically exclude non-game directories when expanding
@@ -11,10 +12,10 @@ Extend the game library scanner to support:
 
 ### `sub_path` field semantics
 
-| | Before | After |
-|---|---|---|
-| Format | Single segment `"GameA"` | Relative path `"GameA"` or `"Collection/GameC"` |
-| Migration | — | None required; existing root-level paths are naturally compatible |
+|           | Before                   | After                                                             |
+| --------- | ------------------------ | ----------------------------------------------------------------- |
+| Format    | Single segment `"GameA"` | Relative path `"GameA"` or `"Collection/GameC"`                   |
+| Migration | —                        | None required; existing root-level paths are naturally compatible |
 
 ### `ScanRow` type extension (frontend only)
 
@@ -32,11 +33,11 @@ interface ScanRow {
   loading: boolean;
 
   // New fields
-  children: ScanRow[];          // Child nodes (populated after expand-scan)
-  expanded: boolean;            // Whether currently expanded
-  isArchive: boolean;           // Whether this is an archive entry
-  depth: number;                // Nesting depth (root = 0)
-  hasChildren: boolean | null;  // null = unprobed, true = has sub-dirs, false = none
+  children: ScanRow[]; // Child nodes (populated after expand-scan)
+  expanded: boolean; // Whether currently expanded
+  isArchive: boolean; // Whether this is an archive entry
+  depth: number; // Nesting depth (root = 0)
+  hasChildren: boolean | null; // null = unprobed, true = has sub-dirs, false = none
 }
 ```
 
@@ -65,16 +66,21 @@ All entries stored lowercase; comparison uses `toLowerCase()`.
 
 ```javascript
 const ARCHIVE_EXTENSIONS = new Set([
-  '.zip', '.7z', '.rar',
-  '.001', '.002', '.003', '.004', '.005',
-  '.006', '.007', '.008', '.009',
+  '.zip',
+  '.7z',
+  '.rar',
+  '.001',
+  '.002',
+  '.003',
+  '.004',
+  '.005',
+  '.006',
+  '.007',
+  '.008',
+  '.009',
 ]);
 
-const VOLUME_PATTERNS = [
-  /^(.+)\.7z\.\d+$/,
-  /^(.+)\.part\d+\.rar$/i,
-  /^(.+)\.rar\.r\d+$/i,
-];
+const VOLUME_PATTERNS = [/^(.+)\.7z\.\d+$/, /^(.+)\.part\d+\.rar$/i, /^(.+)\.rar\.r\d+$/i];
 
 const deduplicateArchives = (archiveNames) => {
   const map = new Map();
@@ -82,7 +88,10 @@ const deduplicateArchives = (archiveNames) => {
     let baseName = null;
     for (const pattern of VOLUME_PATTERNS) {
       const match = name.match(pattern);
-      if (match) { baseName = match[1]; break; }
+      if (match) {
+        baseName = match[1];
+        break;
+      }
     }
     if (baseName) {
       if (!map.has(baseName)) map.set(baseName, name);
@@ -97,23 +106,25 @@ const deduplicateArchives = (archiveNames) => {
 const expandDirectory = (dirPath) => {
   if (!fs.existsSync(dirPath)) return { dirs: [], archives: [], hasSubDirs: {} };
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
   const archives = entries
-    .filter(e => e.isFile())
-    .filter(e => ARCHIVE_EXTENSIONS.has(path.extname(e.name).toLowerCase()))
-    .map(e => e.name);
+    .filter((e) => e.isFile())
+    .filter((e) => ARCHIVE_EXTENSIONS.has(path.extname(e.name).toLowerCase()))
+    .map((e) => e.name);
   const hasSubDirs = {};
   for (const d of dirs) {
     const subPath = path.join(dirPath, d);
     try {
-      hasSubDirs[d] = fs.readdirSync(subPath, { withFileTypes: true }).some(e => e.isDirectory());
-    } catch { hasSubDirs[d] = false; }
+      hasSubDirs[d] = fs.readdirSync(subPath, { withFileTypes: true }).some((e) => e.isDirectory());
+    } catch {
+      hasSubDirs[d] = false;
+    }
   }
   return { dirs, archives, hasSubDirs };
 };
 
 const filterGameDirs = (dirNames) => {
-  return dirNames.filter(d => !NON_GAME_DIRS.has(d.toLowerCase()));
+  return dirNames.filter((d) => !NON_GAME_DIRS.has(d.toLowerCase()));
 };
 ```
 
@@ -129,6 +140,7 @@ Response: {
 ```
 
 Logic:
+
 1. Look up library path from `libraryId`
 2. Construct full path: `library.path + path.sep + subPath`
 3. Call `expandDirectory(fullPath)`
@@ -139,6 +151,7 @@ Logic:
 ### Modified API: `POST /games/scan`
 
 Response changes:
+
 - Add `archives` field (deduplicated archive file names at root level)
 - `newDirs` now includes both directories and archives
 - `sub_path` for archives uses filename (e.g., `RJ123456.7z`)
@@ -180,10 +193,10 @@ Response changes:
 
 ## API Summary
 
-| Method | Path | Change |
-|--------|------|--------|
-| POST | `/games/scan/expand` | **New** — expand-scan one level |
-| POST | `/games/scan` | **Modified** — add archives, support relative sub_path |
-| POST | `/games/scan/add` | **Modified** — support relative sub_path format |
-| GET | `/games/unscraped` | No change |
-| GET/PUT | `/settings/*` | No change |
+| Method  | Path                 | Change                                                 |
+| ------- | -------------------- | ------------------------------------------------------ |
+| POST    | `/games/scan/expand` | **New** — expand-scan one level                        |
+| POST    | `/games/scan`        | **Modified** — add archives, support relative sub_path |
+| POST    | `/games/scan/add`    | **Modified** — support relative sub_path format        |
+| GET     | `/games/unscraped`   | No change                                              |
+| GET/PUT | `/settings/*`        | No change                                              |

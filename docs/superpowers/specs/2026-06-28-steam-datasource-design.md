@@ -15,16 +15,19 @@
 ### API 选择：Steam Storefront API（公开接口）
 
 **端点**：
+
 - 搜索：`https://store.steampowered.com/api/storesearch/?term={keyword}&cc=cn&l=schinese`
 - 详情：`https://store.steampowered.com/api/appdetails?appids={appId}&cc=cn&l=schinese`
 
 **优势**：
+
 - ✅ 零配置（无需 API Key）
 - ✅ 官方维护，稳定可靠
 - ✅ 返回标准 JSON，易于集成
 - ✅ 中文支持（`cc=cn&l=schinese`）
 
 **限制**：
+
 - 速率限制约 20 请求/分钟（个人使用足够）
 
 ## 架构设计
@@ -47,7 +50,7 @@ server/
 #### steam.js 导出函数
 
 ```javascript
-export { searchSteam, fetchSteamDetail }
+export { searchSteam, fetchSteamDetail };
 ```
 
 **searchSteam(keyword)** → `Promise<Array<{ id, name, makerName, coverUrl }>>`
@@ -82,14 +85,15 @@ export { searchSteam, fetchSteamDetail }
 
 #### 新增端点（scraper.js）
 
-| 方法 | 路径 | 功能 |
-|------|------|------|
-| POST | `/scraper/steam/search` | 搜索 Steam 游戏 |
-| POST | `/scraper/steam/fetch` | 获取 Steam 游戏详情 |
+| 方法 | 路径                    | 功能                |
+| ---- | ----------------------- | ------------------- |
+| POST | `/scraper/steam/search` | 搜索 Steam 游戏     |
+| POST | `/scraper/steam/fetch`  | 获取 Steam 游戏详情 |
 
 **请求/响应格式**：
 
 **搜索**：
+
 ```json
 POST /scraper/steam/search
 Body: { "keyword": "Portal" }
@@ -97,6 +101,7 @@ Response: { "results": [{ "id": "570", "name": "DOTA 2", ... }] }
 ```
 
 **详情**：
+
 ```json
 POST /scraper/steam/fetch
 Body: { "id": "620" }  // AppID
@@ -108,6 +113,7 @@ Response: { "id": "620", "title": "Portal", "makers": ["Valve"], ... }
 修改 `/scraper/auto/search` 的数据源优先级逻辑：
 
 **当前逻辑（3 个数据源）**：
+
 ```
 hasRJ?        → [dlsite, bangumi, vndb]
 isMostlyEnglish? → [vndb, bangumi, dlsite]
@@ -115,6 +121,7 @@ isMostlyEnglish? → [vndb, bangumi, dlsite]
 ```
 
 **新逻辑（4 个数据源）**：
+
 ```
 hasRJ?        → [dlsite, bangumi, vndb, steam]
 isMostlyEnglish? → [steam, vndb, bangumi, dlsite]  // 🔥 Steam 提升至第一
@@ -122,6 +129,7 @@ isMostlyEnglish? → [steam, vndb, bangumi, dlsite]  // 🔥 Steam 提升至第�
 ```
 
 **策略说明**：
+
 - **英文游戏优先 Steam**：解决用户核心痛点（国际游戏覆盖不全）
 - **中文/日文保持不变**：不影响现有行为
 - **RJ 码仍优先 DLSite**：明确标识不改变
@@ -131,6 +139,7 @@ isMostlyEnglish? → [steam, vndb, bangumi, dlsite]  // 🔥 Steam 提升至第�
 ✅ **完全兼容** - 无需任何修改
 
 原因：
+
 1. `game_source` 表使用 `source_type: 'steam'` 存储来源
 2. Adopt 依赖标准化返回格式（已满足）
 3. 批量 adopt/batch 同样适用
@@ -221,11 +230,12 @@ adopt 流程写入 game_source (source_type='steam', source_id='1145360')
 
 ```javascript
 // fetchSteamDetail 返回的 tags 字段
-tags: data.data.tags?.map(tag => tag.name) || []
+tags: data.data.tags?.map((tag) => tag.name) || [];
 // 示例: ["Action", "RPG", "Indie", "Difficult"]
 ```
 
 **实现方式**：
+
 - 从 `appdetails` 响应的 `data.tags` 字段提取
 - 映射到标准格式的 `tags: Array<String>`
 - 写入 `game_tag` 表（通过现有 adopt 流程）
@@ -240,12 +250,12 @@ tags: data.data.tags?.map(tag => tag.name) || []
 const fetchSteamDetail = async (appId) => {
   // 优先尝试简体中文
   let detail = await fetchWithLocale(appId, 'cn', 'schinese');
-  
+
   // 中文缺失时 fallback 到英文
   if (!detail || !detail.title || detail.title === appId) {
     detail = await fetchWithLocale(appId, 'us', 'english');
   }
-  
+
   return detail;
 };
 
@@ -253,9 +263,9 @@ const fetchWithLocale = async (appId, cc, l) => {
   const url = `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=${cc}&l=${l}`;
   const response = await retryGet(url);
   const data = response.data[appId];
-  
+
   if (!data?.success) return null;
-  
+
   return {
     id: appId,
     title: data.data.name,
@@ -265,6 +275,7 @@ const fetchWithLocale = async (appId, cc, l) => {
 ```
 
 **Fallback 触发条件**：
+
 - `title` 为空或等于 AppID（纯数字）
 - `short_description` 为空或极短
 - `developers` 为空
@@ -295,7 +306,7 @@ const searchSteam = async (keyword) => {
       key: cacheKey,
       source: 'steam',
       keyword,
-      results
+      results,
     });
   }
 
@@ -304,6 +315,7 @@ const searchSteam = async (keyword) => {
 ```
 
 **缓存策略**：
+
 - **Key 格式**：`steam:{keyword}`（与 dlsite/bangumi/vndb 区分）
 - **过期机制**：永久有效（与 DLSite/VNDB/Bangumi 一致）
 - **失效方式**：通过 `/cache/search` DELETE 接口手动清理
@@ -318,10 +330,10 @@ const searchSteam = async (keyword) => {
 
 ## 变更清单
 
-| 操作 | 文件 | 改动量 | 说明 |
-|------|------|--------|------|
-| **新建** | `server/scraper/steam.js` | ~140 行 | 核心 API + Tags + Fallback + 缓存逻辑 |
-| **修改** | `server/routes/scraper.js` | +25 行 | +2 路由 + 更新 auto/search 策略 |
+| 操作     | 文件                       | 改动量  | 说明                                  |
+| -------- | -------------------------- | ------- | ------------------------------------- |
+| **新建** | `server/scraper/steam.js`  | ~140 行 | 核心 API + Tags + Fallback + 缓存逻辑 |
+| **修改** | `server/routes/scraper.js` | +25 行  | +2 路由 + 更新 auto/search 策略       |
 
 **总计**：1 个新文件 + 1 个文件微调
 

@@ -4,7 +4,13 @@ import fs from 'node:fs';
 import * as db from '../database/db.js';
 import { scanDirectory, expandDirectory } from '../scanner.js';
 import { ARCHIVE_EXTENSIONS, VOLUME_PATTERNS } from '../constants.js';
-import { createTask, executeMoveTask, executeExtractTask, executeCompressTask, activeTaskForGame } from '../tasks.js';
+import {
+  createTask,
+  executeMoveTask,
+  executeExtractTask,
+  executeCompressTask,
+  activeTaskForGame,
+} from '../tasks.js';
 
 // Settings that hold a list of paths. Anything that is not a JSON array is treated as
 // empty: a client can write an arbitrary value via PUT /api/settings/:key, and spreading
@@ -48,6 +54,8 @@ const shouldCompress = (sourcePath) => {
   }
   return { compress: true, reason: 'needs_compression' };
 };
+
+import { COVERS_DIR, imageExtension } from '../scraper/cover.js';
 
 const router = express.Router();
 
@@ -184,10 +192,8 @@ router.post('/check-conflicts', async (req, res, next) => {
     // Single batch query to fetch all existing sources at once (fixes N+1 performance issue)
     const allSourceKeys = Array.from(groups.keys());
     if (allSourceKeys.length > 0) {
-      let query = db
-        .knex('game_source as gs')
-        .join('game as g', 'g.id', 'gs.game_id');
-      
+      let query = db.knex('game_source as gs').join('game as g', 'g.id', 'gs.game_id');
+
       allSourceKeys.forEach((key, index) => {
         const [sourceType, sourceId] = key.split(':');
         if (index === 0) {
@@ -196,8 +202,13 @@ router.post('/check-conflicts', async (req, res, next) => {
           query = query.orWhere({ 'gs.source_type': sourceType, 'gs.source_id': sourceId });
         }
       });
-      
-      const allExisting = await query.select('gs.source_type', 'gs.source_id', 'gs.game_id', 'g.name as game_name');
+
+      const allExisting = await query.select(
+        'gs.source_type',
+        'gs.source_id',
+        'gs.game_id',
+        'g.name as game_name',
+      );
 
       // Group results by source key for O(1) lookup
       const existingMap = new Map();
@@ -240,13 +251,12 @@ router.post('/check-conflicts', async (req, res, next) => {
   }
 });
 
-// Ids of games that already have a scraped source. The batch scraper uses this to skip
-// games that were scraped by hand while the batch was still running.
+// Ids of games that already count as scraped. The batch scraper uses this to skip games
+// that were scraped (or given a cover) by hand while the batch was still running.
 // Must stay above '/:id'.
 router.get('/scraped-ids', async (_req, res, next) => {
   try {
-    const rows = await db.knex('game_source').distinct('game_id');
-    res.send(rows.map((r) => r.game_id));
+    res.send(await db.getScrapedIds());
   } catch (err) {
     next(err);
   }
@@ -271,20 +281,32 @@ router.post('/', async (req, res, next) => {
       return res.status(400).send({ error: 'name and sub_path are required' });
     }
     if (!library_id && !/^[a-zA-Z]:|^\\/.test(sub_path)) {
-      return res.status(400).send({ error: 'sub_path must be absolute when library_id is not provided' });
+      return res
+        .status(400)
+        .send({ error: 'sub_path must be absolute when library_id is not provided' });
     }
 
     let dirCreatedAt = null;
     try {
       const fullPath = library_id
-        ? path.join((await db.knex('library').where({ id: library_id }).first())?.path || '', sub_path)
+        ? path.join(
+            (await db.knex('library').where({ id: library_id }).first())?.path || '',
+            sub_path,
+          )
         : sub_path;
       dirCreatedAt = fs.statSync(fullPath).birthtime;
     } catch {
       // ignore if path not accessible
     }
 
-    const [id] = await db.insertGame({ name, library_id, sub_path, cover_path, description, dir_created_at: dirCreatedAt });
+    const [id] = await db.insertGame({
+      name,
+      library_id,
+      sub_path,
+      cover_path,
+      description,
+      dir_created_at: dirCreatedAt,
+    });
     const game = await db.getGameDetail(id);
     res.status(201).send(game);
   } catch (err) {
@@ -299,6 +321,58 @@ router.put('/:id', async (req, res, next) => {
     await db.updateGame(Number(id), { name, cover_path, description });
     const game = await db.getGameDetail(Number(id));
     res.send(game);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Drop-a-cover support for games no configured source carries. The dropped file is
+// validated by its content, never by its name, and the stored extension comes from that
+// same check - so a renamed executable, or an .svg (which can carry script and would be
+// served from our own origin), cannot end up stored as a cover.
+router.put('/:id/manual-cover', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { imagePath } = req.body;
+
+    if (!imagePath || typeof imagePath !== 'string' || !fs.existsSync(imagePath)) {
+      return res.status(400).send({ error: 'Invalid image path' });
+    }
+
+    const image = fs.readFileSync(imagePath);
+    const ext = imageExtension(image);
+    if (!ext) {
+      return res.status(400).send({ error: 'Not a supported image file' });
+    }
+
+    const game = await db.getGameDetail(id);
+    if (!game) {
+      return res.status(404).send({ error: 'Game not found' });
+    }
+
+    // cover_path holds the bare file name; the client builds the URL by prefixing
+    // /covers/ (see getCoversUrl), and /covers is a static mount. Storing a prefixed
+    // path here yields /covers//covers/<name> and a 404.
+    const previous = game.cover_path;
+    // A bare timestamp collides when two drops land in the same millisecond.
+    const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const filename = `manual_${id}_${stamp}${ext}`;
+    fs.writeFileSync(path.join(COVERS_DIR, filename), image);
+
+    await db.updateGame(id, { cover_path: filename });
+
+    // Only a previous manual file is ours to remove: a scraped cover is named after its
+    // source and can be shared by several games.
+    if (previous && previous !== filename && previous.startsWith('manual_')) {
+      try {
+        fs.rmSync(path.join(COVERS_DIR, previous), { force: true });
+      } catch (err) {
+        // The new cover is already in place, so this is untidiness rather than a failure.
+        console.warn(`[manual-cover] could not remove old cover ${previous}:`, err.message);
+      }
+    }
+
+    res.send(await db.getGameDetail(id));
   } catch (err) {
     next(err);
   }
@@ -387,12 +461,9 @@ router.post('/scan', async (req, res, next) => {
     const archivedFolders = await getArchivedFolders();
     const excludeList = [...blacklist, ...archived, ...archivedFolders];
     const excludeSet = new Set(excludeList);
-    const filteredDirs = excludeList.length > 0
-      ? dirs.filter((d) => !excludeSet.has(d))
-      : dirs;
-    const filteredArchives = excludeList.length > 0
-      ? archives.filter((a) => !excludeSet.has(a))
-      : archives;
+    const filteredDirs = excludeList.length > 0 ? dirs.filter((d) => !excludeSet.has(d)) : dirs;
+    const filteredArchives =
+      excludeList.length > 0 ? archives.filter((a) => !excludeSet.has(a)) : archives;
 
     const existingGames = await db
       .knex('game')
@@ -441,9 +512,7 @@ router.post('/scan/add', async (req, res, next) => {
         }
       }
       return {
-        name: d.includes('/') || d.includes('\\')
-          ? path.basename(d, path.extname(d))
-          : d,
+        name: d.includes('/') || d.includes('\\') ? path.basename(d, path.extname(d)) : d,
         library_id: libraryId,
         sub_path: d,
         dir_created_at: dirCreatedAt,
@@ -454,7 +523,9 @@ router.post('/scan/add', async (req, res, next) => {
     if (rows.length > 0) {
       const BATCH_SIZE = 100;
       for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-        const ids = await db.knex('game').insert(rows.slice(i, i + BATCH_SIZE), ['id', 'name', 'sub_path']);
+        const ids = await db
+          .knex('game')
+          .insert(rows.slice(i, i + BATCH_SIZE), ['id', 'name', 'sub_path']);
         inserted.push(...ids);
       }
     }
@@ -487,12 +558,22 @@ router.post('/scan/expand', async (req, res, next) => {
     const prefixedArchives = archives.map((a) => subPath + '/' + a);
 
     const allPaths = [...prefixedDirs, ...prefixedArchives];
-    const existingRows = allPaths.length > 0
-      ? await db.knex('game').where({ library_id: libraryId }).whereIn('sub_path', allPaths).select('sub_path')
-      : [];
+    const existingRows =
+      allPaths.length > 0
+        ? await db
+            .knex('game')
+            .where({ library_id: libraryId })
+            .whereIn('sub_path', allPaths)
+            .select('sub_path')
+        : [];
     const existingPaths = new Set(existingRows.map((r) => r.sub_path));
 
-    res.send({ dirs: prefixedDirs, archives: prefixedArchives, hasSubDirs, existingPaths: [...existingPaths] });
+    res.send({
+      dirs: prefixedDirs,
+      archives: prefixedArchives,
+      hasSubDirs,
+      existingPaths: [...existingPaths],
+    });
   } catch (err) {
     next(err);
   }
@@ -506,7 +587,10 @@ router.put('/:id/relocate', async (req, res, next) => {
       return res.status(400).send({ error: 'newPath is required' });
     }
 
-    const game = await db.knex('game').where({ id: Number(id) }).first();
+    const game = await db
+      .knex('game')
+      .where({ id: Number(id) })
+      .first();
     if (!game) {
       return res.status(404).send({ error: 'Game not found' });
     }
@@ -530,11 +614,17 @@ router.put('/:id/relocate', async (req, res, next) => {
 
     // Path traversal validation
     if (!path.isAbsolute(normalizedNew) || normalizedNew.includes('..')) {
-      return res.status(400).send({ error: 'Invalid path: must be absolute and cannot contain ..' });
+      return res
+        .status(400)
+        .send({ error: 'Invalid path: must be absolute and cannot contain ..' });
     }
 
     const currentFullPath = game.library_id
-      ? normalizePath((await db.knex('library').where({ id: game.library_id }).first())?.path || '') + '\\' + normalizePath(game.sub_path)
+      ? normalizePath(
+          (await db.knex('library').where({ id: game.library_id }).first())?.path || '',
+        ) +
+        '\\' +
+        normalizePath(game.sub_path)
       : normalizePath(game.sub_path);
 
     if (normalizedNew.toLowerCase() === currentFullPath.toLowerCase()) {
@@ -551,87 +641,27 @@ router.put('/:id/relocate', async (req, res, next) => {
         newLibraryId = lib.id;
         newSubPath = normalizedNew.substring(libNorm.length + 1);
         break;
-}
-  }
-
-  // Handle compression if requested - check rules first (will skip for archives)
-  if (compressFiles) {
-    const compressCheck = shouldCompress(currentFullPath);
-    if (!compressCheck.compress) {
-      return res.status(400).send({ error: `Compression not needed: ${compressCheck.reason}`, compressSkipped: true, reason: compressCheck.reason });
-    }
-
-    // Ensure target has .rar extension
-    const destArchive = normalizedNew.toLowerCase().endsWith('.rar') ? normalizedNew : normalizedNew + '.rar';
-    
-    // Check if target archive already exists
-    const destExists = fs.existsSync(destArchive);
-    if (destExists && !force) {
-      return res.status(409).send({ error: 'Target archive already exists', conflict: true });
-    }
-
-    const task = createTask('compress', {
-      source: currentFullPath,
-      dest: destArchive,
-      gameId: Number(id),
-      sourceDir: currentFullPath,
-      destArchive,
-      sourceSubPath: game.sub_path,
-    });
-
-    void executeCompressTask(task.id, currentFullPath, destArchive, Number(id), newLibraryId, path.basename(destArchive), game.sub_path);
-
-    return res.send({ operation: 'compress', taskId: task.id });
-  }
-
-  // Archive source: extraction is mandatory when target is directory
-  const ext = path.extname(currentFullPath).toLowerCase();
-  const isArchive = ARCHIVE_EXTENSIONS.has(ext);
-
-  if (isArchive) {
-    const destExists = fs.existsSync(normalizedNew);
-    if (destExists) {
-      const stat = fs.statSync(normalizedNew);
-      if (!stat.isDirectory()) {
-        return res.status(400).send({ error: 'Target path exists but is not a directory' });
       }
-      const files = fs.readdirSync(normalizedNew);
-      if (files.length > 0 && !force) {
-        return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
-      }
-    } else {
-      fs.mkdirSync(normalizedNew, { recursive: true });
     }
 
-    const task = createTask('extract', {
-      source: currentFullPath,
-      dest: normalizedNew,
-      gameId: Number(id),
-      archivePath: currentFullPath,
-      archiveSubPath: game.sub_path,
-    });
-
-    void executeExtractTask(task.id, currentFullPath, normalizedNew, Number(id), newLibraryId, newSubPath);
-
-    return res.send({ operation: 'extract', taskId: task.id });
-  }
-
-  if (!moveFiles) {
-      await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
-      const updated = await db.getGameDetail(Number(id));
-      return res.send({ ...updated, operation: 'update_only', taskId: null });
-    }
-
-    // Handle compression if requested - check rules BEFORE isArchive check
+    // Handle compression if requested - check rules first (will skip for archives)
     if (compressFiles) {
       const compressCheck = shouldCompress(currentFullPath);
       if (!compressCheck.compress) {
-        return res.status(400).send({ error: `Compression not needed: ${compressCheck.reason}`, compressSkipped: true, reason: compressCheck.reason });
+        return res
+          .status(400)
+          .send({
+            error: `Compression not needed: ${compressCheck.reason}`,
+            compressSkipped: true,
+            reason: compressCheck.reason,
+          });
       }
 
       // Ensure target has .rar extension
-      const destArchive = normalizedNew.toLowerCase().endsWith('.rar') ? normalizedNew : normalizedNew + '.rar';
-      
+      const destArchive = normalizedNew.toLowerCase().endsWith('.rar')
+        ? normalizedNew
+        : normalizedNew + '.rar';
+
       // Check if target archive already exists
       const destExists = fs.existsSync(destArchive);
       if (destExists && !force) {
@@ -647,7 +677,108 @@ router.put('/:id/relocate', async (req, res, next) => {
         sourceSubPath: game.sub_path,
       });
 
-      void executeCompressTask(task.id, currentFullPath, destArchive, Number(id), newLibraryId, path.basename(destArchive), game.sub_path);
+      void executeCompressTask(
+        task.id,
+        currentFullPath,
+        destArchive,
+        Number(id),
+        newLibraryId,
+        path.basename(destArchive),
+        game.sub_path,
+      );
+
+      return res.send({ operation: 'compress', taskId: task.id });
+    }
+
+    // Archive source: extraction is mandatory when target is directory
+    const ext = path.extname(currentFullPath).toLowerCase();
+    const isArchive = ARCHIVE_EXTENSIONS.has(ext);
+
+    if (isArchive) {
+      const destExists = fs.existsSync(normalizedNew);
+      if (destExists) {
+        const stat = fs.statSync(normalizedNew);
+        if (!stat.isDirectory()) {
+          return res.status(400).send({ error: 'Target path exists but is not a directory' });
+        }
+        const files = fs.readdirSync(normalizedNew);
+        if (files.length > 0 && !force) {
+          return res
+            .status(409)
+            .send({ error: 'Target path already exists and is not empty', conflict: true });
+        }
+      } else {
+        fs.mkdirSync(normalizedNew, { recursive: true });
+      }
+
+      const task = createTask('extract', {
+        source: currentFullPath,
+        dest: normalizedNew,
+        gameId: Number(id),
+        archivePath: currentFullPath,
+        archiveSubPath: game.sub_path,
+      });
+
+      void executeExtractTask(
+        task.id,
+        currentFullPath,
+        normalizedNew,
+        Number(id),
+        newLibraryId,
+        newSubPath,
+      );
+
+      return res.send({ operation: 'extract', taskId: task.id });
+    }
+
+    if (!moveFiles) {
+      await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
+      const updated = await db.getGameDetail(Number(id));
+      return res.send({ ...updated, operation: 'update_only', taskId: null });
+    }
+
+    // Handle compression if requested - check rules BEFORE isArchive check
+    if (compressFiles) {
+      const compressCheck = shouldCompress(currentFullPath);
+      if (!compressCheck.compress) {
+        return res
+          .status(400)
+          .send({
+            error: `Compression not needed: ${compressCheck.reason}`,
+            compressSkipped: true,
+            reason: compressCheck.reason,
+          });
+      }
+
+      // Ensure target has .rar extension
+      const destArchive = normalizedNew.toLowerCase().endsWith('.rar')
+        ? normalizedNew
+        : normalizedNew + '.rar';
+
+      // Check if target archive already exists
+      const destExists = fs.existsSync(destArchive);
+      if (destExists && !force) {
+        return res.status(409).send({ error: 'Target archive already exists', conflict: true });
+      }
+
+      const task = createTask('compress', {
+        source: currentFullPath,
+        dest: destArchive,
+        gameId: Number(id),
+        sourceDir: currentFullPath,
+        destArchive,
+        sourceSubPath: game.sub_path,
+      });
+
+      void executeCompressTask(
+        task.id,
+        currentFullPath,
+        destArchive,
+        Number(id),
+        newLibraryId,
+        path.basename(destArchive),
+        game.sub_path,
+      );
 
       return res.send({ operation: 'compress', taskId: task.id });
     }
@@ -663,7 +794,9 @@ router.put('/:id/relocate', async (req, res, next) => {
     if (destExists) {
       const files = fs.readdirSync(normalizedNew);
       if (files.length > 0 && !force) {
-        return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
+        return res
+          .status(409)
+          .send({ error: 'Target path already exists and is not empty', conflict: true });
       }
     }
 
@@ -678,7 +811,9 @@ router.put('/:id/relocate', async (req, res, next) => {
       if (destExists) {
         const files = fs.readdirSync(normalizedNew);
         if (files.length > 0 && !force) {
-          return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
+          return res
+            .status(409)
+            .send({ error: 'Target path already exists and is not empty', conflict: true });
         }
       }
       try {
@@ -697,7 +832,14 @@ router.put('/:id/relocate', async (req, res, next) => {
       gameId: Number(id),
     });
 
-    void executeMoveTask(task.id, currentFullPath, normalizedNew, Number(id), newLibraryId, newSubPath);
+    void executeMoveTask(
+      task.id,
+      currentFullPath,
+      normalizedNew,
+      Number(id),
+      newLibraryId,
+      newSubPath,
+    );
 
     res.send({ operation: 'move', taskId: task.id });
   } catch (err) {

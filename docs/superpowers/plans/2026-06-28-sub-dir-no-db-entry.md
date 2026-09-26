@@ -12,19 +12,20 @@
 
 ## 文件结构
 
-| 文件 | 职责 | 操作 |
-|------|------|------|
-| `server/database/schema.js` | 建表 DDL | 修改：adopt_cache 主键改为 (library_id, sub_path)，加 library_id + sub_path 列 |
-| `server/database/init.js` | 迁移逻辑 | 修改：加迁移 v5 重建 adopt_cache 表 |
-| `server/database/db.js` | 数据访问层 | 修改：adopt_cache 函数支持 sub_path 查询/删除/迁移 |
-| `server/routes/cache.js` | 缓存 API 路由 | 修改：adopt 端点支持混合查询/删除，新增 /adopt/migrate 端点 |
-| `src/components/ScannerDialog.vue` | 扫描对话框 | 修改：去掉临时 ID，统一用 libraryId+subPath 做缓存 |
+| 文件                               | 职责          | 操作                                                                           |
+| ---------------------------------- | ------------- | ------------------------------------------------------------------------------ |
+| `server/database/schema.js`        | 建表 DDL      | 修改：adopt_cache 主键改为 (library_id, sub_path)，加 library_id + sub_path 列 |
+| `server/database/init.js`          | 迁移逻辑      | 修改：加迁移 v5 重建 adopt_cache 表                                            |
+| `server/database/db.js`            | 数据访问层    | 修改：adopt_cache 函数支持 sub_path 查询/删除/迁移                             |
+| `server/routes/cache.js`           | 缓存 API 路由 | 修改：adopt 端点支持混合查询/删除，新增 /adopt/migrate 端点                    |
+| `src/components/ScannerDialog.vue` | 扫描对话框    | 修改：去掉临时 ID，统一用 libraryId+subPath 做缓存                             |
 
 ---
 
 ### 任务 1：后端 — 修改 adopt_cache 表结构
 
 **文件：**
+
 - 修改：`server/database/schema.js:80-93`
 - 修改：`server/database/init.js`（在 v4 迁移之前添加 v5）
 
@@ -57,11 +58,11 @@
 在 `server/database/init.js` 中，找到 `const v4 = await knex('setting').where({ key: 'migration_v4' }).first();` 这一行，在其**前面**插入：
 
 ```js
-  const v5 = await knex('setting').where({ key: 'migration_v5' }).first();
-  if (!v5) {
-    console.log(' * Running migration v5: rebuild adopt_cache with library_id + sub_path...');
-    await knex.raw('PRAGMA foreign_keys = OFF');
-    await knex.raw(`
+const v5 = await knex('setting').where({ key: 'migration_v5' }).first();
+if (!v5) {
+  console.log(' * Running migration v5: rebuild adopt_cache with library_id + sub_path...');
+  await knex.raw('PRAGMA foreign_keys = OFF');
+  await knex.raw(`
       CREATE TABLE adopt_cache_new (
         game_id INTEGER NOT NULL DEFAULT 0,
         library_id INTEGER NOT NULL DEFAULT 0,
@@ -80,14 +81,15 @@
         PRIMARY KEY (library_id, sub_path)
       )
     `);
-    await knex.raw('INSERT INTO adopt_cache_new (game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at) SELECT game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at FROM adopt_cache');
-    await knex.raw('DROP TABLE adopt_cache');
-    await knex.raw('ALTER TABLE adopt_cache_new RENAME TO adopt_cache');
-    await knex.raw('PRAGMA foreign_keys = ON');
-    await knex('setting').insert({ key: 'migration_v5', value: '1' }).onConflict('key').ignore();
-    console.log(' * Migration v5 done.');
-  }
-
+  await knex.raw(
+    'INSERT INTO adopt_cache_new (game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at) SELECT game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at FROM adopt_cache',
+  );
+  await knex.raw('DROP TABLE adopt_cache');
+  await knex.raw('ALTER TABLE adopt_cache_new RENAME TO adopt_cache');
+  await knex.raw('PRAGMA foreign_keys = ON');
+  await knex('setting').insert({ key: 'migration_v5', value: '1' }).onConflict('key').ignore();
+  console.log(' * Migration v5 done.');
+}
 ```
 
 同时，在 `init.js` 的 `TABLE_DDL` 对象中，将 adopt_cache 的 DDL 替换为与 schema.js 一致的新结构：
@@ -129,6 +131,7 @@ git commit -m "feat: adopt_cache table uses (library_id, sub_path) as primary ke
 ### 任务 2：后端 — 修改 db.js adopt_cache 函数
 
 **文件：**
+
 - 修改：`server/database/db.js:331-368`（adopt_cache 相关函数）
 - 修改：`server/database/db.js:404-439`（export 列表）
 
@@ -150,7 +153,9 @@ const getAdoptCache = async (gameIds) => {
 
 const getAdoptCacheBySubPaths = async (libraryId, subPaths) => {
   if (!libraryId || subPaths.length === 0) return [];
-  const rows = await db('adopt_cache').where({ library_id: libraryId }).whereIn('sub_path', subPaths);
+  const rows = await db('adopt_cache')
+    .where({ library_id: libraryId })
+    .whereIn('sub_path', subPaths);
   return rows.map((r) => ({
     ...r,
     makers: JSON.parse(r.makers),
@@ -181,7 +186,20 @@ const getAdoptCacheMixed = async (gameIds, subPathEntries) => {
 将 `setAdoptCache` 函数替换为：
 
 ```js
-const setAdoptCache = async ({ gameId, libraryId, subPath, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }) => {
+const setAdoptCache = async ({
+  gameId,
+  libraryId,
+  subPath,
+  sourceType,
+  sourceId,
+  sourceUrl,
+  name,
+  coverUrl,
+  makers,
+  genres,
+  tags,
+  description,
+}) => {
   const data = {
     game_id: gameId || 0,
     library_id: libraryId || 0,
@@ -232,7 +250,9 @@ const deleteAdoptCacheMixed = async (gameIds, subPathEntries) => {
 
 const migrateAdoptCacheGameId = async (libraryId, subPathToGameId) => {
   for (const [subPath, gameId] of Object.entries(subPathToGameId)) {
-    await db('adopt_cache').where({ library_id: libraryId, sub_path: subPath }).update({ game_id: gameId });
+    await db('adopt_cache')
+      .where({ library_id: libraryId, sub_path: subPath })
+      .update({ game_id: gameId });
   }
 };
 ```
@@ -274,6 +294,7 @@ git commit -m "feat: adopt_cache db functions support sub_path queries"
 ### 任务 3：后端 — 修改 cache.js API 端点
 
 **文件：**
+
 - 修改：`server/routes/cache.js`（GET/POST/DELETE /adopt + 新增 POST /adopt/migrate）
 
 - [ ] **步骤 1：替换 GET /adopt 端点**
@@ -284,7 +305,12 @@ git commit -m "feat: adopt_cache db functions support sub_path queries"
 router.get('/adopt', async (req, res, next) => {
   try {
     const { gameIds, libraryId, subPaths } = req.query;
-    const gameIdList = gameIds ? String(gameIds).split(',').map(Number).filter((n) => !isNaN(n) && n > 0) : [];
+    const gameIdList = gameIds
+      ? String(gameIds)
+          .split(',')
+          .map(Number)
+          .filter((n) => !isNaN(n) && n > 0)
+      : [];
     const subPathList = subPaths ? String(subPaths).split(',') : [];
     const libId = libraryId ? Number(libraryId) : 0;
 
@@ -292,7 +318,8 @@ router.get('/adopt', async (req, res, next) => {
       return res.send({ entries: [] });
     }
 
-    const subPathEntries = libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
+    const subPathEntries =
+      libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
     const entries = await db.getAdoptCacheMixed(gameIdList, subPathEntries);
     res.send({ entries });
   } catch (err) {
@@ -308,14 +335,40 @@ router.get('/adopt', async (req, res, next) => {
 ```js
 router.post('/adopt', async (req, res, next) => {
   try {
-    const { gameId, libraryId, subPath, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description } = req.body;
+    const {
+      gameId,
+      libraryId,
+      subPath,
+      sourceType,
+      sourceId,
+      sourceUrl,
+      name,
+      coverUrl,
+      makers,
+      genres,
+      tags,
+      description,
+    } = req.body;
     if (!sourceType || !sourceId) {
       return res.status(400).send({ error: 'sourceType, sourceId are required' });
     }
     if (!gameId && !libraryId && !subPath) {
       return res.status(400).send({ error: 'gameId or libraryId + subPath is required' });
     }
-    await db.setAdoptCache({ gameId, libraryId, subPath, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description });
+    await db.setAdoptCache({
+      gameId,
+      libraryId,
+      subPath,
+      sourceType,
+      sourceId,
+      sourceUrl,
+      name,
+      coverUrl,
+      makers,
+      genres,
+      tags,
+      description,
+    });
     res.send({ ok: true });
   } catch (err) {
     next(err);
@@ -350,7 +403,12 @@ router.post('/adopt/migrate', async (req, res, next) => {
 router.delete('/adopt', async (req, res, next) => {
   try {
     const { gameIds, libraryId, subPaths } = req.query;
-    const gameIdList = gameIds ? String(gameIds).split(',').map(Number).filter((n) => !isNaN(n) && n > 0) : [];
+    const gameIdList = gameIds
+      ? String(gameIds)
+          .split(',')
+          .map(Number)
+          .filter((n) => !isNaN(n) && n > 0)
+      : [];
     const subPathList = subPaths ? String(subPaths).split(',') : [];
     const libId = libraryId ? Number(libraryId) : 0;
 
@@ -358,7 +416,8 @@ router.delete('/adopt', async (req, res, next) => {
       return res.send({ ok: true });
     }
 
-    const subPathEntries = libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
+    const subPathEntries =
+      libId > 0 ? subPathList.map((sp) => ({ libraryId: libId, subPath: sp })) : [];
     await db.deleteAdoptCacheMixed(gameIdList, subPathEntries);
     res.send({ ok: true });
   } catch (err) {
@@ -379,6 +438,7 @@ git commit -m "feat: adopt cache API supports libraryId+subPath queries"
 ### 任务 4：前端 — 去掉临时 ID 机制，统一缓存操作
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 这是最大的任务，按修改位置分为多个步骤。
@@ -456,10 +516,15 @@ const preloadAdoptCache = async () => {
     if (!params.gameIds && !params.subPaths) return;
     const res = await api.get('/cache/adopt', { params });
     const entries: AdoptCacheEntry[] = res.data.entries || [];
-    const adoptByGameId = new Map(entries.filter((e) => e.game_id > 0).map((e): [number, AdoptCacheEntry] => [e.game_id, e]));
-    const adoptBySubPath = new Map(entries.filter((e) => e.sub_path).map((e): [string, AdoptCacheEntry] => [e.sub_path, e]));
+    const adoptByGameId = new Map(
+      entries.filter((e) => e.game_id > 0).map((e): [number, AdoptCacheEntry] => [e.game_id, e]),
+    );
+    const adoptBySubPath = new Map(
+      entries.filter((e) => e.sub_path).map((e): [string, AdoptCacheEntry] => [e.sub_path, e]),
+    );
     for (const row of allRows) {
-      const cached = row.gameId > 0 ? adoptByGameId.get(row.gameId) : adoptBySubPath.get(row.subPath);
+      const cached =
+        row.gameId > 0 ? adoptByGameId.get(row.gameId) : adoptBySubPath.get(row.subPath);
       if (cached) {
         row.source = cached.source_type as SourceType;
         row.searchResult = {
@@ -500,78 +565,80 @@ const preloadAdoptCache = async () => {
 在 `expandRow` 末尾，搜索缓存预加载之后，添加 adopt 缓存预加载。将：
 
 ```typescript
-    const newRows = row.children;
-    if (newRows.length > 0) {
-      const keywords = newRows.map((r) => r.searchKeyword || r.name);
-      try {
-        const cacheRes = await api.post('/cache/search/preload', { keywords });
-        const entries = cacheRes.data.entries || [];
-        for (const entry of entries) {
-          searchCache.set(entry.key, { source: entry.source, results: entry.results });
-        }
-      } catch {
-        // preload failure is non-critical
-      }
+const newRows = row.children;
+if (newRows.length > 0) {
+  const keywords = newRows.map((r) => r.searchKeyword || r.name);
+  try {
+    const cacheRes = await api.post('/cache/search/preload', { keywords });
+    const entries = cacheRes.data.entries || [];
+    for (const entry of entries) {
+      searchCache.set(entry.key, { source: entry.source, results: entry.results });
     }
+  } catch {
+    // preload failure is non-critical
+  }
+}
 ```
 
 替换为：
 
 ```typescript
-    const newRows = row.children;
-    if (newRows.length > 0) {
-      const keywords = newRows.map((r) => r.searchKeyword || r.name);
-      try {
-        const cacheRes = await api.post('/cache/search/preload', { keywords });
-        const entries = cacheRes.data.entries || [];
-        for (const entry of entries) {
-          searchCache.set(entry.key, { source: entry.source, results: entry.results });
-        }
-      } catch {
-        // preload failure is non-critical
-      }
-      if (selectedLibrary.value) {
-        try {
-          const subPathList = newRows.map((r) => r.subPath);
-          const adoptRes = await api.get('/cache/adopt', {
-            params: { libraryId: selectedLibrary.value, subPaths: subPathList.join(',') },
-          });
-          const adoptEntries: AdoptCacheEntry[] = adoptRes.data.entries || [];
-          const adoptBySubPath = new Map(adoptEntries.map((e): [string, AdoptCacheEntry] => [e.sub_path, e]));
-          for (const child of newRows) {
-            const cached = adoptBySubPath.get(child.subPath);
-            if (cached) {
-              child.source = cached.source_type as SourceType;
-              child.searchResult = {
-                id: cached.source_id,
-                name: cached.name || child.name,
-                makerName: '',
-                coverUrl: cached.cover_url || '',
-              };
-              child.adoptData = {
-                source: cached.source_type as SourceType,
-                sourceId: cached.source_id,
-                name: cached.name || child.name,
-                makerName: '',
-                coverUrl: cached.cover_url || '',
-                detail: {
-                  id: cached.source_id,
-                  title: cached.name || child.name,
-                  coverURL: cached.cover_url || '',
-                  makers: cached.makers || [],
-                  genres: cached.genres || [],
-                  tags: cached.tags || [],
-                  description: cached.description || '',
-                },
-              };
-              child.status = 'adopted';
-            }
-          }
-        } catch {
-          // adopt cache preload failure is non-critical
-        }
-      }
+const newRows = row.children;
+if (newRows.length > 0) {
+  const keywords = newRows.map((r) => r.searchKeyword || r.name);
+  try {
+    const cacheRes = await api.post('/cache/search/preload', { keywords });
+    const entries = cacheRes.data.entries || [];
+    for (const entry of entries) {
+      searchCache.set(entry.key, { source: entry.source, results: entry.results });
     }
+  } catch {
+    // preload failure is non-critical
+  }
+  if (selectedLibrary.value) {
+    try {
+      const subPathList = newRows.map((r) => r.subPath);
+      const adoptRes = await api.get('/cache/adopt', {
+        params: { libraryId: selectedLibrary.value, subPaths: subPathList.join(',') },
+      });
+      const adoptEntries: AdoptCacheEntry[] = adoptRes.data.entries || [];
+      const adoptBySubPath = new Map(
+        adoptEntries.map((e): [string, AdoptCacheEntry] => [e.sub_path, e]),
+      );
+      for (const child of newRows) {
+        const cached = adoptBySubPath.get(child.subPath);
+        if (cached) {
+          child.source = cached.source_type as SourceType;
+          child.searchResult = {
+            id: cached.source_id,
+            name: cached.name || child.name,
+            makerName: '',
+            coverUrl: cached.cover_url || '',
+          };
+          child.adoptData = {
+            source: cached.source_type as SourceType,
+            sourceId: cached.source_id,
+            name: cached.name || child.name,
+            makerName: '',
+            coverUrl: cached.cover_url || '',
+            detail: {
+              id: cached.source_id,
+              title: cached.name || child.name,
+              coverURL: cached.cover_url || '',
+              makers: cached.makers || [],
+              genres: cached.genres || [],
+              tags: cached.tags || [],
+              description: cached.description || '',
+            },
+          };
+          child.status = 'adopted';
+        }
+      }
+    } catch {
+      // adopt cache preload failure is non-critical
+    }
+  }
+}
 ```
 
 - [ ] **步骤 5：修改 onAdopted 函数**
@@ -615,20 +682,22 @@ const preloadAdoptCache = async () => {
 const saveAdoptCache = (row: ScanRow) => {
   if (!row.adoptData) return;
   const d = row.adoptData;
-  api.post('/cache/adopt', {
-    gameId: row.gameId || undefined,
-    libraryId: selectedLibrary.value || undefined,
-    subPath: row.subPath,
-    sourceType: d.source,
-    sourceId: d.sourceId,
-    sourceUrl: getSourceUrl(d.source, d.sourceId),
-    name: d.detail.title,
-    coverUrl: d.detail.coverURL,
-    makers: d.detail.makers,
-    genres: d.detail.genres,
-    tags: d.detail.tags,
-    description: d.detail.description,
-  }).catch(() => {});
+  api
+    .post('/cache/adopt', {
+      gameId: row.gameId || undefined,
+      libraryId: selectedLibrary.value || undefined,
+      subPath: row.subPath,
+      sourceType: d.source,
+      sourceId: d.sourceId,
+      sourceUrl: getSourceUrl(d.source, d.sourceId),
+      name: d.detail.title,
+      coverUrl: d.detail.coverURL,
+      makers: d.detail.makers,
+      genres: d.detail.genres,
+      tags: d.detail.tags,
+      description: d.detail.description,
+    })
+    .catch(() => {});
 };
 ```
 
@@ -637,26 +706,26 @@ const saveAdoptCache = (row: ScanRow) => {
 将 `discardRow` 函数中的：
 
 ```typescript
-  row.adoptData = null;
-  if (!isTempId(row.gameId)) {
-    api.delete('/cache/adopt', { params: { gameIds: row.gameId } }).catch(() => {});
-  }
+row.adoptData = null;
+if (!isTempId(row.gameId)) {
+  api.delete('/cache/adopt', { params: { gameIds: row.gameId } }).catch(() => {});
+}
 ```
 
 替换为：
 
 ```typescript
-  row.adoptData = null;
-  const params: Record<string, string> = {};
-  if (row.gameId > 0) {
-    params.gameIds = String(row.gameId);
-  } else if (selectedLibrary.value) {
-    params.libraryId = String(selectedLibrary.value);
-    params.subPaths = row.subPath;
-  }
-  if (params.gameIds || params.subPaths) {
-    api.delete('/cache/adopt', { params }).catch(() => {});
-  }
+row.adoptData = null;
+const params: Record<string, string> = {};
+if (row.gameId > 0) {
+  params.gameIds = String(row.gameId);
+} else if (selectedLibrary.value) {
+  params.libraryId = String(selectedLibrary.value);
+  params.subPaths = row.subPath;
+}
+if (params.gameIds || params.subPaths) {
+  api.delete('/cache/adopt', { params }).catch(() => {});
+}
 ```
 
 - [ ] **步骤 8：修改 forceRefresh 函数**
@@ -664,26 +733,26 @@ const saveAdoptCache = (row: ScanRow) => {
 将 `forceRefresh` 中的：
 
 ```typescript
-    const realGameIds = allRows.filter((r) => !isTempId(r.gameId)).map((r) => r.gameId);
-    if (realGameIds.length > 0) {
-      await api.delete('/cache/adopt', { params: { gameIds: realGameIds.join(',') } });
-    }
+const realGameIds = allRows.filter((r) => !isTempId(r.gameId)).map((r) => r.gameId);
+if (realGameIds.length > 0) {
+  await api.delete('/cache/adopt', { params: { gameIds: realGameIds.join(',') } });
+}
 ```
 
 替换为：
 
 ```typescript
-    const realIdRows = allRows.filter((r) => r.gameId > 0);
-    const tempIdRows = allRows.filter((r) => r.gameId === 0);
-    const params: Record<string, string> = {};
-    if (realIdRows.length > 0) params.gameIds = realIdRows.map((r) => r.gameId).join(',');
-    if (tempIdRows.length > 0 && selectedLibrary.value) {
-      params.libraryId = String(selectedLibrary.value);
-      params.subPaths = tempIdRows.map((r) => r.subPath).join(',');
-    }
-    if (params.gameIds || params.subPaths) {
-      await api.delete('/cache/adopt', { params });
-    }
+const realIdRows = allRows.filter((r) => r.gameId > 0);
+const tempIdRows = allRows.filter((r) => r.gameId === 0);
+const params: Record<string, string> = {};
+if (realIdRows.length > 0) params.gameIds = realIdRows.map((r) => r.gameId).join(',');
+if (tempIdRows.length > 0 && selectedLibrary.value) {
+  params.libraryId = String(selectedLibrary.value);
+  params.subPaths = tempIdRows.map((r) => r.subPath).join(',');
+}
+if (params.gameIds || params.subPaths) {
+  await api.delete('/cache/adopt', { params });
+}
 ```
 
 - [ ] **步骤 9：修改 doSubmit 函数**
@@ -691,34 +760,34 @@ const saveAdoptCache = (row: ScanRow) => {
 将 `doSubmit` 中的：
 
 ```typescript
-    const adoptedGameIds = games.map((g) => g.gameId);
-    if (adoptedGameIds.length > 0) {
-      try {
-        await api.delete('/cache/adopt', { params: { gameIds: adoptedGameIds.join(',') } });
-      } catch {
-        // adopt cache delete failure is non-critical
-      }
-    }
+const adoptedGameIds = games.map((g) => g.gameId);
+if (adoptedGameIds.length > 0) {
+  try {
+    await api.delete('/cache/adopt', { params: { gameIds: adoptedGameIds.join(',') } });
+  } catch {
+    // adopt cache delete failure is non-critical
+  }
+}
 ```
 
 替换为：
 
 ```typescript
-    const adoptedGameIds = games.map((g) => g.gameId);
-    const adoptedSubPaths = games.map((g) => g.subPath).filter(Boolean);
-    const delParams: Record<string, string> = {};
-    if (adoptedGameIds.length > 0) delParams.gameIds = adoptedGameIds.join(',');
-    if (adoptedSubPaths.length > 0 && selectedLibrary.value) {
-      delParams.libraryId = String(selectedLibrary.value);
-      delParams.subPaths = adoptedSubPaths.join(',');
-    }
-    if (delParams.gameIds || delParams.subPaths) {
-      try {
-        await api.delete('/cache/adopt', { params: delParams });
-      } catch {
-        // adopt cache delete failure is non-critical
-      }
-    }
+const adoptedGameIds = games.map((g) => g.gameId);
+const adoptedSubPaths = games.map((g) => g.subPath).filter(Boolean);
+const delParams: Record<string, string> = {};
+if (adoptedGameIds.length > 0) delParams.gameIds = adoptedGameIds.join(',');
+if (adoptedSubPaths.length > 0 && selectedLibrary.value) {
+  delParams.libraryId = String(selectedLibrary.value);
+  delParams.subPaths = adoptedSubPaths.join(',');
+}
+if (delParams.gameIds || delParams.subPaths) {
+  try {
+    await api.delete('/cache/adopt', { params: delParams });
+  } catch {
+    // adopt cache delete failure is non-critical
+  }
+}
 ```
 
 - [ ] **步骤 10：修改 submitAdopted 函数**
@@ -726,64 +795,68 @@ const saveAdoptCache = (row: ScanRow) => {
 将 `submitAdopted` 中的：
 
 ```typescript
-  const staleRows = flattenAllRows(scanResults.value).filter((r) => r.status === 'stale' && !isTempId(r.gameId));
+const staleRows = flattenAllRows(scanResults.value).filter(
+  (r) => r.status === 'stale' && !isTempId(r.gameId),
+);
 ```
 
 替换为：
 
 ```typescript
-  const staleRows = flattenAllRows(scanResults.value).filter((r) => r.status === 'stale' && r.gameId > 0);
+const staleRows = flattenAllRows(scanResults.value).filter(
+  (r) => r.status === 'stale' && r.gameId > 0,
+);
 ```
 
 将 `submitAdopted` 中的：
 
 ```typescript
-    const tempRows = adoptedRows.filter((r) => isTempId(r.gameId));
-    if (tempRows.length > 0 && selectedLibrary.value) {
-      const addRes = await api.post('/games/scan/add', {
-        libraryId: selectedLibrary.value,
-        dirs: tempRows.map((r) => r.subPath),
-      });
-      const inserted: { id: number; sub_path: string }[] = addRes.data.games || [];
-      const idMap = new Map(inserted.map((g) => [g.sub_path, g.id]));
-      for (const row of tempRows) {
-        const realId = idMap.get(row.subPath);
-        if (realId !== undefined) {
-          row.gameId = realId;
-        }
-      }
+const tempRows = adoptedRows.filter((r) => isTempId(r.gameId));
+if (tempRows.length > 0 && selectedLibrary.value) {
+  const addRes = await api.post('/games/scan/add', {
+    libraryId: selectedLibrary.value,
+    dirs: tempRows.map((r) => r.subPath),
+  });
+  const inserted: { id: number; sub_path: string }[] = addRes.data.games || [];
+  const idMap = new Map(inserted.map((g) => [g.sub_path, g.id]));
+  for (const row of tempRows) {
+    const realId = idMap.get(row.subPath);
+    if (realId !== undefined) {
+      row.gameId = realId;
     }
+  }
+}
 ```
 
 替换为：
 
 ```typescript
-    const tempRows = adoptedRows.filter((r) => r.gameId === 0);
-    if (tempRows.length > 0 && selectedLibrary.value) {
-      const addRes = await api.post('/games/scan/add', {
-        libraryId: selectedLibrary.value,
-        dirs: tempRows.map((r) => r.subPath),
-      });
-      const inserted: { id: number; sub_path: string }[] = addRes.data.games || [];
-      const idMap = new Map(inserted.map((g) => [g.sub_path, g.id]));
-      for (const row of tempRows) {
-        const realId = idMap.get(row.subPath);
-        if (realId !== undefined) {
-          row.gameId = realId;
-        }
-      }
-      const subPathToGameId: Record<string, number> = {};
-      for (const row of tempRows) {
-        if (row.gameId > 0) subPathToGameId[row.subPath] = row.gameId;
-      }
-      if (Object.keys(subPathToGameId).length > 0) {
-        try {
-          await api.post('/cache/adopt/migrate', { libraryId: selectedLibrary.value, subPathToGameId });
-        } catch {
-          // migration failure is non-critical
-        }
-      }
+const tempRows = adoptedRows.filter((r) => r.gameId === 0);
+if (tempRows.length > 0 && selectedLibrary.value) {
+  const addRes = await api.post('/games/scan/add', {
+    libraryId: selectedLibrary.value,
+    dirs: tempRows.map((r) => r.subPath),
+  });
+  const inserted: { id: number; sub_path: string }[] = addRes.data.games || [];
+  const idMap = new Map(inserted.map((g) => [g.sub_path, g.id]));
+  for (const row of tempRows) {
+    const realId = idMap.get(row.subPath);
+    if (realId !== undefined) {
+      row.gameId = realId;
     }
+  }
+  const subPathToGameId: Record<string, number> = {};
+  for (const row of tempRows) {
+    if (row.gameId > 0) subPathToGameId[row.subPath] = row.gameId;
+  }
+  if (Object.keys(subPathToGameId).length > 0) {
+    try {
+      await api.post('/cache/adopt/migrate', { libraryId: selectedLibrary.value, subPathToGameId });
+    } catch {
+      // migration failure is non-critical
+    }
+  }
+}
 ```
 
 将 `submitAdopted` 中构建 `SubmitGame` 的 `return {` 块里，在 `gameId: row.gameId,` 后面添加一行：
@@ -795,6 +868,7 @@ const saveAdoptCache = (row: ScanRow) => {
 - [ ] **步骤 11：验证无残留 isTempId/nextTempId 引用**
 
 搜索 `ScannerDialog.vue` 中是否还有 `isTempId` 或 `nextTempId` 的引用。如果有，按上述规则替换：
+
 - `isTempId(r.gameId)` → `r.gameId === 0`（判断子目录行）
 - `!isTempId(r.gameId)` → `r.gameId > 0`（判断已入库行）
 - `nextTempId()` → `0`

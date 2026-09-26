@@ -36,15 +36,11 @@ const fetchWithLocale = async (appId, locale) => {
     id: appId,
     title: appData.name || '',
     coverURL: appData.header_image || '',
-    makers: Array.isArray(appData.developers)
-      ? [...new Set(appData.developers)]
-      : [],
+    makers: Array.isArray(appData.developers) ? [...new Set(appData.developers)] : [],
     genres: Array.isArray(appData.genres)
       ? appData.genres.map((g) => g.description).filter(Boolean)
       : [],
-    tags: Array.isArray(appData.tags)
-      ? appData.tags.map((t) => t.name).filter(Boolean)
-      : [],
+    tags: Array.isArray(appData.tags) ? appData.tags.map((t) => t.name).filter(Boolean) : [],
     description: stripHtmlTags(appData.short_description || ''),
   };
 };
@@ -74,12 +70,7 @@ const searchSteam = async (keyword) => {
 const fetchSteamDetail = async (appId) => {
   let detail = await fetchWithLocale(appId, STEAM_LOCALE_CN);
 
-  if (
-    !detail ||
-    !detail.title ||
-    detail.title === appId ||
-    detail.title.match(/^\d+$/)
-  ) {
+  if (!detail || !detail.title || detail.title === appId || detail.title.match(/^\d+$/)) {
     detail = await fetchWithLocale(appId, STEAM_LOCALE_EN);
   }
 

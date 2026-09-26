@@ -67,10 +67,7 @@ const visibleRange = computed(() => {
   const rawStart = Math.floor(scrollTop.value / stride) - props.bufferRows;
   const startRow = Math.max(0, rawStart);
   const visibleRows = Math.ceil(containerHeight.value / stride);
-  const endRow = Math.min(
-    totalRows.value,
-    startRow + visibleRows + 2 * props.bufferRows,
-  );
+  const endRow = Math.min(totalRows.value, startRow + visibleRows + 2 * props.bufferRows);
   return { startRow, endRow };
 });
 

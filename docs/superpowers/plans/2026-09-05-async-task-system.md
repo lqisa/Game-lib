@@ -22,9 +22,11 @@
 ### Task 1: Backend — Task Manager Core (`server/tasks.js`)
 
 **Files:**
+
 - Create: `server/tasks.js`
 
 **Interfaces:**
+
 - Consumes: None
 - Produces: `createTask(type, meta)`, `getTask(id)`, `getAllTasks()`, `updateTask(id, patch)`, `cancelTask(id)`, `removeTask(id)`, `hasRunningMoveTasks()`, `hasRunningTasks()`, `onTaskChange(callback)`, `attachChildProcess(id, child)`
 
@@ -45,7 +47,10 @@ const createTask = (type, meta) => {
     id: randomUUID(),
     type,
     status: 'pending',
-    label: type === 'move' ? `Moving: ${meta.source.split('\\').pop()}` : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
+    label:
+      type === 'move'
+        ? `Moving: ${meta.source.split('\\').pop()}`
+        : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
     progress: 0,
     detail: 'Waiting...',
     error: null,
@@ -93,7 +98,8 @@ const removeTask = (id) => {
   tasks.delete(id);
 };
 
-const hasRunningMoveTasks = () => [...tasks.values()].some((t) => t.status === 'running' && t.type === 'move');
+const hasRunningMoveTasks = () =>
+  [...tasks.values()].some((t) => t.status === 'running' && t.type === 'move');
 
 const hasRunningTasks = () => [...tasks.values()].some((t) => t.status === 'running');
 
@@ -138,10 +144,12 @@ git commit -m "feat: add in-memory task manager core"
 ### Task 2: Backend — Task Routes + SSE (`server/routes/task.js`)
 
 **Files:**
+
 - Create: `server/routes/task.js`
 - Modify: `server/routes/index.js`
 
 **Interfaces:**
+
 - Consumes: `getAllTasks`, `cancelTask`, `removeTask`, `onTaskChange` from `server/tasks.js`
 - Produces: `GET /api/tasks`, `DELETE /api/tasks/:id`, `GET /api/tasks/events` (SSE)
 
@@ -236,9 +244,11 @@ git commit -m "feat: add task routes with SSE endpoint"
 ### Task 3: Backend — robocopy Move Executor
 
 **Files:**
+
 - Modify: `server/tasks.js`
 
 **Interfaces:**
+
 - Consumes: `createTask`, `updateTask`, `attachChildProcess` from `server/tasks.js`; `db.updateGame`, `db.getGameDetail`, `db.getLibraries` from `server/database/db.js`
 - Produces: `executeMoveTask(taskId, source, dest, gameId, newLibraryId, newSubPath)` — spawns robocopy, tracks progress, updates DB on completion
 
@@ -276,14 +286,23 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
 
   try {
     const totalFiles = await countFilesWithRobocopy(source, dest);
-    updateTask(taskId, { meta: { ...getTask(taskId).meta, totalFiles }, detail: `Found ${totalFiles} files` });
+    updateTask(taskId, {
+      meta: { ...getTask(taskId).meta, totalFiles },
+      detail: `Found ${totalFiles} files`,
+    });
 
     const logFile = path.join(os.tmpdir(), `robocopy-${taskId}.log`);
     if (fs.existsSync(logFile)) fs.unlinkSync(logFile);
 
     const child = spawn('robocopy', [
-      source, dest,
-      '/E', '/COPY:DAT', '/MT:8', '/R:3', '/W:5', '/NP',
+      source,
+      dest,
+      '/E',
+      '/COPY:DAT',
+      '/MT:8',
+      '/R:3',
+      '/W:5',
+      '/NP',
       `/LOG+:${logFile}`,
     ]);
 
@@ -300,7 +319,8 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
           const newFileCount = (content.match(/New File/g) || []).length;
           if (newFileCount > copiedFiles) {
             copiedFiles = newFileCount;
-            const progress = totalFiles > 0 ? Math.min(99, Math.round((copiedFiles / totalFiles) * 100)) : 0;
+            const progress =
+              totalFiles > 0 ? Math.min(99, Math.round((copiedFiles / totalFiles) * 100)) : 0;
             updateTask(taskId, {
               progress,
               detail: `Copying ${copiedFiles}/${totalFiles}`,
@@ -313,24 +333,43 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
 
     child.on('close', (code) => {
       clearInterval(pollInterval);
-      try { fs.unlinkSync(logFile); } catch {}
+      try {
+        fs.unlinkSync(logFile);
+      } catch {}
 
       if (code <= 7) {
         updateTask(taskId, { progress: 99, detail: 'Deleting source...' });
-        fs.promises.rm(source, { recursive: true, force: true })
+        fs.promises
+          .rm(source, { recursive: true, force: true })
           .then(() => updateGameAfterMove(gameId, newLibraryId, newSubPath, taskId))
-          .catch((err) => updateTask(taskId, { status: 'failed', error: `Source deletion failed: ${err.message}`, detail: 'Move completed but source deletion failed' }));
+          .catch((err) =>
+            updateTask(taskId, {
+              status: 'failed',
+              error: `Source deletion failed: ${err.message}`,
+              detail: 'Move completed but source deletion failed',
+            }),
+          );
       } else {
-        updateTask(taskId, { status: 'failed', error: `robocopy exited with code ${code}`, detail: 'Move failed' });
+        updateTask(taskId, {
+          status: 'failed',
+          error: `robocopy exited with code ${code}`,
+          detail: 'Move failed',
+        });
         if (fs.existsSync(dest)) {
-          try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
+          try {
+            fs.rmSync(dest, { recursive: true, force: true });
+          } catch {}
         }
       }
     });
 
     child.on('error', (err) => {
       clearInterval(pollInterval);
-      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start robocopy' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: err.message,
+        detail: 'Failed to start robocopy',
+      });
     });
   } catch (err) {
     updateTask(taskId, { status: 'failed', error: err.message, detail: 'Scan failed' });
@@ -340,14 +379,28 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
 const countFilesWithRobocopy = (source, dest) => {
   return new Promise((resolve, reject) => {
     const child = spawn('robocopy', [
-      source, dest,
-      '/L', '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP',
+      source,
+      dest,
+      '/L',
+      '/NFL',
+      '/NDL',
+      '/NJH',
+      '/NJS',
+      '/NC',
+      '/NS',
+      '/NP',
     ]);
     let output = '';
-    child.stdout.on('data', (data) => { output += data.toString(); });
-    child.stderr.on('data', (data) => { output += data.toString(); });
+    child.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    child.stderr.on('data', (data) => {
+      output += data.toString();
+    });
     child.on('close', (code) => {
-      const match = output.match(/Total\s+Copied\s+Skipped\s+Mismatch\s+FAIL\s+Extras\s+[\r\n]+\s+Files\s*:\s*(\d+)/);
+      const match = output.match(
+        /Total\s+Copied\s+Skipped\s+Mismatch\s+FAIL\s+Extras\s+[\r\n]+\s+Files\s*:\s*(\d+)/,
+      );
       if (match) {
         resolve(parseInt(match[1], 10));
       } else {
@@ -360,9 +413,14 @@ const countFilesWithRobocopy = (source, dest) => {
 };
 
 const updateGameAfterMove = async (gameId, newLibraryId, newSubPath, taskId) => {
-  const db = (await import('./database/db.js'));
+  const db = await import('./database/db.js');
   await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
-  updateTask(taskId, { status: 'completed', progress: 100, detail: 'Move completed', completedAt: new Date() });
+  updateTask(taskId, {
+    status: 'completed',
+    progress: 100,
+    detail: 'Move completed',
+    completedAt: new Date(),
+  });
 };
 ```
 
@@ -385,10 +443,12 @@ git commit -m "feat: add robocopy move executor with progress tracking"
 ### Task 4: Backend — Archive Extraction Executor
 
 **Files:**
+
 - Modify: `server/tasks.js`
 - Modify: `server/constants.js`
 
 **Interfaces:**
+
 - Consumes: `createTask`, `updateTask`, `attachChildProcess` from `server/tasks.js`; `db.getSetting`, `db.setSetting`, `db.updateGame` from `server/database/db.js`; `ARCHIVE_EXTENSIONS` from `server/constants.js`
 - Produces: `executeExtractTask(taskId, archivePath, dest, gameId, newLibraryId, newSubPath)`, `detectExtractTools()`
 
@@ -398,14 +458,8 @@ Add at bottom before export:
 
 ```js
 const EXTRACT_TOOL_PATHS = {
-  unrar: [
-    'C:\\Program Files\\WinRAR\\UnRAR.exe',
-    'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe',
-  ],
-  sevenzip: [
-    'C:\\Program Files\\7-Zip\\7z.exe',
-    'C:\\Program Files (x86)\\7-Zip\\7z.exe',
-  ],
+  unrar: ['C:\\Program Files\\WinRAR\\UnRAR.exe', 'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe'],
+  sevenzip: ['C:\\Program Files\\7-Zip\\7z.exe', 'C:\\Program Files (x86)\\7-Zip\\7z.exe'],
   sevenzipZstd: [
     'C:\\Program Files\\7-Zip-ZStandard\\7z.exe',
     `${process.env.LOCALAPPDATA || ''}\\Programs\\7-Zip-ZStandard\\7z.exe`,
@@ -423,7 +477,13 @@ const FORMAT_TOOL_PRIORITY = {
 Update export:
 
 ```js
-export { NON_GAME_DIRS, ARCHIVE_EXTENSIONS, VOLUME_PATTERNS, EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY };
+export {
+  NON_GAME_DIRS,
+  ARCHIVE_EXTENSIONS,
+  VOLUME_PATTERNS,
+  EXTRACT_TOOL_PATHS,
+  FORMAT_TOOL_PRIORITY,
+};
 ```
 
 - [ ] **Step 2: Add `detectExtractTools` and `executeExtractTask` to `server/tasks.js`**
@@ -451,7 +511,7 @@ const detectExtractTools = () => {
 };
 
 const getEffectiveTools = async () => {
-  const db = (await import('./database/db.js'));
+  const db = await import('./database/db.js');
   const savedStr = await db.getSetting('extract_tools');
   if (savedStr) {
     try {
@@ -477,11 +537,15 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
   const tool = selectTool(ext, tools);
 
   if (!tool) {
-    updateTask(taskId, { status: 'failed', error: `No extraction tool found for ${ext}`, detail: 'No tool available' });
+    updateTask(taskId, {
+      status: 'failed',
+      error: `No extraction tool found for ${ext}`,
+      detail: 'No tool available',
+    });
     return;
   }
 
-  const db = (await import('./database/db.js'));
+  const db = await import('./database/db.js');
   const passwordsStr = await db.getSetting('archive_passwords');
   const passwords = passwordsStr ? JSON.parse(passwordsStr) : [];
   const allPasswords = [null, ...passwords];
@@ -501,7 +565,12 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
         }
       }
       await db.updateGame(gameId, { library_id: newLibraryId, sub_path: newSubPath });
-      updateTask(taskId, { status: 'completed', progress: 100, detail: 'Extraction completed', completedAt: new Date() });
+      updateTask(taskId, {
+        status: 'completed',
+        progress: 100,
+        detail: 'Extraction completed',
+        completedAt: new Date(),
+      });
       return;
     }
     if (result === 'error') {
@@ -509,7 +578,11 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
     }
   }
 
-  updateTask(taskId, { status: 'failed', error: 'All passwords failed', detail: 'No matching password found' });
+  updateTask(taskId, {
+    status: 'failed',
+    error: 'All passwords failed',
+    detail: 'No matching password found',
+  });
 };
 
 const tryExtract = (taskId, tool, archivePath, dest, password) => {
@@ -538,7 +611,9 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
     });
 
     let stderrText = '';
-    child.stderr.on('data', (data) => { stderrText += data.toString(); });
+    child.stderr.on('data', (data) => {
+      stderrText += data.toString();
+    });
 
     child.on('close', (code) => {
       if (code === 0 || (tool.name === 'unrar' && code === 1)) {
@@ -551,13 +626,21 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
           resolve('error');
           return;
         }
-        updateTask(taskId, { status: 'failed', error: `Exit code ${code}: ${stderrText}`, detail: 'Extraction failed' });
+        updateTask(taskId, {
+          status: 'failed',
+          error: `Exit code ${code}: ${stderrText}`,
+          detail: 'Extraction failed',
+        });
         resolve('error');
       }
     });
 
     child.on('error', (err) => {
-      updateTask(taskId, { status: 'failed', error: err.message, detail: 'Failed to start extraction tool' });
+      updateTask(taskId, {
+        status: 'failed',
+        error: err.message,
+        detail: 'Failed to start extraction tool',
+      });
       resolve('error');
     });
   });
@@ -583,9 +666,11 @@ git commit -m "feat: add archive extraction executor with password auto-try"
 ### Task 5: Backend — Relocate API Rewrite
 
 **Files:**
+
 - Modify: `server/routes/game.js`
 
 **Interfaces:**
+
 - Consumes: `createTask`, `executeMoveTask`, `executeExtractTask` from `server/tasks.js`; `ARCHIVE_EXTENSIONS` from `server/constants.js`
 - Produces: `PUT /games/:id/relocate` returns `{ taskId, operation }` immediately
 
@@ -608,7 +693,10 @@ router.put('/:id/relocate', async (req, res, next) => {
       return res.status(400).send({ error: 'newPath is required' });
     }
 
-    const game = await db.knex('game').where({ id: Number(id) }).first();
+    const game = await db
+      .knex('game')
+      .where({ id: Number(id) })
+      .first();
     if (!game) {
       return res.status(404).send({ error: 'Game not found' });
     }
@@ -617,7 +705,11 @@ router.put('/:id/relocate', async (req, res, next) => {
     const normalizedNew = normalizePath(newPath);
 
     const currentFullPath = game.library_id
-      ? normalizePath((await db.knex('library').where({ id: game.library_id }).first())?.path || '') + '\\' + normalizePath(game.sub_path)
+      ? normalizePath(
+          (await db.knex('library').where({ id: game.library_id }).first())?.path || '',
+        ) +
+        '\\' +
+        normalizePath(game.sub_path)
       : normalizePath(game.sub_path);
 
     if (normalizedNew.toLowerCase() === currentFullPath.toLowerCase()) {
@@ -651,7 +743,9 @@ router.put('/:id/relocate', async (req, res, next) => {
       if (destExists) {
         const files = fs.readdirSync(normalizedNew);
         if (files.length > 0 && !force) {
-          return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
+          return res
+            .status(409)
+            .send({ error: 'Target path already exists and is not empty', conflict: true });
         }
       } else {
         fs.mkdirSync(normalizedNew, { recursive: true });
@@ -665,7 +759,14 @@ router.put('/:id/relocate', async (req, res, next) => {
         archiveSubPath: game.sub_path,
       });
 
-      void executeExtractTask(task.id, currentFullPath, normalizedNew, Number(id), newLibraryId, newSubPath);
+      void executeExtractTask(
+        task.id,
+        currentFullPath,
+        normalizedNew,
+        Number(id),
+        newLibraryId,
+        newSubPath,
+      );
 
       return res.send({ operation: 'extract', taskId: task.id });
     }
@@ -681,7 +782,9 @@ router.put('/:id/relocate', async (req, res, next) => {
     if (destExists) {
       const files = fs.readdirSync(normalizedNew);
       if (files.length > 0 && !force) {
-        return res.status(409).send({ error: 'Target path already exists and is not empty', conflict: true });
+        return res
+          .status(409)
+          .send({ error: 'Target path already exists and is not empty', conflict: true });
       }
     }
 
@@ -705,7 +808,14 @@ router.put('/:id/relocate', async (req, res, next) => {
       gameId: Number(id),
     });
 
-    void executeMoveTask(task.id, currentFullPath, normalizedNew, Number(id), newLibraryId, newSubPath);
+    void executeMoveTask(
+      task.id,
+      currentFullPath,
+      normalizedNew,
+      Number(id),
+      newLibraryId,
+      newSubPath,
+    );
 
     res.send({ operation: 'move', taskId: task.id });
   } catch (err) {
@@ -731,9 +841,11 @@ git commit -m "feat: rewrite relocate API as async task-based"
 ### Task 6: Backend — Settings API Extensions (Archived Archives, Passwords, Tool Detection)
 
 **Files:**
+
 - Modify: `server/routes/setting.js`
 
 **Interfaces:**
+
 - Consumes: `detectExtractTools` from `server/tasks.js`; `db.getSetting`, `db.setSetting` from `server/database/db.js`
 - Produces: `GET /api/settings/archived-archives`, `POST /api/settings/archived-archives`, `DELETE /api/settings/archived-archives/:index`, `GET /api/settings/archive-passwords`, `PUT /api/settings/archive-passwords`, `GET /api/settings/detect-tools`, `GET /api/settings/extract-tools`, `PUT /api/settings/extract-tools`
 
@@ -752,7 +864,9 @@ router.get('/archived-archives', async (_req, res, next) => {
   try {
     const val = await db.getSetting('archived_archives');
     res.send(val ? JSON.parse(val) : []);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/archived-archives', async (req, res, next) => {
@@ -766,7 +880,9 @@ router.post('/archived-archives', async (req, res, next) => {
       await db.setSetting('archived_archives', JSON.stringify(list));
     }
     res.send(list);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.delete('/archived-archives/:index', async (req, res, next) => {
@@ -779,23 +895,30 @@ router.delete('/archived-archives/:index', async (req, res, next) => {
       await db.setSetting('archived_archives', JSON.stringify(list));
     }
     res.send(list);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/archive-passwords', async (_req, res, next) => {
   try {
     const val = await db.getSetting('archive_passwords');
     res.send(val ? JSON.parse(val) : []);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.put('/archive-passwords', async (req, res, next) => {
   try {
     const { passwords } = req.body;
-    if (!Array.isArray(passwords)) return res.status(400).send({ error: 'passwords must be an array' });
+    if (!Array.isArray(passwords))
+      return res.status(400).send({ error: 'passwords must be an array' });
     await db.setSetting('archive_passwords', JSON.stringify(passwords));
     res.send(passwords);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/detect-tools', (_req, res) => {
@@ -806,16 +929,21 @@ router.get('/extract-tools', async (_req, res, next) => {
   try {
     const val = await db.getSetting('extract_tools');
     res.send(val ? JSON.parse(val) : detectExtractTools());
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.put('/extract-tools', async (req, res, next) => {
   try {
     const { tools } = req.body;
-    if (!tools || typeof tools !== 'object') return res.status(400).send({ error: 'tools object is required' });
+    if (!tools || typeof tools !== 'object')
+      return res.status(400).send({ error: 'tools object is required' });
     await db.setSetting('extract_tools', JSON.stringify(tools));
     res.send(tools);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 ```
 
@@ -875,9 +1003,11 @@ git commit -m "feat: add archived archives, passwords, tool detection settings +
 ### Task 7: Frontend — Pinia Task Store (`src/stores/taskStore.ts`)
 
 **Files:**
+
 - Create: `src/stores/taskStore.ts`
 
 **Interfaces:**
+
 - Consumes: `useExpressUrl` from `src/composables/useExpressUrl.ts`
 - Produces: `useTaskStore()` — `tasks` ref, `runningCount` computed, `connectSSE()`, `disconnectSSE()`
 
@@ -914,16 +1044,18 @@ export const useTaskStore = defineStore('task', () => {
   let eventSource: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const runningCount = computed(() =>
-    [...tasks.value.values()].filter((t) => t.status === 'running' || t.status === 'pending').length
+  const runningCount = computed(
+    () =>
+      [...tasks.value.values()].filter((t) => t.status === 'running' || t.status === 'pending')
+        .length,
   );
 
   const hasRunningMoveTasks = computed(() =>
-    [...tasks.value.values()].some((t) => t.status === 'running' && t.type === 'move')
+    [...tasks.value.values()].some((t) => t.status === 'running' && t.type === 'move'),
   );
 
   const hasRunningTasks = computed(() =>
-    [...tasks.value.values()].some((t) => t.status === 'running')
+    [...tasks.value.values()].some((t) => t.status === 'running'),
   );
 
   const connectSSE = () => {
@@ -995,9 +1127,11 @@ git commit -m "feat: add Pinia task store with SSE connection"
 ### Task 8: Frontend — Task Panel Component (`src/components/TaskPanel.vue`)
 
 **Files:**
+
 - Create: `src/components/TaskPanel.vue`
 
 **Interfaces:**
+
 - Consumes: `useTaskStore` from `src/stores/taskStore.ts`; `api` from `src/composables/useApi.ts`
 
 - [ ] **Step 1: Create `src/components/TaskPanel.vue`**
@@ -1009,7 +1143,15 @@ git commit -m "feat: add Pinia task store with SSE connection"
       <div class="row items-center q-mb-sm">
         <div class="text-subtitle2" style="color: var(--m3-on-surface);">Background Tasks</div>
         <q-space />
-        <q-btn flat round dense size="sm" icon="close" style="color: var(--m3-on-surface-variant);" @click="show = false" />
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="close"
+          style="color: var(--m3-on-surface-variant);"
+          @click="show = false"
+        />
       </div>
       <q-scroll-area style="height: 300px;">
         <q-list dense>
@@ -1022,7 +1164,9 @@ git commit -m "feat: add Pinia task store with SSE connection"
               />
             </q-item-section>
             <q-item-section>
-              <q-item-label caption style="color: var(--m3-on-surface);">{{ task.label }}</q-item-label>
+              <q-item-label caption style="color: var(--m3-on-surface);">{{
+                task.label
+              }}</q-item-label>
               <q-linear-progress
                 v-if="task.status === 'running' || task.status === 'pending'"
                 :value="task.progress / 100"
@@ -1050,7 +1194,11 @@ git commit -m "feat: add Pinia task store with SSE connection"
                 <q-tooltip>Cancel</q-tooltip>
               </q-btn>
               <q-btn
-                v-if="task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'"
+                v-if="
+                  task.status === 'completed' ||
+                  task.status === 'failed' ||
+                  task.status === 'cancelled'
+                "
                 flat
                 round
                 dense
@@ -1065,7 +1213,9 @@ git commit -m "feat: add Pinia task store with SSE connection"
           </q-item>
           <q-item v-if="sortedTasks.length === 0">
             <q-item-section>
-              <q-item-label caption class="text-center" style="color: var(--m3-on-surface-variant);">No tasks</q-item-label>
+              <q-item-label caption class="text-center" style="color: var(--m3-on-surface-variant);"
+                >No tasks</q-item-label
+              >
             </q-item-section>
           </q-item>
         </q-list>
@@ -1084,9 +1234,9 @@ const taskStore = useTaskStore();
 const show = defineModel<boolean>({ default: false });
 
 const sortedTasks = computed(() =>
-  [...taskStore.tasks.values()].sort((a, b) =>
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  [...taskStore.tasks.values()].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  ),
 );
 
 const statusColor = (task: Task) => {
@@ -1123,9 +1273,11 @@ git commit -m "feat: add TaskPanel component with progress display"
 ### Task 9: Frontend — MainLayout Integration (FAB + Badge + SSE)
 
 **Files:**
+
 - Modify: `src/layouts/MainLayout.vue`
 
 **Interfaces:**
+
 - Consumes: `useTaskStore` from `src/stores/taskStore.ts`; `TaskPanel` from `src/components/TaskPanel.vue`
 
 - [ ] **Step 1: Add task FAB + badge + TaskPanel to MainLayout**
@@ -1133,19 +1285,16 @@ git commit -m "feat: add TaskPanel component with progress display"
 In the `<template>`, add before `</q-layout>` closing tag:
 
 ```html
-    <q-page-sticky position="bottom-right" :offset="[16, 16]">
-      <q-btn
-        fab
-        icon="assignment"
-        color="primary"
-        @click="showTaskPanel = true"
-      >
-        <q-badge v-if="taskStore.runningCount > 0" color="red" floating>{{ taskStore.runningCount }}</q-badge>
-        <q-tooltip>Tasks</q-tooltip>
-      </q-btn>
-    </q-page-sticky>
+<q-page-sticky position="bottom-right" :offset="[16, 16]">
+  <q-btn fab icon="assignment" color="primary" @click="showTaskPanel = true">
+    <q-badge v-if="taskStore.runningCount > 0" color="red" floating
+      >{{ taskStore.runningCount }}</q-badge
+    >
+    <q-tooltip>Tasks</q-tooltip>
+  </q-btn>
+</q-page-sticky>
 
-    <TaskPanel v-model="showTaskPanel" />
+<TaskPanel v-model="showTaskPanel" />
 ```
 
 In the `<script setup>`, add imports:
@@ -1181,9 +1330,11 @@ git commit -m "feat: add task FAB with badge and TaskPanel to MainLayout"
 ### Task 10: Frontend — Detail Page Relocate Flow Update
 
 **Files:**
+
 - Modify: `src/pages/GameDetailPage.vue`
 
 **Interfaces:**
+
 - Consumes: `useTaskStore` from `src/stores/taskStore.ts`
 
 - [ ] **Step 1: Update `doRelocate` to handle async task response**
@@ -1231,7 +1382,10 @@ const doRelocate = async () => {
 
     $q.notify({
       type: 'info',
-      message: operation === 'move' ? 'File move started in background' : 'Extraction started in background',
+      message:
+        operation === 'move'
+          ? 'File move started in background'
+          : 'Extraction started in background',
       icon: operation === 'move' ? 'drive_file_move' : 'archive',
     });
 
@@ -1241,7 +1395,10 @@ const doRelocate = async () => {
       if (!task) return;
       if (task.status === 'completed') {
         unwatch();
-        $q.notify({ type: 'positive', message: task.type === 'move' ? 'Move completed' : 'Extraction completed' });
+        $q.notify({
+          type: 'positive',
+          message: task.type === 'move' ? 'Move completed' : 'Extraction completed',
+        });
         void loadGame();
       } else if (task.status === 'failed') {
         unwatch();
@@ -1284,7 +1441,10 @@ const doRelocateWithForce = async (targetPath: string) => {
 
     $q.notify({
       type: 'info',
-      message: operation === 'move' ? 'File move started in background' : 'Extraction started in background',
+      message:
+        operation === 'move'
+          ? 'File move started in background'
+          : 'Extraction started in background',
     });
 
     const taskStore = (await import('../stores/taskStore')).useTaskStore();
@@ -1325,9 +1485,11 @@ git commit -m "feat: update relocate flow to async task-based"
 ### Task 11: Frontend — Settings Page Extensions
 
 **Files:**
+
 - Modify: `src/pages/SettingPage.vue`
 
 **Interfaces:**
+
 - Consumes: `api` from `src/composables/useApi.ts`
 
 - [ ] **Step 1: Add Archive Passwords, Extraction Tools, and Archived Archives sections to SettingPage**
@@ -1335,104 +1497,176 @@ git commit -m "feat: update relocate flow to async task-based"
 Add after the Blacklist card in `<template>`:
 
 ```html
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Archive Passwords</div>
-          <div class="m3-label-medium q-mb-sm">Passwords to try when extracting encrypted archives. Tried in order, no password first.</div>
-        </q-card-section>
-        <q-card-section>
-          <q-markup-table flat bordered dense>
-            <thead>
-              <tr>
-                <th class="text-left">Password</th>
-                <th class="text-right" style="width: 80px">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(pwd, idx) in archivePasswords" :key="idx">
-                <td>
-                  <span v-if="!passwordVisible[idx]">••••••••</span>
-                  <span v-else>{{ pwd }}</span>
-                  <q-btn flat round dense size="xs" :icon="passwordVisible[idx] ? 'visibility_off' : 'visibility'" color="grey-7" class="q-ml-xs" @click="passwordVisible[idx] = !passwordVisible[idx]" />
-                </td>
-                <td class="text-right">
-                  <q-btn flat round size="sm" icon="delete" style="color: var(--m3-error);" @click="removePassword(idx)" />
-                </td>
-              </tr>
-              <tr v-if="archivePasswords.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">No passwords</td>
-              </tr>
-            </tbody>
-          </q-markup-table>
-        </q-card-section>
-        <q-card-section>
-          <div class="row q-gutter-sm items-center">
-            <q-input v-model="newPassword" label="Password" type="password" outlined dense class="m3-input" style="max-width: 300px" @keyup.enter="addPassword" />
-            <q-btn unelevated class="m3-btn--tonal" label="Add" dense @click="addPassword" />
-          </div>
-        </q-card-section>
-      </q-card>
+<q-card class="m3-card q-mb-md">
+  <q-card-section>
+    <div class="m3-label-large q-mb-sm">Archive Passwords</div>
+    <div class="m3-label-medium q-mb-sm">
+      Passwords to try when extracting encrypted archives. Tried in order, no password first.
+    </div>
+  </q-card-section>
+  <q-card-section>
+    <q-markup-table flat bordered dense>
+      <thead>
+        <tr>
+          <th class="text-left">Password</th>
+          <th class="text-right" style="width: 80px">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(pwd, idx) in archivePasswords" :key="idx">
+          <td>
+            <span v-if="!passwordVisible[idx]">••••••••</span>
+            <span v-else>{{ pwd }}</span>
+            <q-btn
+              flat
+              round
+              dense
+              size="xs"
+              :icon="passwordVisible[idx] ? 'visibility_off' : 'visibility'"
+              color="grey-7"
+              class="q-ml-xs"
+              @click="passwordVisible[idx] = !passwordVisible[idx]"
+            />
+          </td>
+          <td class="text-right">
+            <q-btn
+              flat
+              round
+              size="sm"
+              icon="delete"
+              style="color: var(--m3-error);"
+              @click="removePassword(idx)"
+            />
+          </td>
+        </tr>
+        <tr v-if="archivePasswords.length === 0">
+          <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">
+            No passwords
+          </td>
+        </tr>
+      </tbody>
+    </q-markup-table>
+  </q-card-section>
+  <q-card-section>
+    <div class="row q-gutter-sm items-center">
+      <q-input
+        v-model="newPassword"
+        label="Password"
+        type="password"
+        outlined
+        dense
+        class="m3-input"
+        style="max-width: 300px"
+        @keyup.enter="addPassword"
+      />
+      <q-btn unelevated class="m3-btn--tonal" label="Add" dense @click="addPassword" />
+    </div>
+  </q-card-section>
+</q-card>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Extraction Tools</div>
-          <div class="m3-label-medium q-mb-sm">Auto-detected paths. Override manually if needed.</div>
-        </q-card-section>
-        <q-card-section>
-          <div class="q-gutter-sm">
-            <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">UnRAR.exe</div>
-              <q-input v-model="extractTools.unrar" outlined dense class="m3-input" style="flex: 1" />
-              <q-icon :name="extractTools.unrar ? 'check_circle' : 'cancel'" :color="extractTools.unrar ? 'positive' : 'negative'" size="sm" />
-            </div>
-            <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z.exe</div>
-              <q-input v-model="extractTools.sevenzip" outlined dense class="m3-input" style="flex: 1" />
-              <q-icon :name="extractTools.sevenzip ? 'check_circle' : 'cancel'" :color="extractTools.sevenzip ? 'positive' : 'negative'" size="sm" />
-            </div>
-            <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z-zstd</div>
-              <q-input v-model="extractTools.sevenzipZstd" outlined dense class="m3-input" style="flex: 1" />
-              <q-icon :name="extractTools.sevenzipZstd ? 'check_circle' : 'cancel'" :color="extractTools.sevenzipZstd ? 'positive' : 'negative'" size="sm" />
-            </div>
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <q-btn unelevated class="m3-btn--filled" label="Save Tools" @click="saveExtractTools" />
-          <q-btn flat class="m3-btn--text q-ml-sm" label="Re-detect" @click="redetectTools" />
-        </q-card-section>
-      </q-card>
+<q-card class="m3-card q-mb-md">
+  <q-card-section>
+    <div class="m3-label-large q-mb-sm">Extraction Tools</div>
+    <div class="m3-label-medium q-mb-sm">Auto-detected paths. Override manually if needed.</div>
+  </q-card-section>
+  <q-card-section>
+    <div class="q-gutter-sm">
+      <div class="row items-center q-gutter-sm">
+        <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">
+          UnRAR.exe
+        </div>
+        <q-input v-model="extractTools.unrar" outlined dense class="m3-input" style="flex: 1" />
+        <q-icon
+          :name="extractTools.unrar ? 'check_circle' : 'cancel'"
+          :color="extractTools.unrar ? 'positive' : 'negative'"
+          size="sm"
+        />
+      </div>
+      <div class="row items-center q-gutter-sm">
+        <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z.exe</div>
+        <q-input v-model="extractTools.sevenzip" outlined dense class="m3-input" style="flex: 1" />
+        <q-icon
+          :name="extractTools.sevenzip ? 'check_circle' : 'cancel'"
+          :color="extractTools.sevenzip ? 'positive' : 'negative'"
+          size="sm"
+        />
+      </div>
+      <div class="row items-center q-gutter-sm">
+        <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z-zstd</div>
+        <q-input
+          v-model="extractTools.sevenzipZstd"
+          outlined
+          dense
+          class="m3-input"
+          style="flex: 1"
+        />
+        <q-icon
+          :name="extractTools.sevenzipZstd ? 'check_circle' : 'cancel'"
+          :color="extractTools.sevenzipZstd ? 'positive' : 'negative'"
+          size="sm"
+        />
+      </div>
+    </div>
+  </q-card-section>
+  <q-card-section>
+    <q-btn unelevated class="m3-btn--filled" label="Save Tools" @click="saveExtractTools" />
+    <q-btn flat class="m3-btn--text q-ml-sm" label="Re-detect" @click="redetectTools" />
+  </q-card-section>
+</q-card>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Archived Archives</div>
-          <div class="m3-label-medium q-mb-sm">Archives that have been extracted. Excluded from scans. Copy path to manually delete the archive file.</div>
-        </q-card-section>
-        <q-card-section>
-          <q-markup-table flat bordered dense>
-            <thead>
-              <tr>
-                <th class="text-left">Archive Path</th>
-                <th class="text-right" style="width: 120px">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, idx) in archivedArchives" :key="idx">
-                <td style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item }}</td>
-                <td class="text-right">
-                  <q-btn flat round size="sm" icon="content_copy" style="color: var(--m3-primary);" @click="copyPath(item)">
-                    <q-tooltip>Copy Path</q-tooltip>
-                  </q-btn>
-                  <q-btn flat round size="sm" icon="delete" style="color: var(--m3-error);" @click="removeArchivedArchive(idx)" />
-                </td>
-              </tr>
-              <tr v-if="archivedArchives.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">No archived archives</td>
-              </tr>
-            </tbody>
-          </q-markup-table>
-        </q-card-section>
-      </q-card>
+<q-card class="m3-card q-mb-md">
+  <q-card-section>
+    <div class="m3-label-large q-mb-sm">Archived Archives</div>
+    <div class="m3-label-medium q-mb-sm">
+      Archives that have been extracted. Excluded from scans. Copy path to manually delete the
+      archive file.
+    </div>
+  </q-card-section>
+  <q-card-section>
+    <q-markup-table flat bordered dense>
+      <thead>
+        <tr>
+          <th class="text-left">Archive Path</th>
+          <th class="text-right" style="width: 120px">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(item, idx) in archivedArchives" :key="idx">
+          <td
+            style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          >
+            {{ item }}
+          </td>
+          <td class="text-right">
+            <q-btn
+              flat
+              round
+              size="sm"
+              icon="content_copy"
+              style="color: var(--m3-primary);"
+              @click="copyPath(item)"
+            >
+              <q-tooltip>Copy Path</q-tooltip>
+            </q-btn>
+            <q-btn
+              flat
+              round
+              size="sm"
+              icon="delete"
+              style="color: var(--m3-error);"
+              @click="removeArchivedArchive(idx)"
+            />
+          </td>
+        </tr>
+        <tr v-if="archivedArchives.length === 0">
+          <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">
+            No archived archives
+          </td>
+        </tr>
+      </tbody>
+    </q-markup-table>
+  </q-card-section>
+</q-card>
 ```
 
 Add corresponding script logic:
@@ -1533,9 +1767,9 @@ const removeArchivedArchive = async (idx: number) => {
 Add to `onMounted`:
 
 ```ts
-  void fetchArchivePasswords();
-  void fetchExtractTools();
-  void fetchArchivedArchives();
+void fetchArchivePasswords();
+void fetchExtractTools();
+void fetchArchivedArchives();
 ```
 
 - [ ] **Step 2: Verify**
@@ -1555,11 +1789,13 @@ git commit -m "feat: add archive passwords, extraction tools, archived archives 
 ### Task 12: Electron — Exit & Shutdown Interception
 
 **Files:**
+
 - Modify: `src-electron/electron-main.ts`
 - Modify: `src-electron/electron-preload.ts`
 - Modify: `src/types/electron.d.ts`
 
 **Interfaces:**
+
 - Consumes: `hasRunningMoveTasks`, `hasRunningTasks` from `server/tasks.js` (via dynamic import)
 
 - [ ] **Step 1: Add IPC handlers for task state queries in `src-electron/electron-main.ts`**
@@ -1567,27 +1803,23 @@ git commit -m "feat: add archive passwords, extraction tools, archived archives 
 Add after the existing `dialog:openPathForRelocate` handler:
 
 ```ts
-  ipcMain.handle('tasks:hasRunningMoveTasks', async () => {
-    try {
-      const tasksModule = await import(
-        pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href
-      );
-      return tasksModule.hasRunningMoveTasks();
-    } catch {
-      return false;
-    }
-  });
+ipcMain.handle('tasks:hasRunningMoveTasks', async () => {
+  try {
+    const tasksModule = await import(pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href);
+    return tasksModule.hasRunningMoveTasks();
+  } catch {
+    return false;
+  }
+});
 
-  ipcMain.handle('tasks:hasRunningTasks', async () => {
-    try {
-      const tasksModule = await import(
-        pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href
-      );
-      return tasksModule.hasRunningTasks();
-    } catch {
-      return false;
-    }
-  });
+ipcMain.handle('tasks:hasRunningTasks', async () => {
+  try {
+    const tasksModule = await import(pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href);
+    return tasksModule.hasRunningTasks();
+  } catch {
+    return false;
+  }
+});
 ```
 
 - [ ] **Step 2: Add before-quit interception**
@@ -1599,17 +1831,21 @@ app.on('before-quit', (e) => {
   if (isQuitting) return;
   try {
     const tasksUrl = pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href;
-    import(tasksUrl).then((tasksModule) => {
-      if (tasksModule.hasRunningMoveTasks()) {
-        e.preventDefault();
-        isQuitting = false;
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('task:move-in-progress');
+    import(tasksUrl)
+      .then((tasksModule) => {
+        if (tasksModule.hasRunningMoveTasks()) {
+          e.preventDefault();
+          isQuitting = false;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('task:move-in-progress');
+          }
+        } else {
+          isQuitting = true;
         }
-      } else {
+      })
+      .catch(() => {
         isQuitting = true;
-      }
-    }).catch(() => { isQuitting = true; });
+      });
   } catch {
     isQuitting = true;
   }
@@ -1632,11 +1868,13 @@ try {
   powerMonitor.on('shutdown', (e) => {
     try {
       const tasksUrl = pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href;
-      import(tasksUrl).then((tasksModule) => {
-        if (tasksModule.hasRunningMoveTasks()) {
-          e.preventDefault();
-        }
-      }).catch(() => {});
+      import(tasksUrl)
+        .then((tasksModule) => {
+          if (tasksModule.hasRunningMoveTasks()) {
+            e.preventDefault();
+          }
+        })
+        .catch(() => {});
     } catch {}
   });
 } catch {}
@@ -1693,10 +1931,10 @@ Add corresponding IPC listener in `src-electron/electron-preload.ts`:
 Add `app:forceQuit` handler in `src-electron/electron-main.ts`:
 
 ```ts
-  ipcMain.handle('app:forceQuit', () => {
-    isQuitting = true;
-    app.quit();
-  });
+ipcMain.handle('app:forceQuit', () => {
+  isQuitting = true;
+  app.quit();
+});
 ```
 
 Update `src/types/electron.d.ts`:

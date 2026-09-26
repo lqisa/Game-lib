@@ -12,20 +12,21 @@
 
 ## 文件结构
 
-| 文件 | 操作 | 职责 |
-|------|------|------|
-| `server/database/db.js` | 修改 | 新增 getMakers/getGenres/getTags，修改 getGames 支持筛选 |
-| `server/routes/game.js` | 修改 | 新增 GET /makers、GET /genres、GET /tags，修改 GET /games |
-| `src/components/FilterDialog.vue` | 创建 | 筛选弹窗组件 |
-| `src/pages/GameLibPage.vue` | 修改 | 集成筛选、sticky 工具栏 |
-| `src/components/GameCard.vue` | 修改 | 空白封面占位图标 |
-| `src/components/ScrapeDialog.vue` | 修改 | Adopt 按钮移至底部 Action 栏 |
+| 文件                              | 操作 | 职责                                                      |
+| --------------------------------- | ---- | --------------------------------------------------------- |
+| `server/database/db.js`           | 修改 | 新增 getMakers/getGenres/getTags，修改 getGames 支持筛选  |
+| `server/routes/game.js`           | 修改 | 新增 GET /makers、GET /genres、GET /tags，修改 GET /games |
+| `src/components/FilterDialog.vue` | 创建 | 筛选弹窗组件                                              |
+| `src/pages/GameLibPage.vue`       | 修改 | 集成筛选、sticky 工具栏                                   |
+| `src/components/GameCard.vue`     | 修改 | 空白封面占位图标                                          |
+| `src/components/ScrapeDialog.vue` | 修改 | Adopt 按钮移至底部 Action 栏                              |
 
 ---
 
 ### 任务 1：后端 — 新增筛选数据接口
 
 **文件：**
+
 - 修改：`server/database/db.js`
 - 修改：`server/routes/game.js`
 
@@ -35,16 +36,16 @@
 
 ```js
 const getMakers = async () => {
-  return db('maker').select('id', 'name').orderBy('name')
-}
+  return db('maker').select('id', 'name').orderBy('name');
+};
 
 const getGenres = async () => {
-  return db('genre').select('id', 'name').orderBy('name')
-}
+  return db('genre').select('id', 'name').orderBy('name');
+};
 
 const getTags = async () => {
-  return db('tag').select('id', 'name').orderBy('name')
-}
+  return db('tag').select('id', 'name').orderBy('name');
+};
 ```
 
 在 `module.exports` 中添加 `getMakers`、`getGenres`、`getTags`。
@@ -56,30 +57,30 @@ const getTags = async () => {
 ```js
 router.get('/makers', async (req, res, next) => {
   try {
-    const makers = await db.getMakers()
-    res.send(makers)
+    const makers = await db.getMakers();
+    res.send(makers);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.get('/genres', async (req, res, next) => {
   try {
-    const genres = await db.getGenres()
-    res.send(genres)
+    const genres = await db.getGenres();
+    res.send(genres);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 
 router.get('/tags', async (req, res, next) => {
   try {
-    const tags = await db.getTags()
-    res.send(tags)
+    const tags = await db.getTags();
+    res.send(tags);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 ```
 
 - [ ] **步骤 3：验证新接口**
@@ -98,6 +99,7 @@ git commit -m "feat: add GET /games/makers, /genres, /tags endpoints"
 ### 任务 2：后端 — 扩展 GET /games 支持筛选
 
 **文件：**
+
 - 修改：`server/database/db.js`
 - 修改：`server/routes/game.js`
 
@@ -106,54 +108,63 @@ git commit -m "feat: add GET /games/makers, /genres, /tags endpoints"
 将 `getGames` 方法签名和实现改为：
 
 ```js
-const getGames = async ({ page = 1, pageSize = 50, keyword = '', libraryIds, makerIds, genreIds, tagIds, scraped } = {}) => {
+const getGames = async ({
+  page = 1,
+  pageSize = 50,
+  keyword = '',
+  libraryIds,
+  makerIds,
+  genreIds,
+  tagIds,
+  scraped,
+} = {}) => {
   let query = db('game')
     .leftJoin('library', 'game.library_id', 'library.id')
     .select('game.*', 'library.name as library_name', 'library.path as library_path')
-    .orderBy('game.updated_at', 'desc')
+    .orderBy('game.updated_at', 'desc');
 
   if (keyword) {
-    query = query.where('game.name', 'like', `%${keyword}%`)
+    query = query.where('game.name', 'like', `%${keyword}%`);
   }
 
   if (libraryIds && libraryIds.length > 0) {
-    query = query.whereIn('game.library_id', libraryIds)
+    query = query.whereIn('game.library_id', libraryIds);
   }
 
   if (makerIds && makerIds.length > 0) {
     query = query
       .join('game_maker', 'game.id', 'game_maker.game_id')
-      .whereIn('game_maker.maker_id', makerIds)
+      .whereIn('game_maker.maker_id', makerIds);
   }
 
   if (genreIds && genreIds.length > 0) {
     query = query
       .join('game_genre', 'game.id', 'game_genre.game_id')
-      .whereIn('game_genre.genre_id', genreIds)
+      .whereIn('game_genre.genre_id', genreIds);
   }
 
   if (tagIds && tagIds.length > 0) {
     query = query
       .join('game_tag', 'game.id', 'game_tag.game_id')
-      .whereIn('game_tag.tag_id', tagIds)
+      .whereIn('game_tag.tag_id', tagIds);
   }
 
   if (scraped === true) {
     query = query.whereExists(function () {
-      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id')
-    })
+      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id');
+    });
   } else if (scraped === false) {
     query = query.whereNotExists(function () {
-      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id')
-    })
+      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id');
+    });
   }
 
-  const total = await query.clone().countDistinct('game.id as count').first()
-  const offset = (page - 1) * pageSize
-  const games = await query.groupBy('game.id').offset(offset).limit(pageSize)
+  const total = await query.clone().countDistinct('game.id as count').first();
+  const offset = (page - 1) * pageSize;
+  const games = await query.groupBy('game.id').offset(offset).limit(pageSize);
 
-  return { games, total: total.count, page, pageSize }
-}
+  return { games, total: total.count, page, pageSize };
+};
 ```
 
 注意：使用 `countDistinct('game.id')` 和 `groupBy('game.id')` 避免 JOIN 导致的重复行问题。
@@ -165,7 +176,7 @@ const getGames = async ({ page = 1, pageSize = 50, keyword = '', libraryIds, mak
 ```js
 router.get('/', async (req, res, next) => {
   try {
-    const { page, pageSize, keyword, libraryIds, makerIds, genreIds, tagIds, scraped } = req.query
+    const { page, pageSize, keyword, libraryIds, makerIds, genreIds, tagIds, scraped } = req.query;
     const result = await db.getGames({
       page: Number(page) || 1,
       pageSize: Number(pageSize) || 50,
@@ -175,17 +186,18 @@ router.get('/', async (req, res, next) => {
       genreIds: genreIds ? String(genreIds).split(',').map(Number) : undefined,
       tagIds: tagIds ? String(tagIds).split(',').map(Number) : undefined,
       scraped: scraped === 'true' ? true : scraped === 'false' ? false : undefined,
-    })
-    res.send(result)
+    });
+    res.send(result);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 ```
 
 - [ ] **步骤 3：验证筛选接口**
 
 用 curl 或浏览器测试：
+
 - `GET /games?scraped=false` — 应只返回未爬取的游戏
 - `GET /games?scraped=true` — 应只返回已爬取的游戏
 - `GET /games?libraryIds=1` — 应只返回指定库的游戏
@@ -202,6 +214,7 @@ git commit -m "feat: extend GET /games with filter params (libraryIds, makerIds,
 ### 任务 3：前端 — 创建 FilterDialog 组件
 
 **文件：**
+
 - 创建：`src/components/FilterDialog.vue`
 
 - [ ] **步骤 1：创建 FilterDialog.vue**
@@ -231,7 +244,9 @@ git commit -m "feat: extend GET /games with filter params (libraryIds, makerIds,
               :label="lib.name"
               dense
             />
-            <div v-if="filteredLibraries.length === 0" class="text-caption text-grey q-ml-sm">无匹配</div>
+            <div v-if="filteredLibraries.length === 0" class="text-caption text-grey q-ml-sm">
+              无匹配
+            </div>
           </div>
         </q-expansion-item>
 
@@ -249,7 +264,9 @@ git commit -m "feat: extend GET /games with filter params (libraryIds, makerIds,
               :label="m.name"
               dense
             />
-            <div v-if="filteredMakers.length === 0" class="text-caption text-grey q-ml-sm">无匹配</div>
+            <div v-if="filteredMakers.length === 0" class="text-caption text-grey q-ml-sm">
+              无匹配
+            </div>
           </div>
         </q-expansion-item>
 
@@ -283,7 +300,9 @@ git commit -m "feat: extend GET /games with filter params (libraryIds, makerIds,
               :label="t.name"
               dense
             />
-            <div v-if="filteredTags.length === 0" class="text-caption text-grey q-ml-sm">无匹配</div>
+            <div v-if="filteredTags.length === 0" class="text-caption text-grey q-ml-sm">
+              无匹配
+            </div>
           </div>
         </q-expansion-item>
 
@@ -303,137 +322,152 @@ git commit -m "feat: extend GET /games with filter params (libraryIds, makerIds,
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import api from '../composables/useApi'
+import { ref, computed, watch } from 'vue';
+import api from '../composables/useApi';
 
 interface FilterState {
-  libraryIds: number[]
-  makerIds: number[]
-  genreIds: number[]
-  tagIds: number[]
-  scraped: 'all' | 'yes' | 'no'
+  libraryIds: number[];
+  makerIds: number[];
+  genreIds: number[];
+  tagIds: number[];
+  scraped: 'all' | 'yes' | 'no';
 }
 
 const props = defineProps<{
-  modelValue: boolean
-  filter: FilterState
-}>()
+  modelValue: boolean;
+  filter: FilterState;
+}>();
 
 const emit = defineEmits<{
-  'update:modelValue': [val: boolean]
-  'apply': [filter: FilterState]
-}>()
+  'update:modelValue': [val: boolean];
+  apply: [filter: FilterState];
+}>();
 
 const show = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
-})
+  set: (val) => emit('update:modelValue', val),
+});
 
-const localFilter = ref<FilterState>({ libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'all' })
+const localFilter = ref<FilterState>({
+  libraryIds: [],
+  makerIds: [],
+  genreIds: [],
+  tagIds: [],
+  scraped: 'all',
+});
 
-const libraries = ref<{ id: number; name: string; path: string }[]>([])
-const makers = ref<{ id: number; name: string }[]>([])
-const genres = ref<{ id: number; name: string }[]>([])
-const tags = ref<{ id: number; name: string }[]>([])
+const libraries = ref<{ id: number; name: string; path: string }[]>([]);
+const makers = ref<{ id: number; name: string }[]>([]);
+const genres = ref<{ id: number; name: string }[]>([]);
+const tags = ref<{ id: number; name: string }[]>([]);
 
-const librariesLoading = ref(false)
-const makersLoading = ref(false)
-const genresLoading = ref(false)
-const tagsLoading = ref(false)
+const librariesLoading = ref(false);
+const makersLoading = ref(false);
+const genresLoading = ref(false);
+const tagsLoading = ref(false);
 
-const librarySearch = ref('')
-const makerSearch = ref('')
-const tagSearch = ref('')
+const librarySearch = ref('');
+const makerSearch = ref('');
+const tagSearch = ref('');
 
 const filteredLibraries = computed(() => {
-  if (!librarySearch.value) return libraries.value
-  const q = librarySearch.value.toLowerCase()
-  return libraries.value.filter(l => l.name.toLowerCase().includes(q))
-})
+  if (!librarySearch.value) return libraries.value;
+  const q = librarySearch.value.toLowerCase();
+  return libraries.value.filter((l) => l.name.toLowerCase().includes(q));
+});
 
 const filteredMakers = computed(() => {
-  if (!makerSearch.value) return makers.value
-  const q = makerSearch.value.toLowerCase()
-  return makers.value.filter(m => m.name.toLowerCase().includes(q))
-})
+  if (!makerSearch.value) return makers.value;
+  const q = makerSearch.value.toLowerCase();
+  return makers.value.filter((m) => m.name.toLowerCase().includes(q));
+});
 
 const filteredTags = computed(() => {
-  if (!tagSearch.value) return tags.value
-  const q = tagSearch.value.toLowerCase()
-  return tags.value.filter(t => t.name.toLowerCase().includes(q))
-})
+  if (!tagSearch.value) return tags.value;
+  const q = tagSearch.value.toLowerCase();
+  return tags.value.filter((t) => t.name.toLowerCase().includes(q));
+});
 
 const loadLibraries = async () => {
-  if (libraries.value.length > 0) return
-  librariesLoading.value = true
+  if (libraries.value.length > 0) return;
+  librariesLoading.value = true;
   try {
-    const res = await api.get('/libraries')
-    libraries.value = res.data
+    const res = await api.get('/libraries');
+    libraries.value = res.data;
   } finally {
-    librariesLoading.value = false
+    librariesLoading.value = false;
   }
-}
+};
 
 const loadMakers = async () => {
-  if (makers.value.length > 0) return
-  makersLoading.value = true
+  if (makers.value.length > 0) return;
+  makersLoading.value = true;
   try {
-    const res = await api.get('/games/makers')
-    makers.value = res.data
+    const res = await api.get('/games/makers');
+    makers.value = res.data;
   } finally {
-    makersLoading.value = false
+    makersLoading.value = false;
   }
-}
+};
 
 const loadGenres = async () => {
-  if (genres.value.length > 0) return
-  genresLoading.value = true
+  if (genres.value.length > 0) return;
+  genresLoading.value = true;
   try {
-    const res = await api.get('/games/genres')
-    genres.value = res.data
+    const res = await api.get('/games/genres');
+    genres.value = res.data;
   } finally {
-    genresLoading.value = false
+    genresLoading.value = false;
   }
-}
+};
 
 const loadTags = async () => {
-  if (tags.value.length > 0) return
-  tagsLoading.value = true
+  if (tags.value.length > 0) return;
+  tagsLoading.value = true;
   try {
-    const res = await api.get('/games/tags')
-    tags.value = res.data
+    const res = await api.get('/games/tags');
+    tags.value = res.data;
   } finally {
-    tagsLoading.value = false
+    tagsLoading.value = false;
   }
-}
+};
 
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    localFilter.value = {
-      libraryIds: [...props.filter.libraryIds],
-      makerIds: [...props.filter.makerIds],
-      genreIds: [...props.filter.genreIds],
-      tagIds: [...props.filter.tagIds],
-      scraped: props.filter.scraped,
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (val) {
+      localFilter.value = {
+        libraryIds: [...props.filter.libraryIds],
+        makerIds: [...props.filter.makerIds],
+        genreIds: [...props.filter.genreIds],
+        tagIds: [...props.filter.tagIds],
+        scraped: props.filter.scraped,
+      };
+      librarySearch.value = '';
+      makerSearch.value = '';
+      tagSearch.value = '';
+      void loadLibraries();
+      void loadMakers();
+      void loadGenres();
+      void loadTags();
     }
-    librarySearch.value = ''
-    makerSearch.value = ''
-    tagSearch.value = ''
-    void loadLibraries()
-    void loadMakers()
-    void loadGenres()
-    void loadTags()
-  }
-})
+  },
+);
 
 const resetFilter = () => {
-  localFilter.value = { libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'all' }
-}
+  localFilter.value = { libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'all' };
+};
 
 const applyFilter = () => {
-  emit('apply', { ...localFilter.value, libraryIds: [...localFilter.value.libraryIds], makerIds: [...localFilter.value.makerIds], genreIds: [...localFilter.value.genreIds], tagIds: [...localFilter.value.tagIds] })
-  show.value = false
-}
+  emit('apply', {
+    ...localFilter.value,
+    libraryIds: [...localFilter.value.libraryIds],
+    makerIds: [...localFilter.value.makerIds],
+    genreIds: [...localFilter.value.genreIds],
+    tagIds: [...localFilter.value.tagIds],
+  });
+  show.value = false;
+};
 </script>
 ```
 
@@ -453,6 +487,7 @@ git commit -m "feat: add FilterDialog component"
 ### 任务 4：前端 — GameLibPage 集成筛选 + sticky 工具栏
 
 **文件：**
+
 - 修改：`src/pages/GameLibPage.vue`
 
 - [ ] **步骤 1：添加筛选状态和 FilterDialog 引用**
@@ -460,35 +495,41 @@ git commit -m "feat: add FilterDialog component"
 在 `<script setup>` 中添加：
 
 ```typescript
-import FilterDialog from '../components/FilterDialog.vue'
+import FilterDialog from '../components/FilterDialog.vue';
 
 interface FilterState {
-  libraryIds: number[]
-  makerIds: number[]
-  genreIds: number[]
-  tagIds: number[]
-  scraped: 'all' | 'yes' | 'no'
+  libraryIds: number[];
+  makerIds: number[];
+  genreIds: number[];
+  tagIds: number[];
+  scraped: 'all' | 'yes' | 'no';
 }
 
-const showFilter = ref(false)
-const currentFilter = ref<FilterState>({ libraryIds: [], makerIds: [], genreIds: [], tagIds: [], scraped: 'all' })
+const showFilter = ref(false);
+const currentFilter = ref<FilterState>({
+  libraryIds: [],
+  makerIds: [],
+  genreIds: [],
+  tagIds: [],
+  scraped: 'all',
+});
 
 const activeFilterCount = computed(() => {
-  const f = currentFilter.value
-  let count = 0
-  if (f.libraryIds.length > 0) count++
-  if (f.makerIds.length > 0) count++
-  if (f.genreIds.length > 0) count++
-  if (f.tagIds.length > 0) count++
-  if (f.scraped !== 'all') count++
-  return count
-})
+  const f = currentFilter.value;
+  let count = 0;
+  if (f.libraryIds.length > 0) count++;
+  if (f.makerIds.length > 0) count++;
+  if (f.genreIds.length > 0) count++;
+  if (f.tagIds.length > 0) count++;
+  if (f.scraped !== 'all') count++;
+  return count;
+});
 
 const onApplyFilter = (filter: FilterState) => {
-  currentFilter.value = filter
-  page.value = 1
-  void loadGames()
-}
+  currentFilter.value = filter;
+  page.value = 1;
+  void loadGames();
+};
 ```
 
 - [ ] **步骤 2：修改 loadGames 传递筛选参数**
@@ -497,28 +538,28 @@ const onApplyFilter = (filter: FilterState) => {
 
 ```typescript
 const loadGames = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    const f = currentFilter.value
+    const f = currentFilter.value;
     const params: Record<string, string | number> = {
       page: page.value,
       pageSize,
-    }
-    if (keyword.value) params.keyword = keyword.value
-    if (f.libraryIds.length > 0) params.libraryIds = f.libraryIds.join(',')
-    if (f.makerIds.length > 0) params.makerIds = f.makerIds.join(',')
-    if (f.genreIds.length > 0) params.genreIds = f.genreIds.join(',')
-    if (f.tagIds.length > 0) params.tagIds = f.tagIds.join(',')
-    if (f.scraped === 'yes') params.scraped = 'true'
-    else if (f.scraped === 'no') params.scraped = 'false'
+    };
+    if (keyword.value) params.keyword = keyword.value;
+    if (f.libraryIds.length > 0) params.libraryIds = f.libraryIds.join(',');
+    if (f.makerIds.length > 0) params.makerIds = f.makerIds.join(',');
+    if (f.genreIds.length > 0) params.genreIds = f.genreIds.join(',');
+    if (f.tagIds.length > 0) params.tagIds = f.tagIds.join(',');
+    if (f.scraped === 'yes') params.scraped = 'true';
+    else if (f.scraped === 'no') params.scraped = 'false';
 
-    const res = await api.get('/games', { params })
-    games.value = res.data.games
-    total.value = res.data.total
+    const res = await api.get('/games', { params });
+    games.value = res.data.games;
+    total.value = res.data.total;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 ```
 
 - [ ] **步骤 3：修改模板 — 添加筛选按钮 + FilterDialog + sticky 工具栏**
@@ -528,12 +569,7 @@ const loadGames = async () => {
 在搜索输入框后面、Scan & Scrape 按钮前面，添加筛选按钮：
 
 ```html
-<q-btn
-  flat
-  icon="filter_list"
-  label="筛选"
-  @click="showFilter = true"
->
+<q-btn flat icon="filter_list" label="筛选" @click="showFilter = true">
   <q-badge v-if="activeFilterCount > 0" color="orange" floating>{{ activeFilterCount }}</q-badge>
 </q-btn>
 ```
@@ -541,11 +577,7 @@ const loadGames = async () => {
 在 `</q-page>` 之前、ScannerDialog 之后添加：
 
 ```html
-<FilterDialog
-  v-model="showFilter"
-  :filter="currentFilter"
-  @apply="onApplyFilter"
-/>
+<FilterDialog v-model="showFilter" :filter="currentFilter" @apply="onApplyFilter" />
 ```
 
 - [ ] **步骤 4：添加 sticky CSS**
@@ -572,6 +604,7 @@ const loadGames = async () => {
 - [ ] **步骤 5：验证页面功能**
 
 运行 `npx vue-tsc --noEmit` 确认无类型错误。启动开发服务器，验证：
+
 1. 搜索栏滚动时固定在顶部
 2. 筛选按钮点击弹出弹窗
 3. 选择筛选条件后点应用，列表正确过滤
@@ -588,6 +621,7 @@ git commit -m "feat: integrate FilterDialog and sticky toolbar in GameLibPage"
 ### 任务 5：前端 — GameCard 空白封面占位图标
 
 **文件：**
+
 - 修改：`src/components/GameCard.vue`
 
 - [ ] **步骤 1：修改模板，空封面时显示占位图标**
@@ -595,12 +629,7 @@ git commit -m "feat: integrate FilterDialog and sticky toolbar in GameLibPage"
 将 `<q-img>` 部分替换为条件渲染：
 
 ```html
-<q-img
-  v-if="game.cover_path"
-  :src="coverSrc"
-  :ratio="16 / 9"
-  class="game-cover"
->
+<q-img v-if="game.cover_path" :src="coverSrc" :ratio="16 / 9" class="game-cover">
   <template v-slot:error>
     <div class="absolute-full flex flex-center bg-grey-4 text-grey-6">
       <q-icon name="videogame_asset" size="48px" />
@@ -644,6 +673,7 @@ git commit -m "feat: add placeholder icon for games without cover"
 ### 任务 6：前端 — ScrapeDialog Adopt 按钮移至底部 Action 栏
 
 **文件：**
+
 - 修改：`src/components/ScrapeDialog.vue`
 
 - [ ] **步骤 1：从右侧详情区移除 Adopt 按钮**
@@ -669,6 +699,7 @@ git commit -m "feat: add placeholder icon for games without cover"
 - [ ] **步骤 3：验证**
 
 运行 `npx vue-tsc --noEmit`。打开 ScrapeDialog，确认：
+
 1. Adopt 按钮出现在弹窗底部右侧
 2. 右侧详情区不再有 Adopt 按钮
 3. 点击 Adopt 功能正常

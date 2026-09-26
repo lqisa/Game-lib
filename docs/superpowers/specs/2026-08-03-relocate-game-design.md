@@ -37,6 +37,7 @@ Allow editing game path directly on the Detail page. When the path changes, the 
 ### 2. Backend API — `PUT /games/:id/relocate`
 
 **Request body:**
+
 ```json
 { "newPath": "D:\\GAL\\SomeGame" }
 ```
@@ -80,10 +81,10 @@ Allow editing game path directly on the Detail page. When the path changes, the 
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/pages/GameDetailPage.vue` | Add path editing UI, confirmation dialog, loading state, API call |
-| `server/routes/game.js` | Add `PUT /:id/relocate` route |
-| `src-electron/electron-main.ts` | Add `dialog:openPathForRelocate` IPC handler |
-| `src-electron/electron-preload.ts` | Expose `openPathForRelocate` |
-| `src/types/electron.d.ts` | Add type declaration for `openPathForRelocate` |
+| File                               | Change                                                            |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `src/pages/GameDetailPage.vue`     | Add path editing UI, confirmation dialog, loading state, API call |
+| `server/routes/game.js`            | Add `PUT /:id/relocate` route                                     |
+| `src-electron/electron-main.ts`    | Add `dialog:openPathForRelocate` IPC handler                      |
+| `src-electron/electron-preload.ts` | Expose `openPathForRelocate`                                      |
+| `src/types/electron.d.ts`          | Add type declaration for `openPathForRelocate`                    |

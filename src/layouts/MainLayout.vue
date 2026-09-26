@@ -2,10 +2,21 @@
   <q-layout view="lHh Lpr lFf">
     <q-header>
       <q-toolbar>
-        <q-btn flat dense round icon="menu" @click="drawer = !drawer" style="color: var(--m3-on-surface-variant);" />
+        <q-btn
+          flat
+          dense
+          round
+          icon="menu"
+          @click="drawer = !drawer"
+          style="color: var(--m3-on-surface-variant)"
+        />
         <q-toolbar-title>
-          Game Lib<template v-if="$route.path === '/' && gameListStore.favoritesMode"> - Favorites</template>
-          <span v-if="showGameCount" class="q-ml-sm" style="color: var(--m3-on-surface-variant);">({{ filteredCount }})</span>
+          Game Lib<template v-if="$route.path === '/' && gameListStore.favoritesMode">
+            - Favorites</template
+          >
+          <span v-if="showGameCount" class="q-ml-sm" style="color: var(--m3-on-surface-variant)"
+            >({{ filteredCount }})</span
+          >
         </q-toolbar-title>
       </q-toolbar>
     </q-header>
@@ -20,7 +31,9 @@
           >
             <q-icon name="videogame_asset" class="m3-nav-icon" />
             <span class="m3-nav-label">Games</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Game Lib</q-tooltip>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
+              >Game Lib</q-tooltip
+            >
           </div>
           <div
             class="m3-nav-item"
@@ -29,7 +42,9 @@
           >
             <q-icon name="star" class="m3-nav-icon" />
             <span class="m3-nav-label">Favorites</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Favorites</q-tooltip>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
+              >Favorites</q-tooltip
+            >
           </div>
           <div
             class="m3-nav-item"
@@ -38,7 +53,9 @@
           >
             <q-icon name="history" class="m3-nav-icon" />
             <span class="m3-nav-label">Recently</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Recently Opened</q-tooltip>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
+              >Recently Opened</q-tooltip
+            >
           </div>
           <div
             class="m3-nav-item"
@@ -47,25 +64,24 @@
           >
             <q-icon name="settings" class="m3-nav-icon" />
             <span class="m3-nav-label">Settings</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Settings</q-tooltip>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
+              >Settings</q-tooltip
+            >
           </div>
         </div>
-        <div
-          class="m3-nav-item"
-          @click="dark = !dark"
-        >
+        <div class="m3-nav-item" @click="dark = !dark">
           <q-icon :name="dark ? 'dark_mode' : 'light_mode'" class="m3-nav-icon" />
           <span class="m3-nav-label">{{ dark ? 'Dark' : 'Light' }}</span>
-          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{ dark ? 'Switch to Light' : 'Switch to Dark' }}</q-tooltip>
+          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{
+            dark ? 'Switch to Light' : 'Switch to Dark'
+          }}</q-tooltip>
         </div>
-        <div
-          v-if="hasElectronAPI"
-          class="m3-nav-item"
-          @click="enterLightweightMode"
-        >
+        <div v-if="hasElectronAPI" class="m3-nav-item" @click="enterLightweightMode">
           <q-icon name="power_settings_new" class="m3-nav-icon" />
           <span class="m3-nav-label">Exit</span>
-          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">Enter Lightweight Mode</q-tooltip>
+          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
+            >Enter Lightweight Mode</q-tooltip
+          >
         </div>
       </div>
     </q-drawer>
@@ -75,13 +91,10 @@
     </q-page-container>
 
     <q-page-sticky position="bottom-right" :offset="[16, 16]">
-      <q-btn
-        fab
-        icon="assignment"
-        color="primary"
-        @click="showTaskPanel = true"
-      >
-        <q-badge v-if="taskStore.runningCount > 0" color="red" floating>{{ taskStore.runningCount }}</q-badge>
+      <q-btn fab icon="assignment" color="primary" @click="showTaskPanel = true">
+        <q-badge v-if="taskStore.runningCount > 0" color="red" floating>{{
+          taskStore.runningCount
+        }}</q-badge>
         <q-tooltip>Tasks</q-tooltip>
       </q-btn>
     </q-page-sticky>
@@ -187,7 +200,9 @@ onMounted(() => {
   border-radius: var(--m3-shape-corner-lg);
   cursor: pointer;
   color: var(--m3-on-surface-variant);
-  transition: background 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.2s cubic-bezier(0.2, 0, 0, 1);
+  transition:
+    background 0.2s cubic-bezier(0.2, 0, 0, 1),
+    color 0.2s cubic-bezier(0.2, 0, 0, 1);
   user-select: none;
 }
 

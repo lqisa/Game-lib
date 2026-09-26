@@ -2,7 +2,13 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import * as db from '../database/db.js';
-import { COVERS_DIR, coverExists, downloadCover, resolveCoverUrl, fetchCoverUrlFromSource } from '../scraper/cover.js';
+import {
+  COVERS_DIR,
+  coverExists,
+  downloadCover,
+  resolveCoverUrl,
+  fetchCoverUrlFromSource,
+} from '../scraper/cover.js';
 
 const router = express.Router();
 
@@ -67,7 +73,8 @@ router.post('/repair', async (req, res, next) => {
       return res.send({ repaired: [], missing: 0, attempted: 0, unresolvable: 0 });
     }
 
-    let query = db.knex('game as g')
+    let query = db
+      .knex('game as g')
       .join('game_source as gs', 'gs.game_id', 'g.id')
       .select(
         'g.id as gameId',

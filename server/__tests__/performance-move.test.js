@@ -36,16 +36,17 @@ const cleanupTasks = () => {
   }
 };
 
-const waitFor = (fn, timeout = 60000, interval = 300) => new Promise((resolve, reject) => {
-  const start = Date.now();
-  const check = () => {
-    const result = fn();
-    if (result) return resolve(result);
-    if (Date.now() - start > timeout) return reject(new Error('waitFor timeout'));
-    setTimeout(check, interval);
-  };
-  check();
-});
+const waitFor = (fn, timeout = 60000, interval = 300) =>
+  new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      const result = fn();
+      if (result) return resolve(result);
+      if (Date.now() - start > timeout) return reject(new Error('waitFor timeout'));
+      setTimeout(check, interval);
+    };
+    check();
+  });
 
 describe('Performance: Large File Set Move', () => {
   it('should track progress for 500 files without losing events', async () => {
@@ -58,7 +59,10 @@ describe('Performance: Large File Set Move', () => {
 
     const fileCount = 500;
     for (let i = 0; i < fileCount; i++) {
-      fs.writeFileSync(path.join(sourceDir, `file_${String(i).padStart(4, '0')}.dat`), Buffer.alloc(256, i % 256));
+      fs.writeFileSync(
+        path.join(sourceDir, `file_${String(i).padStart(4, '0')}.dat`),
+        Buffer.alloc(256, i % 256),
+      );
     }
 
     const task = createTask('move', {
@@ -79,7 +83,7 @@ describe('Performance: Large File Set Move', () => {
 
     const finalTask = await waitFor(() => {
       const t = getTask(task.id);
-      return (t && (t.status === 'completed' || t.status === 'failed')) ? t : null;
+      return t && (t.status === 'completed' || t.status === 'failed') ? t : null;
     }, 120000);
 
     unsub();
@@ -88,17 +92,30 @@ describe('Performance: Large File Set Move', () => {
     assert.equal(finalTask.progress, 100);
 
     assert.ok(progressUpdates.length > 0, 'Should have at least one progress update');
-    assert.ok(progressUpdates[progressUpdates.length - 1].progress >= 99, 'Last progress should be near 100');
+    assert.ok(
+      progressUpdates[progressUpdates.length - 1].progress >= 99,
+      'Last progress should be near 100',
+    );
 
     for (const update of progressUpdates) {
-      assert.ok(update.progress >= 0 && update.progress <= 100, `Invalid progress: ${update.progress}`);
+      assert.ok(
+        update.progress >= 0 && update.progress <= 100,
+        `Invalid progress: ${update.progress}`,
+      );
     }
 
     const destFiles = fs.readdirSync(destDir);
-    assert.ok(destFiles.length >= fileCount, `Expected ${fileCount} files, got ${destFiles.length}`);
+    assert.ok(
+      destFiles.length >= fileCount,
+      `Expected ${fileCount} files, got ${destFiles.length}`,
+    );
 
     cleanupTasks();
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   it('should handle deeply nested directory structure', async () => {
@@ -135,7 +152,7 @@ describe('Performance: Large File Set Move', () => {
 
     const finalTask = await waitFor(() => {
       const t = getTask(task.id);
-      return (t && (t.status === 'completed' || t.status === 'failed')) ? t : null;
+      return t && (t.status === 'completed' || t.status === 'failed') ? t : null;
     }, 120000);
 
     assert.equal(finalTask.status, 'completed', `Move failed: ${finalTask.error}`);
@@ -144,6 +161,10 @@ describe('Performance: Large File Set Move', () => {
     assert.ok(fs.existsSync(path.join(destDir, 'dir4', 'sub2', 'nested9.dat')));
 
     cleanupTasks();
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 });

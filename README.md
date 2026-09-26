@@ -17,12 +17,12 @@ A desktop application for managing your local game library. Built with Quasar (V
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
+| Layer    | Technology                         |
+| -------- | ---------------------------------- |
 | Frontend | Vue 3, Quasar 2, Pinia, Vue Router |
-| Desktop | Electron |
-| Backend | Express 5, Knex.js, SQLite3 |
-| Build | Vite (via Quasar CLI) |
+| Desktop  | Electron                           |
+| Backend  | Express 5, Knex.js, SQLite3        |
+| Build    | Vite (via Quasar CLI)              |
 
 ## Project Structure
 
@@ -95,15 +95,15 @@ pnpm typecheck
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| | `GET /api/health` | Health check |
-| | `/api/libraries` | Library CRUD |
-| | `/api/games` | Game CRUD & listing |
-| | `/api/scraper` | Search & scrape from external sources |
-| | `/api/settings` | App settings (Bangumi token, concurrency, etc.) |
-| | `/api/cover` | Cover image management |
-| | `/api/cache` | Search & adopt cache management |
+| Method | Path              | Description                                     |
+| ------ | ----------------- | ----------------------------------------------- |
+|        | `GET /api/health` | Health check                                    |
+|        | `/api/libraries`  | Library CRUD                                    |
+|        | `/api/games`      | Game CRUD & listing                             |
+|        | `/api/scraper`    | Search & scrape from external sources           |
+|        | `/api/settings`   | App settings (Bangumi token, concurrency, etc.) |
+|        | `/api/cover`      | Cover image management                          |
+|        | `/api/cache`      | Search & adopt cache management                 |
 
 ## Configuration
 

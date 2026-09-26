@@ -1,6 +1,9 @@
 <template>
-  <q-page style="overflow: hidden; display: flex; flex-direction: column;">
-    <div class="row items-center q-gutter-sm q-px-md q-py-sm" style="border-bottom: 1px solid var(--m3-outline-variant);">
+  <q-page style="overflow: hidden; display: flex; flex-direction: column">
+    <div
+      class="row items-center q-gutter-sm q-px-md q-py-sm"
+      style="border-bottom: 1px solid var(--m3-outline-variant)"
+    >
       <q-input
         v-model="keyword"
         label="Search"
@@ -15,7 +18,13 @@
           <q-icon name="search" color="primary" />
         </template>
       </q-input>
-      <q-btn flat icon="filter_list" label="Filter" class="m3-btn--tonal" @click="showFilter = true">
+      <q-btn
+        flat
+        icon="filter_list"
+        label="Filter"
+        class="m3-btn--tonal"
+        @click="showFilter = true"
+      >
         <q-badge v-if="activeFilterCount > 0" color="primary" floating>{{
           activeFilterCount
         }}</q-badge>
@@ -34,14 +43,28 @@
         flat
         round
         :icon="sortOrder === 'desc' ? 'arrow_downward' : 'arrow_upward'"
-        style="color: var(--m3-on-surface-variant);"
+        style="color: var(--m3-on-surface-variant)"
         @click="toggleSortOrder"
       />
 
       <q-space />
 
-      <q-btn v-if="!favoritesMode" unelevated class="m3-btn--filled" label="Scan &amp; Scrape" icon="search" @click="showScanner = true" />
-      <q-btn v-if="!selectMode" flat icon="checklist" label="Select" class="m3-btn--outlined" @click="enterSelectMode" />
+      <q-btn
+        v-if="!favoritesMode"
+        unelevated
+        class="m3-btn--filled"
+        label="Scan &amp; Scrape"
+        icon="search"
+        @click="showScanner = true"
+      />
+      <q-btn
+        v-if="!selectMode"
+        flat
+        icon="checklist"
+        label="Select"
+        class="m3-btn--outlined"
+        @click="enterSelectMode"
+      />
       <template v-else>
         <q-btn flat label="Cancel" class="m3-btn--text" @click="exitSelectMode" />
         <template v-if="favoritesMode">
@@ -57,35 +80,44 @@
         <template v-else>
           <q-btn
             unelevated
-            style="background: var(--m3-error-container) !important; color: var(--m3-on-error-container) !important;"
+            style="
+              background: var(--m3-error-container) !important;
+              color: var(--m3-on-error-container) !important;
+            "
             icon="delete"
             :label="`Delete (${selectedIds.size})`"
             :disable="selectedIds.size === 0"
             @click="confirmDeleteDialog = true"
           />
         </template>
-        <span class="text-caption" style="color: var(--m3-on-surface-variant);">{{ selectedIds.size }} selected</span>
+        <span class="text-caption" style="color: var(--m3-on-surface-variant)"
+          >{{ selectedIds.size }} selected</span
+        >
       </template>
 
       <q-separator vertical inset class="q-mx-xs" />
-      <q-btn flat round icon="casino" style="color: var(--m3-primary);" :disable="games.length === 0" @click="openRandomGame">
+      <q-btn
+        flat
+        round
+        icon="casino"
+        style="color: var(--m3-primary)"
+        :disable="games.length === 0"
+        @click="openRandomGame"
+      >
         <q-tooltip>Open a random game</q-tooltip>
       </q-btn>
     </div>
 
     <div
       ref="gridContainer"
-class="q-pa-md"
-      style="flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column;"
+      class="q-pa-md"
+      style="flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent="onDragOver"
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDrop"
     >
-      <div
-        v-if="dragOver && !favoritesMode"
-        class="drop-overlay flex flex-center"
-      >
+      <div v-if="dragOver && !favoritesMode" class="drop-overlay flex flex-center">
         <div class="text-center">
           <q-icon name="cloud_upload" size="64px" color="primary" />
           <div class="text-h6 text-primary q-mt-sm">Drop folder to search</div>
@@ -108,7 +140,11 @@ class="q-pa-md"
         @mouseup="onGridMouseUp"
       >
         <template #default="{ item: game }">
-          <div :data-game-id="game.id" :data-select-mode="selectMode ? '1' : '0'" @contextmenu.prevent="onContextMenu(game, $event)">
+          <div
+            :data-game-id="game.id"
+            :data-select-mode="selectMode ? '1' : '0'"
+            @contextmenu.prevent="onContextMenu(game, $event)"
+          >
             <GameCard
               :game="game"
               :selectable="selectMode"
@@ -123,9 +159,13 @@ class="q-pa-md"
 
       <div v-if="selectMode && dragSelecting" class="drag-select-rect" :style="dragRectStyle" />
 
-      <div v-if="games.length === 0 && !loading" class="text-center q-mt-xl" style="color: var(--m3-on-surface-variant);">
+      <div
+        v-if="games.length === 0 && !loading"
+        class="text-center q-mt-xl"
+        style="color: var(--m3-on-surface-variant)"
+      >
         <q-icon name="videogame_asset" size="64px" />
-        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface);">No games found</div>
+        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface)">No games found</div>
         <div class="text-body2">Add a game library in Settings, then scan for games.</div>
       </div>
 
@@ -140,12 +180,17 @@ class="q-pa-md"
     <q-dialog v-model="confirmDeleteDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error);" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface);">Delete {{ selectedIds.size }} game(s)?</span>
+          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface)">Delete {{ selectedIds.size }} game(s)?</span>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn unelevated style="background: var(--m3-error) !important; color: var(--m3-on-error) !important;" label="Delete" @click="doBatchDelete" />
+          <q-btn
+            unelevated
+            style="background: var(--m3-error) !important; color: var(--m3-on-error) !important"
+            label="Delete"
+            @click="doBatchDelete"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -153,8 +198,10 @@ class="q-pa-md"
     <q-dialog v-model="confirmUnfavoriteDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error);" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface);">Remove {{ selectedIds.size }} game(s) from favorites?</span>
+          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface)"
+            >Remove {{ selectedIds.size }} game(s) from favorites?</span
+          >
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
@@ -166,21 +213,33 @@ class="q-pa-md"
     <q-dialog v-model="showSingleDeleteDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error);" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface);">Delete this game? This action cannot be undone.</span>
+          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface)"
+            >Delete this game? This action cannot be undone.</span
+          >
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup @click="confirmSingleDeleteId = null; showSingleDeleteDialog = false" />
-          <q-btn unelevated style="background: var(--m3-error) !important; color: var(--m3-on-error) !important;" label="Delete" @click="doSingleDelete" />
+          <q-btn
+            flat
+            class="m3-btn--text"
+            label="Cancel"
+            v-close-popup
+            @click="
+              confirmSingleDeleteId = null;
+              showSingleDeleteDialog = false;
+            "
+          />
+          <q-btn
+            unelevated
+            style="background: var(--m3-error) !important; color: var(--m3-on-error) !important"
+            label="Delete"
+            @click="doSingleDelete"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <ScrapeDialog
-      v-model="showDropScrape"
-      :game-name="dropFolderName"
-      @adopted="onDropAdopt"
-    />
+    <ScrapeDialog v-model="showDropScrape" :game-name="dropFolderName" @adopted="onDropAdopt" />
 
     <ContextMenu
       v-if="contextMenuGame"
@@ -283,21 +342,26 @@ const sortOptions = [
 
 const SORT_KEY = '__game_lib_sort__';
 const SORT_KEY_FAV = '__game_lib_sort_fav__';
-const getSortKey = () => favoritesMode.value ? SORT_KEY_FAV : SORT_KEY;
+const getSortKey = () => (favoritesMode.value ? SORT_KEY_FAV : SORT_KEY);
 
 const loadSortPrefs = (): { sortBy: string; sortOrder: 'asc' | 'desc' } => {
   try {
     const saved = localStorage.getItem(getSortKey());
     if (saved) return JSON.parse(saved);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { sortBy: 'updated_at', sortOrder: 'desc' };
 };
 
 const saveSortPrefs = () => {
-  localStorage.setItem(getSortKey(), JSON.stringify({
-    sortBy: sortBy.value,
-    sortOrder: sortOrder.value,
-  }));
+  localStorage.setItem(
+    getSortKey(),
+    JSON.stringify({
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value,
+    }),
+  );
 };
 
 const restoreSortPrefs = () => {
@@ -348,7 +412,9 @@ const confirmSingleDeleteId = ref<number | null>(null);
 const showSingleDeleteDialog = ref(false);
 
 const gridContainer = ref<HTMLElement | null>(null);
-const virtualGrid = ref<{ scrollTo: (top: number) => void; getScrollTop: () => number } | null>(null);
+const virtualGrid = ref<{ scrollTo: (top: number) => void; getScrollTop: () => number } | null>(
+  null,
+);
 const viewportWidth = useViewportWidth();
 
 const CARD_ASPECT = 2.8 / 4;
@@ -641,16 +707,19 @@ watch(sortBy, () => {
 const FILTER_KEY = '__game_lib_filter__';
 const FILTER_KEY_FAV = '__game_lib_filter_fav__';
 
-const getFilterKey = () => favoritesMode.value ? FILTER_KEY_FAV : FILTER_KEY;
+const getFilterKey = () => (favoritesMode.value ? FILTER_KEY_FAV : FILTER_KEY);
 
 // Filter selections are stored in localStorage (like the sort prefs) so they survive an
 // app restart. sessionStorage is cleared when the window closes, which silently reset
 // every filter - including Scraped - back to its default on the next launch.
 const saveFilterState = () => {
-  localStorage.setItem(getFilterKey(), JSON.stringify({
-    keyword: keyword.value,
-    filter: currentFilter.value,
-  }));
+  localStorage.setItem(
+    getFilterKey(),
+    JSON.stringify({
+      keyword: keyword.value,
+      filter: currentFilter.value,
+    }),
+  );
 };
 
 const restoreFilterState = () => {
@@ -665,15 +734,19 @@ const restoreFilterState = () => {
       keyword.value = '';
       currentFilter.value = { ...DEFAULT_FILTER };
     }
-  } catch { /* ignore */ } finally {
-    void nextTick(() => { restoringFilter.value = false; });
+  } catch {
+    /* ignore */
+  } finally {
+    void nextTick(() => {
+      restoringFilter.value = false;
+    });
   }
 };
 
 const SCROLL_KEY = '__game_lib_scroll__';
 const SCROLL_KEY_FAV = '__game_lib_scroll_fav__';
 
-const getScrollKey = () => favoritesMode.value ? SCROLL_KEY_FAV : SCROLL_KEY;
+const getScrollKey = () => (favoritesMode.value ? SCROLL_KEY_FAV : SCROLL_KEY);
 
 const saveScrollPosition = () => {
   const scrollTop = virtualGrid.value?.getScrollTop() ?? 0;
@@ -695,10 +768,13 @@ watch(favoritesMode, (isFav) => {
   const scrollTop = virtualGrid.value?.getScrollTop() ?? 0;
   sessionStorage.setItem(leaveKey, String(scrollTop));
   const leaveFilterKey = isFav ? FILTER_KEY : FILTER_KEY_FAV;
-  localStorage.setItem(leaveFilterKey, JSON.stringify({
-    keyword: keyword.value,
-    filter: currentFilter.value,
-  }));
+  localStorage.setItem(
+    leaveFilterKey,
+    JSON.stringify({
+      keyword: keyword.value,
+      filter: currentFilter.value,
+    }),
+  );
   games.value = [];
   restoringScroll.value = true;
   restoreFilterState();

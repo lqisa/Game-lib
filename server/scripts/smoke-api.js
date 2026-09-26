@@ -27,7 +27,11 @@ const run = async (baseUrl, path, validate, expectStatus = 200) => {
     status = res.status;
     const text = await res.text();
     let body;
-    try { body = JSON.parse(text); } catch { body = text; }
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
     sample = JSON.stringify(body).slice(0, 70);
     ok = status === expectStatus;
     if (ok && validate) {
@@ -65,7 +69,11 @@ const runChecks = async (baseUrl) => {
   await run(baseUrl, '/api/settings/archived-archives/list', isArray('archived archives'));
   await run(baseUrl, '/api/settings/archive-passwords/list', isArray('passwords'));
   await run(baseUrl, '/api/settings/detect-tools', (b) => Object.keys(b).join(',') || 'none found');
-  await run(baseUrl, '/api/settings/extract-tools/list', (b) => Object.keys(b).join(',') || 'none found');
+  await run(
+    baseUrl,
+    '/api/settings/extract-tools/list',
+    (b) => Object.keys(b).join(',') || 'none found',
+  );
   await run(baseUrl, '/api/tasks', isArray('tasks'));
   await run(baseUrl, '/api/games/999999', () => '', 404);
   await run(baseUrl, '/api/settings/__nope__', () => '', 404);
@@ -80,7 +88,9 @@ const runChecks = async (baseUrl) => {
 const report = () => {
   console.log('\n=== smoke results ===');
   for (const r of results) {
-    console.log(`${r.ok ? 'PASS' : 'FAIL'} ${String(r.status).padEnd(4)} ${r.path.padEnd(44)} ${r.note}`);
+    console.log(
+      `${r.ok ? 'PASS' : 'FAIL'} ${String(r.status).padEnd(4)} ${r.path.padEnd(44)} ${r.note}`,
+    );
     if (!r.ok) console.log(`     sample: ${r.sample}`);
   }
   const failed = results.filter((r) => !r.ok);

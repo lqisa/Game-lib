@@ -1,12 +1,20 @@
 <template>
   <q-dialog v-model="show" position="bottom" seamless>
-    <q-card style="min-width: 400px; max-width: 600px; max-height: 400px;" class="q-pa-sm">
+    <q-card style="min-width: 400px; max-width: 600px; max-height: 400px" class="q-pa-sm">
       <div class="row items-center q-mb-sm">
-        <div class="text-subtitle2" style="color: var(--m3-on-surface);">Background Tasks</div>
+        <div class="text-subtitle2" style="color: var(--m3-on-surface)">Background Tasks</div>
         <q-space />
-        <q-btn flat round dense size="sm" icon="close" style="color: var(--m3-on-surface-variant);" @click="show = false" />
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="close"
+          style="color: var(--m3-on-surface-variant)"
+          @click="show = false"
+        />
       </div>
-      <q-scroll-area style="height: 300px;">
+      <q-scroll-area style="height: 300px">
         <q-list dense>
           <q-item v-for="task in sortedTasks" :key="task.id" class="q-pa-xs">
             <q-item-section avatar>
@@ -17,7 +25,9 @@
               />
             </q-item-section>
             <q-item-section>
-              <q-item-label caption style="color: var(--m3-on-surface);">{{ task.label }}</q-item-label>
+              <q-item-label caption style="color: var(--m3-on-surface)">{{
+                task.label
+              }}</q-item-label>
               <q-linear-progress
                 v-if="task.status === 'running' || task.status === 'pending'"
                 :value="task.progress / 100"
@@ -25,7 +35,7 @@
                 size="4px"
                 class="q-mt-xs"
               />
-              <div class="text-caption" style="color: var(--m3-on-surface-variant);">
+              <div class="text-caption" style="color: var(--m3-on-surface-variant)">
                 {{ task.detail }}
                 <span v-if="task.status === 'running'"> ({{ task.progress }}%)</span>
               </div>
@@ -45,7 +55,11 @@
                 <q-tooltip>Cancel</q-tooltip>
               </q-btn>
               <q-btn
-                v-if="task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'"
+                v-if="
+                  task.status === 'completed' ||
+                  task.status === 'failed' ||
+                  task.status === 'cancelled'
+                "
                 flat
                 round
                 dense
@@ -60,7 +74,9 @@
           </q-item>
           <q-item v-if="sortedTasks.length === 0">
             <q-item-section>
-              <q-item-label caption class="text-center" style="color: var(--m3-on-surface-variant);">No tasks</q-item-label>
+              <q-item-label caption class="text-center" style="color: var(--m3-on-surface-variant)"
+                >No tasks</q-item-label
+              >
             </q-item-section>
           </q-item>
         </q-list>
@@ -79,9 +95,9 @@ const taskStore = useTaskStore();
 const show = defineModel<boolean>({ default: false });
 
 const sortedTasks = computed(() =>
-  [...taskStore.tasks.values()].sort((a, b) =>
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  [...taskStore.tasks.values()].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  ),
 );
 
 const statusColor = (task: Task) => {

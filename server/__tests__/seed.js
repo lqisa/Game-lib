@@ -14,7 +14,8 @@ const REWRITE = {
   makers: ['Key'],
   genres: ['Visual Novel', 'Romance'],
   tags: ['Multiple Endings', 'Fantasy', 'School Life'],
-  description: 'Key\'s 6th game, released in 2016. A story about Kazamatsuri, a city where nature and civilization coexist.',
+  description:
+    "Key's 6th game, released in 2016. A story about Kazamatsuri, a city where nature and civilization coexist.",
 };
 
 const createFakeFiles = (dir) => {
@@ -34,11 +35,11 @@ const createFakeArchive = (dir) => {
   fs.mkdirSync(dir, { recursive: true });
   const fake7z = Buffer.alloc(2048);
   fake7z[0] = 0x37;
-  fake7z[1] = 0x7A;
-  fake7z[2] = 0xBC;
-  fake7z[3] = 0xAF;
+  fake7z[1] = 0x7a;
+  fake7z[2] = 0xbc;
+  fake7z[3] = 0xaf;
   fake7z[4] = 0x27;
-  fake7z[5] = 0x1C;
+  fake7z[5] = 0x1c;
   fs.writeFileSync(path.join(dir, 'Rewrite_Haruka.7z'), fake7z);
 
   const fakeRar = Buffer.alloc(2048);
@@ -52,7 +53,10 @@ const createFakeArchive = (dir) => {
 export const seed = async (baseDir) => {
   await initDatabase();
 
-  const rootDir = baseDir || process.env.GAME_LIB_DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'gamelib-e2e-'));
+  const rootDir =
+    baseDir ||
+    process.env.GAME_LIB_DATA_DIR ||
+    fs.mkdtempSync(path.join(os.tmpdir(), 'gamelib-e2e-'));
   const libDir = path.join(rootDir, 'TestLibrary');
   fs.mkdirSync(libDir, { recursive: true });
 
@@ -97,12 +101,15 @@ export const seed = async (baseDir) => {
       description: REWRITE.description,
     });
   } else {
-    const [row] = await knex('game').insert({
-      name: REWRITE.name,
-      library_id: libId,
-      sub_path: 'Rewrite',
-      description: REWRITE.description,
-    }, ['id']);
+    const [row] = await knex('game').insert(
+      {
+        name: REWRITE.name,
+        library_id: libId,
+        sub_path: 'Rewrite',
+        description: REWRITE.description,
+      },
+      ['id'],
+    );
     gameId = row.id || row;
   }
 
@@ -118,7 +125,9 @@ export const seed = async (baseDir) => {
   }
   await knex('game_maker').where({ game_id: gameId }).del();
   for (const mid of makerIds) {
-    await knex('game_maker').insert({ game_id: gameId, maker_id: mid }).catch(() => {});
+    await knex('game_maker')
+      .insert({ game_id: gameId, maker_id: mid })
+      .catch(() => {});
   }
 
   const genreIds = [];
@@ -133,7 +142,9 @@ export const seed = async (baseDir) => {
   }
   await knex('game_genre').where({ game_id: gameId }).del();
   for (const gid of genreIds) {
-    await knex('game_genre').insert({ game_id: gameId, genre_id: gid }).catch(() => {});
+    await knex('game_genre')
+      .insert({ game_id: gameId, genre_id: gid })
+      .catch(() => {});
   }
 
   const tagIds = [];
@@ -148,10 +159,14 @@ export const seed = async (baseDir) => {
   }
   await knex('game_tag').where({ game_id: gameId }).del();
   for (const tid of tagIds) {
-    await knex('game_tag').insert({ game_id: gameId, tag_id: tid }).catch(() => {});
+    await knex('game_tag')
+      .insert({ game_id: gameId, tag_id: tid })
+      .catch(() => {});
   }
 
-  const existingSource = await knex('game_source').where({ game_id: gameId, source_type: 'vndb' }).first();
+  const existingSource = await knex('game_source')
+    .where({ game_id: gameId, source_type: 'vndb' })
+    .first();
   if (!existingSource) {
     await knex('game_source').insert({
       game_id: gameId,
@@ -162,16 +177,21 @@ export const seed = async (baseDir) => {
     });
   }
 
-  const existingArchiveGame = await knex('game').where({ name: 'Rewrite_Haruka.7z', library_id: libId }).first();
+  const existingArchiveGame = await knex('game')
+    .where({ name: 'Rewrite_Haruka.7z', library_id: libId })
+    .first();
   let archiveGameId;
   if (existingArchiveGame) {
     archiveGameId = existingArchiveGame.id;
   } else {
-    const [row] = await knex('game').insert({
-      name: 'Rewrite_Haruka.7z',
-      library_id: libId,
-      sub_path: 'Archives/Rewrite_Haruka.7z',
-    }, ['id']);
+    const [row] = await knex('game').insert(
+      {
+        name: 'Rewrite_Haruka.7z',
+        library_id: libId,
+        sub_path: 'Archives/Rewrite_Haruka.7z',
+      },
+      ['id'],
+    );
     archiveGameId = row.id || row;
   }
 
@@ -212,19 +232,53 @@ export const unseed = async () => {
     return;
   }
 
-  const { rootDir, libId, rewriteGameId, archiveGameId, destLibId } = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+  const { rootDir, libId, rewriteGameId, archiveGameId, destLibId } = JSON.parse(
+    fs.readFileSync(jsonPath, 'utf-8'),
+  );
 
-  await knex('game_source').where({ game_id: rewriteGameId }).del().catch(() => {});
-  await knex('game_maker').where({ game_id: rewriteGameId }).del().catch(() => {});
-  await knex('game_genre').where({ game_id: rewriteGameId }).del().catch(() => {});
-  await knex('game_tag').where({ game_id: rewriteGameId }).del().catch(() => {});
-  await knex('game').where({ id: rewriteGameId }).del().catch(() => {});
-  await knex('game').where({ id: archiveGameId }).del().catch(() => {});
-  await knex('library').where({ id: libId }).del().catch(() => {});
-  await knex('library').where({ id: destLibId }).del().catch(() => {});
+  await knex('game_source')
+    .where({ game_id: rewriteGameId })
+    .del()
+    .catch(() => {});
+  await knex('game_maker')
+    .where({ game_id: rewriteGameId })
+    .del()
+    .catch(() => {});
+  await knex('game_genre')
+    .where({ game_id: rewriteGameId })
+    .del()
+    .catch(() => {});
+  await knex('game_tag')
+    .where({ game_id: rewriteGameId })
+    .del()
+    .catch(() => {});
+  await knex('game')
+    .where({ id: rewriteGameId })
+    .del()
+    .catch(() => {});
+  await knex('game')
+    .where({ id: archiveGameId })
+    .del()
+    .catch(() => {});
+  await knex('library')
+    .where({ id: libId })
+    .del()
+    .catch(() => {});
+  await knex('library')
+    .where({ id: destLibId })
+    .del()
+    .catch(() => {});
 
-  try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* ignore */ }
-  try { fs.unlinkSync(jsonPath); } catch { /* ignore */ }
+  try {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  try {
+    fs.unlinkSync(jsonPath);
+  } catch {
+    /* ignore */
+  }
 
   console.log('✓ E2E seed data cleaned up');
 };
@@ -233,8 +287,18 @@ const isMain = process.argv[1] && process.argv[1].includes('seed');
 if (isMain) {
   const action = process.argv[2] || 'create';
   if (action === 'create') {
-    seed().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
+    seed()
+      .then(() => process.exit(0))
+      .catch((e) => {
+        console.error(e);
+        process.exit(1);
+      });
   } else if (action === 'clean') {
-    unseed().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
+    unseed()
+      .then(() => process.exit(0))
+      .catch((e) => {
+        console.error(e);
+        process.exit(1);
+      });
   }
 }

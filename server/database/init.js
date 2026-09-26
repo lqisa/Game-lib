@@ -146,11 +146,11 @@ const TABLE_DDL = {
 const initDatabase = async () => {
   // Ensure data directory exists before any DB operations
   ensureDir(DB_DIR);
-  
+
   const existingTables = await knex
     .raw("SELECT name FROM sqlite_master WHERE type='table'")
     .then((r) => r.map((row) => row.name));
-  
+
   const missingTables = ALL_TABLES.filter((t) => !existingTables.includes(t));
 
   if (missingTables.length === 0) {
@@ -171,7 +171,7 @@ const initDatabase = async () => {
       console.log(` * Creating table: ${tableName}`);
       await TABLE_DDL[tableName](knex);
     }
-    
+
     if (missingTables.length > 0) {
       console.log(' * Tables created.');
     }
@@ -202,9 +202,9 @@ const initDatabase = async () => {
   const v3 = await knex('setting').where({ key: 'migration_v3' }).first();
   if (!v3) {
     console.log(' * Running migration v3: add name column to game_source...');
-    const hasName = await knex.raw("PRAGMA table_info('game_source')").then(
-      (r) => r.some((col) => col.name === 'name')
-    );
+    const hasName = await knex
+      .raw("PRAGMA table_info('game_source')")
+      .then((r) => r.some((col) => col.name === 'name'));
     if (!hasName) {
       await knex.raw('ALTER TABLE game_source ADD COLUMN name TEXT');
     }
@@ -265,7 +265,9 @@ const initDatabase = async () => {
         PRIMARY KEY (library_id, sub_path)
       )
     `);
-    await knex.raw('INSERT INTO adopt_cache_new (game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at) SELECT game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at FROM adopt_cache');
+    await knex.raw(
+      'INSERT INTO adopt_cache_new (game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at) SELECT game_id, source_type, source_id, source_url, name, cover_url, makers, genres, tags, description, created_at, updated_at FROM adopt_cache',
+    );
     await knex.raw('DROP TABLE adopt_cache');
     await knex.raw('ALTER TABLE adopt_cache_new RENAME TO adopt_cache');
     await knex.raw('PRAGMA foreign_keys = ON');
@@ -388,10 +390,15 @@ const initDatabase = async () => {
         const parsed = JSON.parse(row.value);
         if (!Array.isArray(parsed) || parsed.includes('dmm')) continue;
         const previous = PREVIOUS_DEFAULTS[lang];
-        const untouched = previous.length === parsed.length && previous.every((s, i) => s === parsed[i]);
+        const untouched =
+          previous.length === parsed.length && previous.every((s, i) => s === parsed[i]);
         const next = untouched ? DEFAULT_MATCH_PRIORITY[lang] : [...parsed, 'dmm'];
-        await knex('setting').where({ key }).update({ value: JSON.stringify(next) });
-        console.log(` *   ${key}: ${JSON.stringify(next)}${untouched ? '' : ' (customised - dmm appended)'}`);
+        await knex('setting')
+          .where({ key })
+          .update({ value: JSON.stringify(next) });
+        console.log(
+          ` *   ${key}: ${JSON.stringify(next)}${untouched ? '' : ' (customised - dmm appended)'}`,
+        );
       } catch {
         // Malformed value: leave it alone, getMatchConfig() falls back to the default.
       }

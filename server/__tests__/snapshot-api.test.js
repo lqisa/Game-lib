@@ -6,12 +6,7 @@ import settingRouter from '../routes/setting.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
 import { closePool } from '../database/db.js';
-import {
-  createTask,
-  getAllTasks,
-  updateTask,
-  removeTask,
-} from '../tasks.js';
+import { createTask, getAllTasks, updateTask, removeTask } from '../tasks.js';
 
 let app;
 let baseUrl;
@@ -23,7 +18,11 @@ const request = async (method, path, body) => {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   const text = await res.text();
-  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: text }; }
+  try {
+    return { status: res.status, body: JSON.parse(text) };
+  } catch {
+    return { status: res.status, body: text };
+  }
 };
 
 const cleanupTasks = () => {
@@ -57,7 +56,11 @@ const checkShape = (obj, shape, label) => {
   for (const [key, expectedType] of Object.entries(shape)) {
     assert.ok(key in obj, `${label}: missing key "${key}"`);
     if (expectedType !== 'object' || obj[key] !== null) {
-      assert.equal(typeof obj[key], expectedType, `${label}: key "${key}" should be ${expectedType}, got ${typeof obj[key]}`);
+      assert.equal(
+        typeof obj[key],
+        expectedType,
+        `${label}: key "${key}" should be ${expectedType}, got ${typeof obj[key]}`,
+      );
     }
   }
 };
@@ -106,7 +109,10 @@ describe('Snapshot: API Response Structure', () => {
       createTask('move', { source: 'A', dest: 'B' });
       const res = await request('GET', '/api/tasks/');
       for (const t of res.body) {
-        assert.ok(['pending', 'running', 'completed', 'failed', 'cancelled'].includes(t.status), `Invalid task status: ${t.status}`);
+        assert.ok(
+          ['pending', 'running', 'completed', 'failed', 'cancelled'].includes(t.status),
+          `Invalid task status: ${t.status}`,
+        );
       }
     });
 

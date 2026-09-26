@@ -1,4 +1,14 @@
-import { BrowserWindow, Tray, Menu, nativeImage, app, ipcMain, dialog, shell, powerMonitor } from 'electron';
+import {
+  BrowserWindow,
+  Tray,
+  Menu,
+  nativeImage,
+  app,
+  ipcMain,
+  dialog,
+  shell,
+  powerMonitor,
+} from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -252,8 +262,9 @@ void app.whenReady().then(async () => {
     }
   }
 
-  const startHidden = app.commandLine.hasSwitch('hidden')
-    || (platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden);
+  const startHidden =
+    app.commandLine.hasSwitch('hidden') ||
+    (platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden);
   if (startHidden) {
     lightweightMode = true;
   }
@@ -368,15 +379,15 @@ void app.whenReady().then(async () => {
     const dataDir = getDataDir();
     ensureDir(dataDir);
     fs.writeFileSync(path.join(dataDir, '.sse-token'), sseToken);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   await startServer();
 
   // Cache task functions for synchronous shutdown checks
   try {
-    const tasksModule = await import(
-      pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href
-    );
+    const tasksModule = await import(pathToFileURL(path.resolve(getServerDir(), 'tasks.js')).href);
     hasRunningMoveTasksFn = tasksModule.hasRunningMoveTasks;
     hasRunningTasksFn = tasksModule.hasRunningTasks;
     hasActiveTasksFn = tasksModule.hasActiveTasks;
@@ -455,9 +466,12 @@ app.on('window-all-closed', () => {
   }
 });
 
-(powerMonitor as unknown as NodeJS.EventEmitter).on('shutdown', (e: { preventDefault: () => void }) => {
-  // Same rule on OS shutdown, otherwise the task is killed with the machine.
-  if (hasActiveTasksFn?.()) {
-    e.preventDefault();
-  }
-});
+(powerMonitor as unknown as NodeJS.EventEmitter).on(
+  'shutdown',
+  (e: { preventDefault: () => void }) => {
+    // Same rule on OS shutdown, otherwise the task is killed with the machine.
+    if (hasActiveTasksFn?.()) {
+      e.preventDefault();
+    }
+  },
+);

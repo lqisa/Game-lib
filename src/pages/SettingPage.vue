@@ -1,6 +1,6 @@
 <template>
   <q-page>
-    <div class="q-pa-md" style="max-width: 800px; margin: 0 auto;">
+    <div class="q-pa-md" style="max-width: 800px; margin: 0 auto">
       <div class="m3-title q-mb-lg">Settings</div>
 
       <q-card class="m3-card q-mb-md">
@@ -16,17 +16,35 @@
               </q-item-section>
               <q-item-section side>
                 <div class="row q-gutter-xs">
-                  <q-btn flat round icon="edit" style="color: var(--m3-primary);" @click="openEditDialog(lib)">
+                  <q-btn
+                    flat
+                    round
+                    icon="edit"
+                    style="color: var(--m3-primary)"
+                    @click="openEditDialog(lib)"
+                  >
                     <q-tooltip>Edit</q-tooltip>
                   </q-btn>
-                  <q-btn flat round icon="delete" style="color: var(--m3-error);" @click="deleteLibrary(lib.id)" />
+                  <q-btn
+                    flat
+                    round
+                    icon="delete"
+                    style="color: var(--m3-error)"
+                    @click="deleteLibrary(lib.id)"
+                  />
                 </div>
               </q-item-section>
             </q-item>
           </q-list>
         </q-card-section>
         <q-card-section>
-          <q-btn unelevated class="m3-btn--tonal" icon="add" label="Add Library" @click="showAddDialog = true" />
+          <q-btn
+            unelevated
+            class="m3-btn--tonal"
+            icon="add"
+            label="Add Library"
+            @click="showAddDialog = true"
+          />
         </q-card-section>
       </q-card>
 
@@ -134,13 +152,32 @@
       <q-card class="m3-card q-mb-md">
         <q-card-section>
           <div class="m3-label-large q-mb-sm">Proxy</div>
-          <div class="m3-label-medium q-mb-sm">HTTP proxy for scraper (e.g. Clash, v2ray). Restart required after change.</div>
+          <div class="m3-label-medium q-mb-sm">
+            HTTP proxy for scraper (e.g. Clash, v2ray). Restart required after change.
+          </div>
         </q-card-section>
         <q-card-section>
           <div class="row q-gutter-md items-center">
             <q-toggle v-model="proxyEnabled" label="Enable" color="primary" />
-            <q-input v-model="proxyHost" label="Host" outlined dense class="m3-input" style="max-width: 180px" />
-            <q-input v-model.number="proxyPort" label="Port" type="number" outlined dense class="m3-input" style="max-width: 120px" :min="1" :max="65535" />
+            <q-input
+              v-model="proxyHost"
+              label="Host"
+              outlined
+              dense
+              class="m3-input"
+              style="max-width: 180px"
+            />
+            <q-input
+              v-model.number="proxyPort"
+              label="Port"
+              type="number"
+              outlined
+              dense
+              class="m3-input"
+              style="max-width: 120px"
+              :min="1"
+              :max="65535"
+            />
             <q-btn unelevated class="m3-btn--filled" label="Save" @click="saveProxy" />
             <q-btn
               flat
@@ -183,7 +220,9 @@
       <q-card class="m3-card q-mb-md">
         <q-card-section>
           <div class="m3-label-large q-mb-sm">Blacklist</div>
-          <div class="m3-label-medium q-mb-sm">Directories in this list will be excluded from scan results, game list, and cache.</div>
+          <div class="m3-label-medium q-mb-sm">
+            Directories in this list will be excluded from scan results, game list, and cache.
+          </div>
         </q-card-section>
         <q-card-section>
           <q-markup-table flat bordered dense>
@@ -197,18 +236,35 @@
               <tr v-for="(item, idx) in blacklist" :key="idx">
                 <td>{{ item }}</td>
                 <td class="text-right">
-                  <q-btn flat round size="sm" icon="delete" style="color: var(--m3-error);" @click="removeBlacklist(idx)" />
+                  <q-btn
+                    flat
+                    round
+                    size="sm"
+                    icon="delete"
+                    style="color: var(--m3-error)"
+                    @click="removeBlacklist(idx)"
+                  />
                 </td>
               </tr>
               <tr v-if="blacklist.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">No entries</td>
+                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant)">
+                  No entries
+                </td>
               </tr>
             </tbody>
           </q-markup-table>
         </q-card-section>
         <q-card-section>
           <div class="row q-gutter-sm items-center">
-            <q-input v-model="newBlacklistItem" label="Directory name" outlined dense class="m3-input" style="max-width: 300px" @keyup.enter="addBlacklist" />
+            <q-input
+              v-model="newBlacklistItem"
+              label="Directory name"
+              outlined
+              dense
+              class="m3-input"
+              style="max-width: 300px"
+              @keyup.enter="addBlacklist"
+            />
             <q-btn unelevated class="m3-btn--tonal" label="Add" dense @click="addBlacklist" />
           </div>
         </q-card-section>
@@ -217,7 +273,9 @@
       <q-card class="m3-card q-mb-md">
         <q-card-section>
           <div class="m3-label-large q-mb-sm">Archive Passwords</div>
-          <div class="m3-label-medium q-mb-sm">Passwords to try when extracting encrypted archives. Tried in order, no password first.</div>
+          <div class="m3-label-medium q-mb-sm">
+            Passwords to try when extracting encrypted archives. Tried in order, no password first.
+          </div>
         </q-card-section>
         <q-card-section>
           <q-markup-table flat bordered dense>
@@ -232,21 +290,48 @@
                 <td>
                   <span v-if="!passwordVisible[idx]">••••••••</span>
                   <span v-else>{{ pwd }}</span>
-                  <q-btn flat round dense size="xs" :icon="passwordVisible[idx] ? 'visibility_off' : 'visibility'" color="grey-7" class="q-ml-xs" @click="passwordVisible[idx] = !passwordVisible[idx]" />
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    size="xs"
+                    :icon="passwordVisible[idx] ? 'visibility_off' : 'visibility'"
+                    color="grey-7"
+                    class="q-ml-xs"
+                    @click="passwordVisible[idx] = !passwordVisible[idx]"
+                  />
                 </td>
                 <td class="text-right">
-                  <q-btn flat round size="sm" icon="delete" style="color: var(--m3-error);" @click="removePassword(idx)" />
+                  <q-btn
+                    flat
+                    round
+                    size="sm"
+                    icon="delete"
+                    style="color: var(--m3-error)"
+                    @click="removePassword(idx)"
+                  />
                 </td>
               </tr>
               <tr v-if="archivePasswords.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">No passwords</td>
+                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant)">
+                  No passwords
+                </td>
               </tr>
             </tbody>
           </q-markup-table>
         </q-card-section>
         <q-card-section>
           <div class="row q-gutter-sm items-center">
-            <q-input v-model="newPassword" label="Password" type="password" outlined dense class="m3-input" style="max-width: 300px" @keyup.enter="addPassword" />
+            <q-input
+              v-model="newPassword"
+              label="Password"
+              type="password"
+              outlined
+              dense
+              class="m3-input"
+              style="max-width: 300px"
+              @keyup.enter="addPassword"
+            />
             <q-btn unelevated class="m3-btn--tonal" label="Add" dense @click="addPassword" />
           </div>
         </q-card-section>
@@ -255,24 +340,62 @@
       <q-card class="m3-card q-mb-md">
         <q-card-section>
           <div class="m3-label-large q-mb-sm">Extraction Tools</div>
-          <div class="m3-label-medium q-mb-sm">Auto-detected paths. Override manually if needed.</div>
+          <div class="m3-label-medium q-mb-sm">
+            Auto-detected paths. Override manually if needed.
+          </div>
         </q-card-section>
         <q-card-section>
           <div class="q-gutter-sm">
             <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">UnRAR.exe</div>
-              <q-input v-model="extractTools.unrar" outlined dense class="m3-input" style="flex: 1" />
-              <q-icon :name="extractTools.unrar ? 'check_circle' : 'cancel'" :color="extractTools.unrar ? 'positive' : 'negative'" size="sm" />
+              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface)">
+                UnRAR.exe
+              </div>
+              <q-input
+                v-model="extractTools.unrar"
+                outlined
+                dense
+                class="m3-input"
+                style="flex: 1"
+              />
+              <q-icon
+                :name="extractTools.unrar ? 'check_circle' : 'cancel'"
+                :color="extractTools.unrar ? 'positive' : 'negative'"
+                size="sm"
+              />
             </div>
             <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z.exe</div>
-              <q-input v-model="extractTools.sevenzip" outlined dense class="m3-input" style="flex: 1" />
-              <q-icon :name="extractTools.sevenzip ? 'check_circle' : 'cancel'" :color="extractTools.sevenzip ? 'positive' : 'negative'" size="sm" />
+              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface)">
+                7z.exe
+              </div>
+              <q-input
+                v-model="extractTools.sevenzip"
+                outlined
+                dense
+                class="m3-input"
+                style="flex: 1"
+              />
+              <q-icon
+                :name="extractTools.sevenzip ? 'check_circle' : 'cancel'"
+                :color="extractTools.sevenzip ? 'positive' : 'negative'"
+                size="sm"
+              />
             </div>
             <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface);">7z-zstd</div>
-              <q-input v-model="extractTools.sevenzipZstd" outlined dense class="m3-input" style="flex: 1" />
-              <q-icon :name="extractTools.sevenzipZstd ? 'check_circle' : 'cancel'" :color="extractTools.sevenzipZstd ? 'positive' : 'negative'" size="sm" />
+              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface)">
+                7z-zstd
+              </div>
+              <q-input
+                v-model="extractTools.sevenzipZstd"
+                outlined
+                dense
+                class="m3-input"
+                style="flex: 1"
+              />
+              <q-icon
+                :name="extractTools.sevenzipZstd ? 'check_circle' : 'cancel'"
+                :color="extractTools.sevenzipZstd ? 'positive' : 'negative'"
+                size="sm"
+              />
             </div>
           </div>
         </q-card-section>
@@ -285,7 +408,10 @@
       <q-card class="m3-card q-mb-md">
         <q-card-section>
           <div class="m3-label-large q-mb-sm">Archived Archives</div>
-          <div class="m3-label-medium q-mb-sm">Archives that have been extracted. Excluded from scans. Copy path to manually delete the archive file.</div>
+          <div class="m3-label-medium q-mb-sm">
+            Archives that have been extracted. Excluded from scans. Copy path to manually delete the
+            archive file.
+          </div>
         </q-card-section>
         <q-card-section>
           <q-markup-table flat bordered dense>
@@ -297,16 +423,41 @@
             </thead>
             <tbody>
               <tr v-for="(item, idx) in archivedArchives" :key="idx">
-                <td style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item }}</td>
+                <td
+                  style="
+                    max-width: 500px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                  "
+                >
+                  {{ item }}
+                </td>
                 <td class="text-right">
-                  <q-btn flat round size="sm" icon="content_copy" style="color: var(--m3-primary);" @click="copyPath(item)">
+                  <q-btn
+                    flat
+                    round
+                    size="sm"
+                    icon="content_copy"
+                    style="color: var(--m3-primary)"
+                    @click="copyPath(item)"
+                  >
                     <q-tooltip>Copy Path</q-tooltip>
                   </q-btn>
-                  <q-btn flat round size="sm" icon="delete" style="color: var(--m3-error);" @click="removeArchivedArchive(idx)" />
+                  <q-btn
+                    flat
+                    round
+                    size="sm"
+                    icon="delete"
+                    style="color: var(--m3-error)"
+                    @click="removeArchivedArchive(idx)"
+                  />
                 </td>
               </tr>
               <tr v-if="archivedArchives.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant);">No archived archives</td>
+                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant)">
+                  No archived archives
+                </td>
               </tr>
             </tbody>
           </q-markup-table>
@@ -318,12 +469,27 @@
           <div class="m3-label-large q-mb-sm">Application</div>
         </q-card-section>
         <q-card-section>
-          <q-toggle v-model="closeToTray" label="Close to tray" color="primary" @update:model-value="saveCloseToTray" />
-          <div class="m3-label-medium q-ml-sm q-mt-xs">When closing the window, minimize to tray instead of quitting. The server keeps running in the background.</div>
+          <q-toggle
+            v-model="closeToTray"
+            label="Close to tray"
+            color="primary"
+            @update:model-value="saveCloseToTray"
+          />
+          <div class="m3-label-medium q-ml-sm q-mt-xs">
+            When closing the window, minimize to tray instead of quitting. The server keeps running
+            in the background.
+          </div>
         </q-card-section>
         <q-card-section>
-          <q-toggle v-model="autoStart" label="Launch at startup" color="primary" @update:model-value="saveAutoStart" />
-          <div class="m3-label-medium q-ml-sm q-mt-xs">Automatically start Game Lib when the system boots. Starts minimized to tray.</div>
+          <q-toggle
+            v-model="autoStart"
+            label="Launch at startup"
+            color="primary"
+            @update:model-value="saveAutoStart"
+          />
+          <div class="m3-label-medium q-ml-sm q-mt-xs">
+            Automatically start Game Lib when the system boots. Starts minimized to tray.
+          </div>
         </q-card-section>
       </q-card>
     </div>
@@ -341,7 +507,7 @@
                 v-if="hasElectronAPI"
                 name="folder_open"
                 class="cursor-pointer"
-                style="color: var(--m3-on-surface-variant);"
+                style="color: var(--m3-on-surface-variant)"
                 @click="browseDirectory('add')"
               />
             </template>
@@ -367,7 +533,7 @@
                 v-if="hasElectronAPI"
                 name="folder_open"
                 class="cursor-pointer"
-                style="color: var(--m3-on-surface-variant);"
+                style="color: var(--m3-on-surface-variant)"
                 @click="browseDirectory('edit')"
               />
             </template>
@@ -462,7 +628,10 @@ const $q = useQuasar();
 
 const normalizePath = (p: string) => p.replace(/\//g, '\\').toLowerCase().replace(/\\+$/, '');
 
-const checkNestedLibrary = (newPath: string, excludeId?: number): { conflict: 'child' | 'parent'; lib: Library } | null => {
+const checkNestedLibrary = (
+  newPath: string,
+  excludeId?: number,
+): { conflict: 'child' | 'parent'; lib: Library } | null => {
   const newNorm = normalizePath(newPath);
   for (const lib of libraries.value) {
     if (excludeId && lib.id === excludeId) continue;
@@ -497,9 +666,10 @@ const addLibrary = async () => {
   if (nested) {
     $q.notify({
       type: 'negative',
-      message: nested.conflict === 'child'
-        ? `Path is a subdirectory of library "${nested.lib.name}"`
-        : `Path contains existing library "${nested.lib.name}"`,
+      message:
+        nested.conflict === 'child'
+          ? `Path is a subdirectory of library "${nested.lib.name}"`
+          : `Path contains existing library "${nested.lib.name}"`,
     });
     return;
   }
@@ -523,9 +693,10 @@ const saveEditLibrary = async () => {
   if (nested) {
     $q.notify({
       type: 'negative',
-      message: nested.conflict === 'child'
-        ? `Path is a subdirectory of library "${nested.lib.name}"`
-        : `Path contains existing library "${nested.lib.name}"`,
+      message:
+        nested.conflict === 'child'
+          ? `Path is a subdirectory of library "${nested.lib.name}"`
+          : `Path contains existing library "${nested.lib.name}"`,
     });
     return;
   }
@@ -684,15 +855,21 @@ const fetchProxy = async () => {
   try {
     const enabled = await api.get('/settings/proxy_enabled');
     proxyEnabled.value = enabled.data.value === 'true';
-  } catch { proxyEnabled.value = false; }
+  } catch {
+    proxyEnabled.value = false;
+  }
   try {
     const host = await api.get('/settings/proxy_host');
     proxyHost.value = host.data.value || '127.0.0.1';
-  } catch { proxyHost.value = '127.0.0.1'; }
+  } catch {
+    proxyHost.value = '127.0.0.1';
+  }
   try {
     const port = await api.get('/settings/proxy_port');
     proxyPort.value = parseInt(port.data.value, 10) || 7890;
-  } catch { proxyPort.value = 7890; }
+  } catch {
+    proxyPort.value = 7890;
+  }
 };
 
 const saveProxy = async () => {
@@ -810,7 +987,9 @@ const copyPath = async (item: string) => {
   try {
     await navigator.clipboard.writeText(item);
     $q.notify({ type: 'positive', message: 'Path copied' });
-  } catch { /* clipboard may not be available */ }
+  } catch {
+    /* clipboard may not be available */
+  }
 };
 
 const removeArchivedArchive = async (idx: number) => {

@@ -12,18 +12,19 @@
 
 ## 文件结构
 
-| 文件 | 职责 |
-|------|------|
-| `server/scraper/dlsite.js` | 改进 splitKeyword 括号清理 |
-| `server/routes/scraper.js` | DLSite fetch 兼容 id 参数 |
-| `src/components/ScannerDialog.vue` | Scan 阶段预加载 segments |
-| `src/components/GameCard.vue` | 添加 folder icon 打开目录 |
+| 文件                               | 职责                       |
+| ---------------------------------- | -------------------------- |
+| `server/scraper/dlsite.js`         | 改进 splitKeyword 括号清理 |
+| `server/routes/scraper.js`         | DLSite fetch 兼容 id 参数  |
+| `src/components/ScannerDialog.vue` | Scan 阶段预加载 segments   |
+| `src/components/GameCard.vue`      | 添加 folder icon 打开目录  |
 
 ---
 
 ### 任务 1：改进 splitKeyword 括号清理
 
 **文件：**
+
 - 修改：`server/scraper/dlsite.js:4-11`
 
 - [ ] **步骤 1：添加括号 stripping**
@@ -36,13 +37,14 @@ const splitKeyword = (name) => {
     .replace(/【.*?】/g, '')
     .replace(/（.*?）/g, '')
     .replace(/\s*v\d+[\d.]*\s*$/i, '')
-    .trim()
-  const rjMatch = cleaned.match(/RJ\d+/)
-  if (rjMatch) return { keyword: rjMatch[0], segments: [rjMatch[0]] }
-  const re = /[\u4e00-\u9fff\u3040-\u309f\u30a1-\u30fa\u30fc-\u30ff\uff10-\uff19\uff21-\uff3a\uff41-\uff5a\u0041-\u005a\u0061-\u007a\u0030-\u0039]+/g
-  const segments = cleaned.match(re) || []
-  return { keyword: cleaned, segments }
-}
+    .trim();
+  const rjMatch = cleaned.match(/RJ\d+/);
+  if (rjMatch) return { keyword: rjMatch[0], segments: [rjMatch[0]] };
+  const re =
+    /[\u4e00-\u9fff\u3040-\u309f\u30a1-\u30fa\u30fc-\u30ff\uff10-\uff19\uff21-\uff3a\uff41-\uff5a\u0041-\u005a\u0061-\u007a\u0030-\u0039]+/g;
+  const segments = cleaned.match(re) || [];
+  return { keyword: cleaned, segments };
+};
 ```
 
 - [ ] **步骤 2：验证编译**
@@ -63,6 +65,7 @@ git commit -m "fix: strip Chinese brackets from search keywords"
 ### 任务 2：DLSite fetch 路由兼容 id 参数
 
 **文件：**
+
 - 修改：`server/routes/scraper.js:48-55`
 
 - [ ] **步骤 1：修改 fetch 路由接受 id**
@@ -70,16 +73,16 @@ git commit -m "fix: strip Chinese brackets from search keywords"
 ```js
 router.post('/dlsite/fetch', async (req, res, next) => {
   try {
-    const code = req.body.rjcode || req.body.id
+    const code = req.body.rjcode || req.body.id;
     if (!code) {
-      return res.status(400).send({ error: 'rjcode or id is required' })
+      return res.status(400).send({ error: 'rjcode or id is required' });
     }
-    const detail = await fetchDLSiteDetail(code)
-    res.send(detail)
+    const detail = await fetchDLSiteDetail(code);
+    res.send(detail);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 ```
 
 - [ ] **步骤 2：验证编译**
@@ -100,6 +103,7 @@ git commit -m "fix: accept id parameter in DLSite fetch route"
 ### 任务 3：ScannerDialog Scan 阶段预处理 segments
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue:240-254`
 
 - [ ] **步骤 1：修改 loadUnscraped 预加载 segments**
@@ -109,11 +113,11 @@ git commit -m "fix: accept id parameter in DLSite fetch route"
 ```typescript
 const loadUnscraped = async () => {
   if (!selectedLibrary.value) {
-    scanResults.value = []
-    return
+    scanResults.value = [];
+    return;
   }
-  const res = await api.get('/games/unscraped', { params: { libraryId: selectedLibrary.value } })
-  const rawGames = res.data as { id: number; name: string; sub_path: string }[]
+  const res = await api.get('/games/unscraped', { params: { libraryId: selectedLibrary.value } });
+  const rawGames = res.data as { id: number; name: string; sub_path: string }[];
   scanResults.value = rawGames.map((g) => ({
     name: g.name,
     subPath: g.sub_path,
@@ -124,19 +128,19 @@ const loadUnscraped = async () => {
     source: null as SourceType | null,
     loading: false,
     gameId: g.id,
-  }))
+  }));
 
   for (const row of scanResults.value) {
     try {
-      const segRes = await api.post('/dlsite/segments', { name: row.name })
-      const { keyword, segments } = segRes.data
-      row.searchKeyword = keyword
-      segmentsCache.set(row.name, [keyword, ...segments.filter((s: string) => s !== keyword)])
+      const segRes = await api.post('/dlsite/segments', { name: row.name });
+      const { keyword, segments } = segRes.data;
+      row.searchKeyword = keyword;
+      segmentsCache.set(row.name, [keyword, ...segments.filter((s: string) => s !== keyword)]);
     } catch {
       // keep raw name as keyword
     }
   }
-}
+};
 ```
 
 - [ ] **步骤 2：验证类型检查**
@@ -157,6 +161,7 @@ git commit -m "feat: pre-process search keywords and segments at scan time"
 ### 任务 4：GameCard 添加 folder icon
 
 **文件：**
+
 - 修改：`src/components/GameCard.vue`
 
 - [ ] **步骤 1：更新 GameCard 组件**
@@ -166,11 +171,7 @@ git commit -m "feat: pre-process search keywords and segments at scan time"
 ```vue
 <template>
   <q-card class="game-card cursor-pointer" @click="$router.push(`/game/${game.id}`)">
-    <q-img
-      :src="coverSrc"
-      :ratio="16 / 9"
-      class="game-cover"
-    >
+    <q-img :src="coverSrc" :ratio="16 / 9" class="game-cover">
       <template v-slot:error>
         <div class="absolute-full flex flex-center bg-grey-4 text-grey-6">
           <q-icon name="videogame_asset" size="48px" />
@@ -199,33 +200,33 @@ git commit -m "feat: pre-process search keywords and segments at scan time"
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from 'vue';
 
 interface Game {
-  id: number
-  name: string
-  cover_path: string | null
-  library_name: string
-  library_path: string
-  sub_path: string
+  id: number;
+  name: string;
+  cover_path: string | null;
+  library_name: string;
+  library_path: string;
+  sub_path: string;
 }
 
-const props = defineProps<{ game: Game }>()
+const props = defineProps<{ game: Game }>();
 
 const coverSrc = computed(() => {
   if (props.game.cover_path) {
-    return `/covers/${props.game.cover_path}`
+    return `/covers/${props.game.cover_path}`;
   }
-  return ''
-})
+  return '';
+});
 
-const hasElectronAPI = computed(() => !!window.electronAPI)
+const hasElectronAPI = computed(() => !!window.electronAPI);
 
 const openDir = async () => {
-  if (!window.electronAPI) return
-  const fullPath = props.game.library_path + '\\' + props.game.sub_path
-  await window.electronAPI.openPath(fullPath)
-}
+  if (!window.electronAPI) return;
+  const fullPath = props.game.library_path + '\\' + props.game.sub_path;
+  await window.electronAPI.openPath(fullPath);
+};
 </script>
 ```
 
@@ -239,9 +240,13 @@ const openDir = async () => {
 
 ```typescript
 interface GameItem {
-  id: number; name: string; cover_path: string | null
-  library_name: string; library_id: number; sub_path: string
-  library_path: string
+  id: number;
+  name: string;
+  cover_path: string | null;
+  library_name: string;
+  library_id: number;
+  sub_path: string;
+  library_path: string;
 }
 ```
 

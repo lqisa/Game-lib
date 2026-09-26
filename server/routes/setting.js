@@ -17,7 +17,9 @@ router.get('/archived-archives/list', async (_req, res, next) => {
   try {
     const val = await db.getSetting('archived_archives');
     res.send(val ? JSON.parse(val) : []);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/archived-archives/add', async (req, res, next) => {
@@ -31,7 +33,9 @@ router.post('/archived-archives/add', async (req, res, next) => {
       await db.setSetting('archived_archives', JSON.stringify(list));
     }
     res.send(list);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.delete('/archived-archives/remove/:index', async (req, res, next) => {
@@ -44,23 +48,30 @@ router.delete('/archived-archives/remove/:index', async (req, res, next) => {
       await db.setSetting('archived_archives', JSON.stringify(list));
     }
     res.send(list);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/archive-passwords/list', async (_req, res, next) => {
   try {
     const val = await db.getSetting('archive_passwords');
     res.send(val ? JSON.parse(val) : []);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.put('/archive-passwords/save', async (req, res, next) => {
   try {
     const { passwords } = req.body;
-    if (!Array.isArray(passwords)) return res.status(400).send({ error: 'passwords must be an array' });
+    if (!Array.isArray(passwords))
+      return res.status(400).send({ error: 'passwords must be an array' });
     await db.setSetting('archive_passwords', JSON.stringify(passwords));
     res.send(passwords);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/detect-tools', (_req, res) => {
@@ -72,16 +83,21 @@ router.get('/extract-tools/list', async (_req, res, next) => {
     // getEffectiveTools() falls back to on-disk detection when the saved value is
     // missing or an empty object (the empty object is what migration v8 seeds).
     res.send(await getEffectiveTools());
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.put('/extract-tools/save', async (req, res, next) => {
   try {
     const { tools } = req.body;
-    if (!tools || typeof tools !== 'object') return res.status(400).send({ error: 'tools object is required' });
+    if (!tools || typeof tools !== 'object')
+      return res.status(400).send({ error: 'tools object is required' });
     await db.setSetting('extract_tools', JSON.stringify(tools));
     res.send(tools);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/:key', async (req, res, next) => {

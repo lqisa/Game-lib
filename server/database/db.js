@@ -45,14 +45,14 @@ if (isTestEnv()) {
     },
   });
 }
- 
+
 const closePool = async () => {
   if (db) {
     await db.destroy();
     db = null;
   }
 };
- 
+
 const getGameDetail = async (id) => {
   const game = await db('game').where({ id }).first();
   if (!game) return null;
@@ -103,6 +103,41 @@ const getGameDetail = async (id) => {
   return { ...game, makers, genres, tags, sources, library, duplicateSources };
 };
 
+/**
+ * The single definition of "this game has been scraped".
+ *
+ * It has to live in one place: the list filter, the unscraped list and the batch-skip ids
+ * all ask this question, and when each spelled out its own SQL they disagreed - the list
+ * filter counted a hand-dropped cover as scraped while the other two did not, so a game
+ * vanished from the "unscraped" filter but stayed in the scan dialog's unscraped list.
+ *
+ * A cover counts as scraped on purpose: the games that need a hand-dropped cover are the
+ * ones no configured source carries, so there is nothing left to fetch for them.
+ *
+ * `cover_path` of NULL and '' both mean "no cover" - the cover repair pass already treats
+ * them the same, and an empty string must not pass as a scraped game.
+ */
+const applyScrapedFilter = (query, scraped) => {
+  const hasSource = function () {
+    this.select('id').from('game_source').whereRaw('game_source.game_id = game.id');
+  };
+  const hasCover = function () {
+    this.whereNotNull('game.cover_path').andWhere('game.cover_path', '<>', '');
+  };
+
+  if (scraped === true) {
+    return query.where(function () {
+      this.whereExists(hasSource).orWhere(hasCover);
+    });
+  }
+  if (scraped === false) {
+    return query.whereNotExists(hasSource).where(function () {
+      this.whereNull('game.cover_path').orWhere('game.cover_path', '');
+    });
+  }
+  return query;
+};
+
 const getGames = async ({
   page = 1,
   pageSize = 50,
@@ -130,11 +165,11 @@ const getGames = async ({
 
   if (keyword) {
     query = query.where(function () {
-      this.where('game.name', 'like', `%${keyword}%`)
-        .orWhereIn('game.id', function () {
-          this.select('game_id').from('game_source')
-            .where('game_source.name', 'like', `%${keyword}%`);
-        });
+      this.where('game.name', 'like', `%${keyword}%`).orWhereIn('game.id', function () {
+        this.select('game_id')
+          .from('game_source')
+          .where('game_source.name', 'like', `%${keyword}%`);
+      });
     });
   }
 
@@ -166,39 +201,29 @@ const getGames = async ({
       .whereIn('game_tag.tag_id', tagIds);
   }
 
-  if (scraped === true) {
-    query = query.whereExists(function () {
-      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id');
-    });
-  } else if (scraped === false) {
-    query = query.whereNotExists(function () {
-      this.select('id').from('game_source').whereRaw('game_source.game_id = game.id');
-    });
-  }
+  query = applyScrapedFilter(query, scraped);
 
   if (duplicate === true) {
     query = query.whereIn('game.id', function () {
-      this.select('gs.game_id').from('game_source as gs')
-        .whereIn(
-          db.raw('(gs.source_type, gs.source_id)'),
-          function () {
-            this.select('source_type', 'source_id').from('game_source')
-              .groupBy('source_type', 'source_id')
-              .havingRaw('COUNT(*) > 1');
-          }
-        );
+      this.select('gs.game_id')
+        .from('game_source as gs')
+        .whereIn(db.raw('(gs.source_type, gs.source_id)'), function () {
+          this.select('source_type', 'source_id')
+            .from('game_source')
+            .groupBy('source_type', 'source_id')
+            .havingRaw('COUNT(*) > 1');
+        });
     });
   } else if (duplicate === false) {
     query = query.whereNotIn('game.id', function () {
-      this.select('gs.game_id').from('game_source as gs')
-        .whereIn(
-          db.raw('(gs.source_type, gs.source_id)'),
-          function () {
-            this.select('source_type', 'source_id').from('game_source')
-              .groupBy('source_type', 'source_id')
-              .havingRaw('COUNT(*) > 1');
-          }
-        );
+      this.select('gs.game_id')
+        .from('game_source as gs')
+        .whereIn(db.raw('(gs.source_type, gs.source_id)'), function () {
+          this.select('source_type', 'source_id')
+            .from('game_source')
+            .groupBy('source_type', 'source_id')
+            .havingRaw('COUNT(*) > 1');
+        });
     });
   }
 
@@ -234,9 +259,7 @@ const getGames = async ({
     for (const s of sourceNames) {
       if (!nameMap[s.game_id]) nameMap[s.game_id] = s.name;
     }
-    const favoriteIds = await db('favorite')
-      .whereIn('game_id', gameIds)
-      .select('game_id');
+    const favoriteIds = await db('favorite').whereIn('game_id', gameIds).select('game_id');
     const favSet = new Set(favoriteIds.map((f) => f.game_id));
     for (const g of games) {
       g.sourceName = nameMap[g.id] || null;
@@ -247,14 +270,16 @@ const getGames = async ({
   return { games, total: total.count, page, pageSize };
 };
 
-const getUnscrapedGames = async (libraryId) => {
-  return db('game')
-    .leftJoin('game_source', 'game.id', 'game_source.game_id')
-    .where('game.library_id', libraryId)
-    .whereNull('game_source.id')
+// Uses the same definition as the list filter and the batch-skip ids - see
+// applyScrapedFilter for why that matters.
+const getUnscrapedGames = async (libraryId) =>
+  applyScrapedFilter(db('game').where('game.library_id', libraryId), false)
     .select('game.id', 'game.name', 'game.sub_path')
     .orderBy('game.name');
-};
+
+// Ids the batch scraper skips because the game is already scraped. Same definition again,
+// so a game whose cover was dropped by hand is not re-scraped by a later batch run.
+const getScrapedIds = async () => applyScrapedFilter(db('game'), true).pluck('game.id');
 
 const insertGame = async (data) => db('game').insert(data);
 const updateGame = async (id, data) =>
@@ -267,8 +292,7 @@ const batchDeleteGames = async (ids) => db('game').whereIn('id', ids).del();
 const addFavorite = async (gameId) =>
   db('favorite').insert({ game_id: gameId }).onConflict('game_id').ignore();
 
-const removeFavorite = async (gameId) =>
-  db('favorite').where({ game_id: gameId }).del();
+const removeFavorite = async (gameId) => db('favorite').where({ game_id: gameId }).del();
 
 const batchAddFavorites = async (ids) => {
   if (ids.length === 0) return;
@@ -418,7 +442,9 @@ const getAdoptCache = async (gameIds) => {
 
 const getAdoptCacheBySubPaths = async (libraryId, subPaths) => {
   if (!libraryId || subPaths.length === 0) return [];
-  const rows = await db('adopt_cache').where({ library_id: libraryId }).whereIn('sub_path', subPaths);
+  const rows = await db('adopt_cache')
+    .where({ library_id: libraryId })
+    .whereIn('sub_path', subPaths);
   return rows.map((r) => ({
     ...r,
     makers: JSON.parse(r.makers),
@@ -443,7 +469,20 @@ const getAdoptCacheMixed = async (gameIds, subPathEntries) => {
   return results;
 };
 
-const setAdoptCache = async ({ gameId, libraryId, subPath, sourceType, sourceId, sourceUrl, name, coverUrl, makers, genres, tags, description }) => {
+const setAdoptCache = async ({
+  gameId,
+  libraryId,
+  subPath,
+  sourceType,
+  sourceId,
+  sourceUrl,
+  name,
+  coverUrl,
+  makers,
+  genres,
+  tags,
+  description,
+}) => {
   const data = {
     game_id: gameId || 0,
     library_id: libraryId || 0,
@@ -494,7 +533,9 @@ const deleteAdoptCacheMixed = async (gameIds, subPathEntries) => {
 
 const migrateAdoptCacheGameId = async (libraryId, subPathToGameId) => {
   for (const [subPath, gameId] of Object.entries(subPathToGameId)) {
-    await db('adopt_cache').where({ library_id: libraryId, sub_path: subPath }).update({ game_id: gameId });
+    await db('adopt_cache')
+      .where({ library_id: libraryId, sub_path: subPath })
+      .update({ game_id: gameId });
   }
 };
 
@@ -536,6 +577,7 @@ export {
   getGameDetail,
   getGames,
   getUnscrapedGames,
+  getScrapedIds,
   insertGame,
   updateGame,
   deleteGame,

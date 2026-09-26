@@ -37,7 +37,8 @@ const resetGames = async (count) => {
 // touchedAt / openedAt write explicit timestamps so ordering does not depend on how fast the
 // test machine gets through a loop (two `CURRENT_TIMESTAMP` writes in the same second tie).
 const touchAt = (gameId, openedAt) =>
-  db.knex('recently')
+  db
+    .knex('recently')
     .insert({ game_id: gameId, opened_at: openedAt })
     .onConflict('game_id')
     .merge(['opened_at']);
@@ -129,21 +130,41 @@ describe('POST /api/recently/:gameId', () => {
 
     let res = await request('/api/recently');
     assert.equal(res.body.games.length, 2);
-    assert.deepEqual(res.body.games.map((g) => g.name), ['game-1', 'game-0']);
+    assert.deepEqual(
+      res.body.games.map((g) => g.name),
+      ['game-1', 'game-0'],
+    );
 
     // Re-opening the older one must not create a second row; it must move to the top.
     await request(`/api/recently/${ids[0]}`, { method: 'POST' });
     res = await request('/api/recently');
     assert.equal(res.body.games.length, 2);
-    assert.equal(await db.knex('recently').count('* as c').first().then((r) => r.c), 2);
-    assert.deepEqual(res.body.games.map((g) => g.name), ['game-0', 'game-1']);
+    assert.equal(
+      await db
+        .knex('recently')
+        .count('* as c')
+        .first()
+        .then((r) => r.c),
+      2,
+    );
+    assert.deepEqual(
+      res.body.games.map((g) => g.name),
+      ['game-0', 'game-1'],
+    );
   });
 
   it('404s for a game that does not exist and records nothing', async () => {
     await resetGames(1);
     const res = await request('/api/recently/999999', { method: 'POST' });
     assert.equal(res.status, 404);
-    assert.equal(await db.knex('recently').count('* as c').first().then((r) => r.c), 0);
+    assert.equal(
+      await db
+        .knex('recently')
+        .count('* as c')
+        .first()
+        .then((r) => r.c),
+      0,
+    );
   });
 
   it('rejects a non-numeric id', async () => {
@@ -191,7 +212,14 @@ describe('recently pruning', () => {
     await Promise.all(ids.map((id) => db.touchRecently(id)));
     const deleted = await db.pruneRecently();
     assert.equal(deleted, 0);
-    assert.equal(await db.knex('recently').count('* as c').first().then((r) => r.c), 3);
+    assert.equal(
+      await db
+        .knex('recently')
+        .count('* as c')
+        .first()
+        .then((r) => r.c),
+      3,
+    );
   });
 
   it('drops the history when the game itself is deleted', async () => {
@@ -199,11 +227,31 @@ describe('recently pruning', () => {
     const ids = await resetGames(2);
     await db.touchRecently(ids[0]);
     await db.touchRecently(ids[1]);
-    assert.equal(await db.knex('recently').count('* as c').first().then((r) => r.c), 2);
+    assert.equal(
+      await db
+        .knex('recently')
+        .count('* as c')
+        .first()
+        .then((r) => r.c),
+      2,
+    );
 
     await db.deleteGame(ids[0]);
-    assert.equal(await db.knex('recently').count('* as c').first().then((r) => r.c), 1);
-    assert.equal(await db.knex('recently').first().then((r) => r.game_id), ids[1]);
+    assert.equal(
+      await db
+        .knex('recently')
+        .count('* as c')
+        .first()
+        .then((r) => r.c),
+      1,
+    );
+    assert.equal(
+      await db
+        .knex('recently')
+        .first()
+        .then((r) => r.game_id),
+      ids[1],
+    );
   });
 });
 
@@ -229,9 +277,23 @@ describe('DELETE /api/recently', () => {
     await Promise.all(ids.map((id) => db.touchRecently(id)));
     const res = await request('/api/recently', { method: 'DELETE' });
     assert.equal(res.status, 204);
-    assert.equal(await db.knex('recently').count('* as c').first().then((r) => r.c), 0);
+    assert.equal(
+      await db
+        .knex('recently')
+        .count('* as c')
+        .first()
+        .then((r) => r.c),
+      0,
+    );
     // The games themselves must survive.
-    assert.equal(await db.knex('game').count('* as c').first().then((r) => r.c), 3);
+    assert.equal(
+      await db
+        .knex('game')
+        .count('* as c')
+        .first()
+        .then((r) => r.c),
+      3,
+    );
   });
 
   it('removes a single entry', async () => {

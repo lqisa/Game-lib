@@ -69,9 +69,10 @@ router.post('/', async (req, res, next) => {
     const nested = await checkNestedLibrary(path || '');
     if (nested) {
       return res.status(400).send({
-        error: nested.conflict === 'child'
-          ? `Path is a subdirectory of library "${nested.parentLib.name}"`
-          : `Path contains existing library "${nested.childLib.name}"`,
+        error:
+          nested.conflict === 'child'
+            ? `Path is a subdirectory of library "${nested.parentLib.name}"`
+            : `Path contains existing library "${nested.childLib.name}"`,
       });
     }
     const [id] = await db.insertLibrary({ name, path: path || '' });
@@ -90,19 +91,26 @@ router.put('/:id', async (req, res, next) => {
     const nested = await checkNestedLibrary(path, Number(id));
     if (nested) {
       return res.status(400).send({
-        error: nested.conflict === 'child'
-          ? `Path is a subdirectory of library "${nested.parentLib.name}"`
-          : `Path contains existing library "${nested.childLib.name}"`,
+        error:
+          nested.conflict === 'child'
+            ? `Path is a subdirectory of library "${nested.parentLib.name}"`
+            : `Path contains existing library "${nested.childLib.name}"`,
       });
     }
-    const oldLib = await db.knex('library').where({ id: Number(id) }).first();
+    const oldLib = await db
+      .knex('library')
+      .where({ id: Number(id) })
+      .first();
     await db.updateLibrary(Number(id), { name, path });
     if (path && path !== oldLib.path) {
       const oldPrefix = oldLib.path.replace(/\//g, '\\').replace(/\\+$/, '');
       const newNorm = normalizePath(path);
       const newPrefix = path.replace(/\//g, '\\').replace(/\\+$/, '');
 
-      const currentGames = await db.knex('game').where({ library_id: Number(id) }).select('id', 'sub_path');
+      const currentGames = await db
+        .knex('game')
+        .where({ library_id: Number(id) })
+        .select('id', 'sub_path');
 
       if (currentGames.length > 0) {
         await db.knex.transaction(async (trx) => {

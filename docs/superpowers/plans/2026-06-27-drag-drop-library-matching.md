@@ -12,17 +12,18 @@
 
 ## 文件结构
 
-| 文件 | 职责 |
-|------|------|
-| `server/routes/library.js` | 嵌套校验 + dropped 迁移 + PUT 迁移 |
+| 文件                        | 职责                                |
+| --------------------------- | ----------------------------------- |
+| `server/routes/library.js`  | 嵌套校验 + dropped 迁移 + PUT 迁移  |
 | `src/pages/GameLibPage.vue` | `onDropAdopt` 添加 library 匹配逻辑 |
-| `src/pages/SettingPage.vue` | 添加/编辑 library 时前端嵌套校验 |
+| `src/pages/SettingPage.vue` | 添加/编辑 library 时前端嵌套校验    |
 
 ---
 
 ### 任务 1：后端 — 嵌套 library 校验
 
 **文件：**
+
 - 修改：`server/routes/library.js`
 
 - [ ] **步骤 1：添加路径归一化和嵌套校验函数**
@@ -58,9 +59,10 @@ const checkNestedLibrary = async (newPath, excludeId) => {
 const nested = await checkNestedLibrary(path || '');
 if (nested) {
   return res.status(400).send({
-    error: nested.conflict === 'child'
-      ? `Path is a subdirectory of library "${nested.parentLib.name}"`
-      : `Path contains existing library "${nested.childLib.name}"`,
+    error:
+      nested.conflict === 'child'
+        ? `Path is a subdirectory of library "${nested.parentLib.name}"`
+        : `Path contains existing library "${nested.childLib.name}"`,
   });
 }
 ```
@@ -73,9 +75,10 @@ if (nested) {
 const nested = await checkNestedLibrary(path, Number(id));
 if (nested) {
   return res.status(400).send({
-    error: nested.conflict === 'child'
-      ? `Path is a subdirectory of library "${nested.parentLib.name}"`
-      : `Path contains existing library "${nested.childLib.name}"`,
+    error:
+      nested.conflict === 'child'
+        ? `Path is a subdirectory of library "${nested.parentLib.name}"`
+        : `Path contains existing library "${nested.childLib.name}"`,
   });
 }
 ```
@@ -83,6 +86,7 @@ if (nested) {
 - [ ] **步骤 4：手动验证**
 
 启动后端，使用 curl 测试：
+
 1. 创建 library A：`POST /libraries { name: "LibA", path: "D:\\Games" }` — 应成功
 2. 创建嵌套 library B：`POST /libraries { name: "LibB", path: "D:\\Games\\Sub" }` — 应返回 400 "Path is a subdirectory of library"
 3. 创建父级 library C：`POST /libraries { name: "LibC", path: "D:\\" }` — 应返回 400 "Path contains existing library"
@@ -99,6 +103,7 @@ git commit -m "feat: add nested library path validation on create/update"
 ### 任务 2：后端 — 新增 library 时自动迁移 dropped 游戏
 
 **文件：**
+
 - 修改：`server/routes/library.js`
 
 - [ ] **步骤 1：添加 migrateDroppedGames 函数**
@@ -164,6 +169,7 @@ git commit -m "feat: auto-migrate dropped games when adding a library"
 ### 任务 3：后端 — 修改 library 路径时的迁移
 
 **文件：**
+
 - 修改：`server/routes/library.js`
 
 - [ ] **步骤 1：在 `PUT /:id` 中添加路径变更迁移逻辑**
@@ -171,13 +177,19 @@ git commit -m "feat: auto-migrate dropped games when adding a library"
 在 `router.put('/:id', ...)` 中，`db.updateLibrary` 之后、`res.send(library)` 之前添加：
 
 ```js
-const oldLib = await db.knex('library').where({ id: Number(id) }).first();
+const oldLib = await db
+  .knex('library')
+  .where({ id: Number(id) })
+  .first();
 if (path && path !== oldLib.path) {
   const oldPrefix = oldLib.path.replace(/\//g, '\\').replace(/\\+$/, '');
   const newNorm = normalizePath(path);
   const newPrefix = path.replace(/\//g, '\\').replace(/\\+$/, '');
 
-  const currentGames = await db.knex('game').where({ library_id: Number(id) }).select('id', 'sub_path');
+  const currentGames = await db
+    .knex('game')
+    .where({ library_id: Number(id) })
+    .select('id', 'sub_path');
 
   if (currentGames.length > 0) {
     await db.knex.transaction(async (trx) => {
@@ -224,6 +236,7 @@ git commit -m "feat: migrate games on library path change"
 ### 任务 4：前端 — SettingPage 嵌套 library 校验
 
 **文件：**
+
 - 修改：`src/pages/SettingPage.vue`
 
 - [ ] **步骤 1：添加路径归一化和嵌套校验函数**
@@ -233,7 +246,10 @@ git commit -m "feat: migrate games on library path change"
 ```ts
 const normalizePath = (p: string) => p.replace(/\//g, '\\').toLowerCase().replace(/\\+$/, '');
 
-const checkNestedLibrary = (newPath: string, excludeId?: number): { conflict: 'child' | 'parent'; lib: Library } | null => {
+const checkNestedLibrary = (
+  newPath: string,
+  excludeId?: number,
+): { conflict: 'child' | 'parent'; lib: Library } | null => {
   const newNorm = normalizePath(newPath);
   for (const lib of libraries.value) {
     if (excludeId && lib.id === excludeId) continue;
@@ -260,9 +276,10 @@ const addLibrary = async () => {
   if (nested) {
     $q.notify({
       type: 'negative',
-      message: nested.conflict === 'child'
-        ? `Path is a subdirectory of library "${nested.lib.name}"`
-        : `Path contains existing library "${nested.lib.name}"`,
+      message:
+        nested.conflict === 'child'
+          ? `Path is a subdirectory of library "${nested.lib.name}"`
+          : `Path contains existing library "${nested.lib.name}"`,
     });
     return;
   }
@@ -287,9 +304,10 @@ const saveEditLibrary = async () => {
   if (nested) {
     $q.notify({
       type: 'negative',
-      message: nested.conflict === 'child'
-        ? `Path is a subdirectory of library "${nested.lib.name}"`
-        : `Path contains existing library "${nested.lib.name}"`,
+      message:
+        nested.conflict === 'child'
+          ? `Path is a subdirectory of library "${nested.lib.name}"`
+          : `Path contains existing library "${nested.lib.name}"`,
     });
     return;
   }
@@ -321,6 +339,7 @@ git commit -m "feat: add frontend nested library validation in settings"
 ### 任务 5：前端 — 拖拽时 library 匹配
 
 **文件：**
+
 - 修改：`src/pages/GameLibPage.vue`
 
 - [ ] **步骤 1：添加路径归一化函数**

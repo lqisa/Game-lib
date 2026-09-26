@@ -12,23 +12,24 @@
 
 ## File Structure
 
-| File | Responsibility | Action |
-|------|---------------|--------|
-| `server/database/init.js` | DB initialization + migration | Modify |
-| `server/database/schema.js` | Schema definition for new installs | Modify |
-| `server/database/db.js` | Add `getDuplicateSources` query, update `insertGameSource` | Modify |
-| `server/routes/scraper.js` | Update `adoptOne` conflict handling, add conflict detection to batch | Modify |
-| `server/routes/game.js` | Add `GET /games/duplicates` endpoint | Modify |
-| `src/components/GameCard.vue` | Add `duplicate` prop and icon | Modify |
-| `src/pages/GameLibPage.vue` | Load duplicates, pass prop to GameCard | Modify |
-| `src/components/ScannerDialog.vue` | Show conflict notification after submit | Modify |
-| `src/pages/GameDetailPage.vue` | Show shared-source games in detail | Modify |
+| File                               | Responsibility                                                       | Action |
+| ---------------------------------- | -------------------------------------------------------------------- | ------ |
+| `server/database/init.js`          | DB initialization + migration                                        | Modify |
+| `server/database/schema.js`        | Schema definition for new installs                                   | Modify |
+| `server/database/db.js`            | Add `getDuplicateSources` query, update `insertGameSource`           | Modify |
+| `server/routes/scraper.js`         | Update `adoptOne` conflict handling, add conflict detection to batch | Modify |
+| `server/routes/game.js`            | Add `GET /games/duplicates` endpoint                                 | Modify |
+| `src/components/GameCard.vue`      | Add `duplicate` prop and icon                                        | Modify |
+| `src/pages/GameLibPage.vue`        | Load duplicates, pass prop to GameCard                               | Modify |
+| `src/components/ScannerDialog.vue` | Show conflict notification after submit                              | Modify |
+| `src/pages/GameDetailPage.vue`     | Show shared-source games in detail                                   | Modify |
 
 ---
 
 ### Task 1: Schema Migration — Change game_source Unique Constraint
 
 **Files:**
+
 - Modify: `server/database/init.js:95-120`
 - Modify: `server/database/schema.js:56-65`
 
@@ -37,13 +38,13 @@
 Change the `game_source` table definition in `schema.js` line 63 from:
 
 ```js
-table.unique(['source_type', 'source_id'])
+table.unique(['source_type', 'source_id']);
 ```
 
 to:
 
 ```js
-table.unique(['game_id', 'source_type', 'source_id'])
+table.unique(['game_id', 'source_type', 'source_id']);
 ```
 
 - [ ] **Step 2: Update TABLE_DDL in init.js for missing-table creation**
@@ -51,13 +52,13 @@ table.unique(['game_id', 'source_type', 'source_id'])
 Change the `game_source` entry in `TABLE_DDL` (line 67-76) from:
 
 ```js
-table.unique(['source_type', 'source_id'])
+table.unique(['source_type', 'source_id']);
 ```
 
 to:
 
 ```js
-table.unique(['game_id', 'source_type', 'source_id'])
+table.unique(['game_id', 'source_type', 'source_id']);
 ```
 
 - [ ] **Step 3: Add migration logic in init.js**
@@ -65,13 +66,15 @@ table.unique(['game_id', 'source_type', 'source_id'])
 After the `await knex('setting').insert(...)` line at the end of `initDatabase` (line 119), add migration check:
 
 ```js
-const v2 = await knex('setting').where({ key: 'migration_v2' }).first()
+const v2 = await knex('setting').where({ key: 'migration_v2' }).first();
 if (!v2) {
-  console.log(' * Running migration v2: game_source constraint change...')
-  await knex.raw('DROP INDEX IF EXISTS game_source_source_type_source_id_unique')
-  await knex.raw('CREATE UNIQUE INDEX IF NOT EXISTS game_source_game_id_source_type_source_id_unique ON game_source(game_id, source_type, source_id)')
-  await knex('setting').insert({ key: 'migration_v2', value: '1' }).onConflict('key').ignore()
-  console.log(' * Migration v2 done.')
+  console.log(' * Running migration v2: game_source constraint change...');
+  await knex.raw('DROP INDEX IF EXISTS game_source_source_type_source_id_unique');
+  await knex.raw(
+    'CREATE UNIQUE INDEX IF NOT EXISTS game_source_game_id_source_type_source_id_unique ON game_source(game_id, source_type, source_id)',
+  );
+  await knex('setting').insert({ key: 'migration_v2', value: '1' }).onConflict('key').ignore();
+  console.log(' * Migration v2 done.');
 }
 ```
 
@@ -91,6 +94,7 @@ git commit -m "feat: change game_source unique constraint to allow shared source
 ### Task 2: Backend — Update adoptOne Logic and Add Conflict Detection
 
 **Files:**
+
 - Modify: `server/routes/scraper.js:210-216`
 - Modify: `server/routes/scraper.js:296-320`
 
@@ -99,26 +103,32 @@ git commit -m "feat: change game_source unique constraint to allow shared source
 In `scraper.js`, replace the current game_source insert block (lines 210-216):
 
 ```js
-  await d('game_source').where({ game_id: gameId }).del()
-  await d('game_source').insert({
+await d('game_source').where({ game_id: gameId }).del();
+await d('game_source')
+  .insert({
     game_id: gameId,
     source_type: sourceType,
     source_id: sourceId,
     source_url: sourceUrl || null,
-    raw_data: null
-  }).onConflict(['source_type', 'source_id']).merge(['source_url', 'raw_data', 'game_id'])
+    raw_data: null,
+  })
+  .onConflict(['source_type', 'source_id'])
+  .merge(['source_url', 'raw_data', 'game_id']);
 ```
 
 with:
 
 ```js
-  await d('game_source').insert({
+await d('game_source')
+  .insert({
     game_id: gameId,
     source_type: sourceType,
     source_id: sourceId,
     source_url: sourceUrl || null,
-    raw_data: null
-  }).onConflict(['game_id', 'source_type', 'source_id']).merge(['source_url', 'raw_data'])
+    raw_data: null,
+  })
+  .onConflict(['game_id', 'source_type', 'source_id'])
+  .merge(['source_url', 'raw_data']);
 ```
 
 No more `del()` before insert. The new unique constraint `(game_id, source_type, source_id)` allows multiple games to share the same source.
@@ -129,16 +139,19 @@ In `db.js`, change `insertGameSource` (line 146):
 
 ```js
 const insertGameSource = async (data) => {
-  return db('game_source').insert(data).onConflict(['source_type', 'source_id']).merge()
-}
+  return db('game_source').insert(data).onConflict(['source_type', 'source_id']).merge();
+};
 ```
 
 to:
 
 ```js
 const insertGameSource = async (data) => {
-  return db('game_source').insert(data).onConflict(['game_id', 'source_type', 'source_id']).merge(['source_url', 'raw_data'])
-}
+  return db('game_source')
+    .insert(data)
+    .onConflict(['game_id', 'source_type', 'source_id'])
+    .merge(['source_url', 'raw_data']);
+};
 ```
 
 - [ ] **Step 3: Commit**
@@ -153,6 +166,7 @@ git commit -m "feat: update adopt logic for shared sources"
 ### Task 3: Backend — Add Duplicates API Endpoint
 
 **Files:**
+
 - Modify: `server/database/db.js` (add `getDuplicateSources` function)
 - Modify: `server/routes/game.js` (add `GET /games/duplicates` route)
 
@@ -165,26 +179,24 @@ const getDuplicateSources = async () => {
   const rows = await db('game_source as gs')
     .join('game as g', 'g.id', 'gs.game_id')
     .select('gs.source_type', 'gs.source_id', 'gs.game_id', 'g.name as game_name')
-    .whereIn(
-      db.knex.raw('(gs.source_type, gs.source_id)'),
-      function () {
-        this.select('source_type', 'source_id')
-          .from('game_source')
-          .groupBy('source_type', 'source_id')
-          .havingRaw('COUNT(*) > 1')
-      }
-    )
-    .orderBy('gs.source_type', 'gs.source_id')
+    .whereIn(db.knex.raw('(gs.source_type, gs.source_id)'), function () {
+      this.select('source_type', 'source_id')
+        .from('game_source')
+        .groupBy('source_type', 'source_id')
+        .havingRaw('COUNT(*) > 1');
+    })
+    .orderBy('gs.source_type', 'gs.source_id');
 
-  const groups = {}
+  const groups = {};
   for (const row of rows) {
-    const key = `${row.source_type}:${row.source_id}`
-    if (!groups[key]) groups[key] = { sourceType: row.source_type, sourceId: row.source_id, games: [] }
-    groups[key].games.push({ gameId: row.game_id, name: row.game_name })
+    const key = `${row.source_type}:${row.source_id}`;
+    if (!groups[key])
+      groups[key] = { sourceType: row.source_type, sourceId: row.source_id, games: [] };
+    groups[key].games.push({ gameId: row.game_id, name: row.game_name });
   }
 
-  return Object.values(groups)
-}
+  return Object.values(groups);
+};
 ```
 
 - [ ] **Step 2: Export getDuplicateSources**
@@ -198,12 +210,12 @@ Add before the `/:id` route (to avoid route conflict):
 ```js
 router.get('/duplicates', async (req, res, next) => {
   try {
-    const duplicates = await db.getDuplicateSources()
-    res.send(duplicates)
+    const duplicates = await db.getDuplicateSources();
+    res.send(duplicates);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 ```
 
 - [ ] **Step 4: Test the endpoint**
@@ -224,6 +236,7 @@ git commit -m "feat: add GET /games/duplicates API endpoint"
 ### Task 3b: Backend — Add Check-Conflicts API Endpoint
 
 **Files:**
+
 - Modify: `server/routes/game.js` (add `POST /games/check-conflicts` route)
 
 This endpoint is called by the frontend BEFORE submitting adopt, to detect if any of the sources about to be adopted are already used by other games.
@@ -235,37 +248,39 @@ Add before the `/:id` route (to avoid route conflict):
 ```js
 router.post('/check-conflicts', async (req, res, next) => {
   try {
-    const { sources } = req.body
+    const { sources } = req.body;
     if (!Array.isArray(sources)) {
-      return res.status(400).send({ error: 'sources array is required' })
+      return res.status(400).send({ error: 'sources array is required' });
     }
     if (sources.length === 0) {
-      return res.send([])
+      return res.send([]);
     }
-    const conflicts = []
+    const conflicts = [];
     for (const s of sources) {
-      if (!s.sourceType || !s.sourceId) continue
-      const existing = await db.knex('game_source as gs')
+      if (!s.sourceType || !s.sourceId) continue;
+      const existing = await db
+        .knex('game_source as gs')
         .join('game as g', 'g.id', 'gs.game_id')
         .where({ 'gs.source_type': s.sourceType, 'gs.source_id': String(s.sourceId) })
         .whereNot('gs.game_id', s.gameId)
-        .select('gs.game_id', 'g.name as game_name', 'gs.source_type', 'gs.source_id')
+        .select('gs.game_id', 'g.name as game_name', 'gs.source_type', 'gs.source_id');
       if (existing.length > 0) {
         conflicts.push({
           sourceType: s.sourceType,
           sourceId: s.sourceId,
-          games: existing.map(r => ({ gameId: r.game_id, name: r.game_name }))
-        })
+          games: existing.map((r) => ({ gameId: r.game_id, name: r.game_name })),
+        });
       }
     }
-    res.send(conflicts)
+    res.send(conflicts);
   } catch (err) {
-    next(err)
+    next(err);
   }
-})
+});
 ```
 
 Request body format:
+
 ```json
 {
   "sources": [
@@ -276,14 +291,13 @@ Request body format:
 ```
 
 Response: array of conflicts (empty if no conflicts):
+
 ```json
 [
   {
     "sourceType": "bangumi",
     "sourceId": "269859",
-    "games": [
-      { "gameId": 1820, "name": "我和她（女护士）的诊察日志" }
-    ]
+    "games": [{ "gameId": 1820, "name": "我和她（女护士）的诊察日志" }]
   }
 ]
 ```
@@ -304,6 +318,7 @@ git commit -m "feat: add POST /games/check-conflicts API for pre-submit conflict
 ### Task 4: Frontend — GameCard Duplicate Icon
 
 **Files:**
+
 - Modify: `src/components/GameCard.vue`
 
 - [ ] **Step 1: Add duplicate prop and icon to GameCard**
@@ -313,16 +328,19 @@ Update the `Game` interface to not change (duplicate is a separate prop, not par
 Add `duplicate` prop:
 
 ```ts
-const props = withDefaults(defineProps<{
-  game: Game
-  selectable?: boolean
-  selected?: boolean
-  duplicate?: boolean
-}>(), {
-  selectable: false,
-  selected: false,
-  duplicate: false,
-})
+const props = withDefaults(
+  defineProps<{
+    game: Game;
+    selectable?: boolean;
+    selected?: boolean;
+    duplicate?: boolean;
+  }>(),
+  {
+    selectable: false,
+    selected: false,
+    duplicate: false,
+  },
+);
 ```
 
 Add the duplicate icon in the template, after the selected icon div and before the game-cover__title div:
@@ -347,6 +365,7 @@ git commit -m "feat: add duplicate icon to GameCard"
 ### Task 5: Frontend — Load Duplicates in GameLibPage and Pass to GameCard
 
 **Files:**
+
 - Modify: `src/pages/GameLibPage.vue`
 
 - [ ] **Step 1: Add duplicateGameIds ref and load function**
@@ -354,22 +373,22 @@ git commit -m "feat: add duplicate icon to GameCard"
 After the `total` ref declaration, add:
 
 ```ts
-const duplicateGameIds = ref<Set<number>>(new Set())
+const duplicateGameIds = ref<Set<number>>(new Set());
 
 const loadDuplicates = async () => {
   try {
-    const res = await api.get('/games/duplicates')
-    const ids = new Set<number>()
+    const res = await api.get('/games/duplicates');
+    const ids = new Set<number>();
     for (const group of res.data) {
       for (const game of group.games) {
-        ids.add(game.gameId)
+        ids.add(game.gameId);
       }
     }
-    duplicateGameIds.value = ids
+    duplicateGameIds.value = ids;
   } catch {
-    duplicateGameIds.value = new Set()
+    duplicateGameIds.value = new Set();
   }
-}
+};
 ```
 
 - [ ] **Step 2: Call loadDuplicates on mount and after loadGames**
@@ -405,6 +424,7 @@ git commit -m "feat: load and display duplicate source indicators on game cards"
 ### Task 6: Frontend — Pre-Submit Conflict Confirmation in ScannerDialog
 
 **Files:**
+
 - Modify: `src/components/ScannerDialog.vue`
 
 The flow is: user clicks Submit → call `POST /games/check-conflicts` with the adopted sources → if conflicts found, show confirmation dialog → user confirms or cancels → then call adopt/batch.
@@ -414,9 +434,11 @@ The flow is: user clicks Submit → call `POST /games/check-conflicts` with the 
 Add refs:
 
 ```ts
-const showConflictDialog = ref(false)
-const conflictList = ref<{ sourceType: string; sourceId: string; games: { gameId: number; name: string }[] }[]>([])
-const pendingSubmitData = ref<{ games: any[]; adoptedRows: any[]; staleRows: any[] } | null>(null)
+const showConflictDialog = ref(false);
+const conflictList = ref<
+  { sourceType: string; sourceId: string; games: { gameId: number; name: string }[] }[]
+>([]);
+const pendingSubmitData = ref<{ games: any[]; adoptedRows: any[]; staleRows: any[] } | null>(null);
 ```
 
 - [ ] **Step 2: Update submitAdopted to check conflicts before submitting**
@@ -425,14 +447,14 @@ Replace the existing `submitAdopted` function:
 
 ```ts
 const submitAdopted = async () => {
-  submitting.value = true
-  const adoptedRows = scanResults.value.filter(r => r.status === 'adopted' && r.adoptData)
-  const staleRows = scanResults.value.filter(r => r.status === 'stale')
+  submitting.value = true;
+  const adoptedRows = scanResults.value.filter((r) => r.status === 'adopted' && r.adoptData);
+  const staleRows = scanResults.value.filter((r) => r.status === 'stale');
   try {
     if (adoptedRows.length > 0) {
-      const games = adoptedRows.map(row => {
-        const d = row.adoptData!
-        const source = d.source || 'dlsite'
+      const games = adoptedRows.map((row) => {
+        const d = row.adoptData!;
+        const source = d.source || 'dlsite';
         return {
           gameId: row.gameId,
           sourceType: source,
@@ -444,73 +466,78 @@ const submitAdopted = async () => {
           genres: d.detail.genres,
           tags: d.detail.tags,
           description: d.detail.description,
-        }
-      })
+        };
+      });
 
       const checkRes = await api.post('/games/check-conflicts', {
-        sources: games.map(g => ({ gameId: g.gameId, sourceType: g.sourceType, sourceId: g.sourceId }))
-      })
-      const conflicts = checkRes.data || []
+        sources: games.map((g) => ({
+          gameId: g.gameId,
+          sourceType: g.sourceType,
+          sourceId: g.sourceId,
+        })),
+      });
+      const conflicts = checkRes.data || [];
 
       if (conflicts.length > 0) {
-        conflictList.value = conflicts
-        pendingSubmitData.value = { games, adoptedRows, staleRows }
-        showConflictDialog.value = true
-        return
+        conflictList.value = conflicts;
+        pendingSubmitData.value = { games, adoptedRows, staleRows };
+        showConflictDialog.value = true;
+        return;
       }
 
-      await doSubmit(games, adoptedRows, staleRows)
+      await doSubmit(games, adoptedRows, staleRows);
     } else {
       if (staleRows.length > 0) {
-        await api.post('/games/batch-delete', { ids: staleRows.map(r => r.gameId) })
+        await api.post('/games/batch-delete', { ids: staleRows.map((r) => r.gameId) });
       }
-      scanResults.value = scanResults.value.filter(r => r.status !== 'stale')
-      emit('done')
+      scanResults.value = scanResults.value.filter((r) => r.status !== 'stale');
+      emit('done');
     }
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
-}
+};
 
 const doSubmit = async (games: any[], adoptedRows: any[], staleRows: any[]) => {
-  const failedIds = new Set<number>()
-  const batchRes = await api.post('/scraper/adopt/batch', { games })
-  const results: { gameId: number; success: boolean; error?: string }[] = batchRes.data.results || []
+  const failedIds = new Set<number>();
+  const batchRes = await api.post('/scraper/adopt/batch', { games });
+  const results: { gameId: number; success: boolean; error?: string }[] =
+    batchRes.data.results || [];
   for (const r of results) {
     if (!r.success) {
-      failedIds.add(r.gameId)
-      const row = adoptedRows.find(ar => ar.gameId === r.gameId)
-      if (row) row.status = row.searchResult ? 'searched' : 'pending'
+      failedIds.add(r.gameId);
+      const row = adoptedRows.find((ar) => ar.gameId === r.gameId);
+      if (row) row.status = row.searchResult ? 'searched' : 'pending';
     }
   }
   if (staleRows.length > 0) {
-    await api.post('/games/batch-delete', { ids: staleRows.map(r => r.gameId) })
+    await api.post('/games/batch-delete', { ids: staleRows.map((r) => r.gameId) });
   }
-  scanResults.value = scanResults.value.filter(r => {
-    if (r.status === 'stale') return false
-    if (r.status === 'adopted') return failedIds.has(r.gameId)
-    return true
-  })
-  emit('done')
-}
+  scanResults.value = scanResults.value.filter((r) => {
+    if (r.status === 'stale') return false;
+    if (r.status === 'adopted') return failedIds.has(r.gameId);
+    return true;
+  });
+  emit('done');
+};
 
 const confirmConflictSubmit = async () => {
-  showConflictDialog.value = false
-  if (!pendingSubmitData.value) return
-  const { games, adoptedRows, staleRows } = pendingSubmitData.value
-  pendingSubmitData.value = null
-  submitting.value = true
+  showConflictDialog.value = false;
+  if (!pendingSubmitData.value) return;
+  const { games, adoptedRows, staleRows } = pendingSubmitData.value;
+  pendingSubmitData.value = null;
+  submitting.value = true;
   try {
-    await doSubmit(games, adoptedRows, staleRows)
+    await doSubmit(games, adoptedRows, staleRows);
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
-}
+};
 
 const cancelConflictSubmit = () => {
-  showConflictDialog.value = false
-  pendingSubmitData.value = null
-}
+  showConflictDialog.value = false;
+  pendingSubmitData.value = null;
+};
 ```
 
 - [ ] **Step 3: Add conflict confirmation dialog in template**
@@ -556,6 +583,7 @@ git commit -m "feat: pre-submit conflict confirmation dialog for shared sources"
 ### Task 7: Frontend — Game Detail Page Conflict Info
 
 **Files:**
+
 - Modify: `src/pages/GameDetailPage.vue`
 
 - [ ] **Step 1: Add duplicateSources to GameDetail interface**
@@ -563,7 +591,16 @@ git commit -m "feat: pre-submit conflict confirmation dialog for shared sources"
 Add to the `GameDetail` interface:
 
 ```ts
-  duplicateSources: { sourceType: string; sourceId: string; games: { gameId: number; name: string }[] }[] | null
+duplicateSources: {
+  sourceType: string;
+  sourceId: string;
+  games: {
+    gameId: number;
+    name: string;
+  }
+  [];
+}
+[] | null;
 ```
 
 - [ ] **Step 2: Add duplicate sources display in template**
@@ -598,6 +635,7 @@ git commit -m "feat: show shared source info on game detail page"
 ### Task 8: Backend — Add duplicateSources to Game Detail API
 
 **Files:**
+
 - Modify: `server/database/db.js` (update `getGameDetail`)
 
 - [ ] **Step 1: Add duplicate source query to getGameDetail**
@@ -605,31 +643,35 @@ git commit -m "feat: show shared source info on game detail page"
 In `db.js`, at the end of `getGameDetail`, before the `return` statement, add:
 
 ```js
-  let duplicateSources = null
-  if (sources.length > 0) {
-    const sourceConditions = sources.map(s => ({ source_type: s.source_type, source_id: s.source_id }))
-    const dupRows = await db('game_source as gs')
-      .join('game as g', 'g.id', 'gs.game_id')
-      .where(function () {
-        for (const sc of sourceConditions) {
-          this.orWhere({ 'gs.source_type': sc.source_type, 'gs.source_id': sc.source_id })
-        }
-      })
-      .whereNot('gs.game_id', id)
-      .select('gs.source_type', 'gs.source_id', 'gs.game_id', 'g.name as game_name')
-
-    if (dupRows.length > 0) {
-      const groups = {}
-      for (const row of dupRows) {
-        const key = `${row.source_type}:${row.source_id}`
-        if (!groups[key]) groups[key] = { sourceType: row.source_type, sourceId: row.source_id, games: [] }
-        groups[key].games.push({ gameId: row.game_id, name: row.game_name })
+let duplicateSources = null;
+if (sources.length > 0) {
+  const sourceConditions = sources.map((s) => ({
+    source_type: s.source_type,
+    source_id: s.source_id,
+  }));
+  const dupRows = await db('game_source as gs')
+    .join('game as g', 'g.id', 'gs.game_id')
+    .where(function () {
+      for (const sc of sourceConditions) {
+        this.orWhere({ 'gs.source_type': sc.source_type, 'gs.source_id': sc.source_id });
       }
-      duplicateSources = Object.values(groups)
-    }
-  }
+    })
+    .whereNot('gs.game_id', id)
+    .select('gs.source_type', 'gs.source_id', 'gs.game_id', 'g.name as game_name');
 
-  return { ...game, makers, genres, tags, sources, library, duplicateSources }
+  if (dupRows.length > 0) {
+    const groups = {};
+    for (const row of dupRows) {
+      const key = `${row.source_type}:${row.source_id}`;
+      if (!groups[key])
+        groups[key] = { sourceType: row.source_type, sourceId: row.source_id, games: [] };
+      groups[key].games.push({ gameId: row.game_id, name: row.game_name });
+    }
+    duplicateSources = Object.values(groups);
+  }
+}
+
+return { ...game, makers, genres, tags, sources, library, duplicateSources };
 ```
 
 - [ ] **Step 2: Test the detail API**
@@ -668,6 +710,7 @@ git commit -m "feat: include duplicate source info in game detail API response"
 ### Task 10: ScannerDialog UI Improvements
 
 **Files:**
+
 - Modify: `src/components/ScannerDialog.vue`
 
 Three UI improvements: search filter, folder name tooltip, and wider cover column.
@@ -695,23 +738,24 @@ Add a `q-input` in the toolbar area (after the sort button), before the `<q-spac
 Add the ref:
 
 ```ts
-const scanFilter = ref('')
+const scanFilter = ref('');
 ```
 
 Update `sortedResults` computed to also filter by `scanFilter`:
 
 ```ts
 const sortedResults = computed(() => {
-  let results = [...scanResults.value]
+  let results = [...scanResults.value];
   if (scanFilter.value) {
-    const keyword = scanFilter.value.toLowerCase()
-    results = results.filter(r =>
-      r.name.toLowerCase().includes(keyword) ||
-      r.searchResult?.name?.toLowerCase().includes(keyword)
-    )
+    const keyword = scanFilter.value.toLowerCase();
+    results = results.filter(
+      (r) =>
+        r.name.toLowerCase().includes(keyword) ||
+        r.searchResult?.name?.toLowerCase().includes(keyword),
+    );
   }
   // ... existing sort logic
-})
+});
 ```
 
 - [ ] **Step 2: Add tooltip to folder name**
@@ -775,7 +819,8 @@ Update the virtual scroll item size to match:
 Update the fallback cover placeholder to match:
 
 ```css
-width: 180px; height: 260px;
+width: 180px;
+height: 260px;
 ```
 
 - [ ] **Step 4: Commit**

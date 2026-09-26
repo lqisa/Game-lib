@@ -12,18 +12,19 @@
 
 ## 文件结构
 
-| 文件 | 职责 |
-|------|------|
-| `src/pages/GameLibPage.vue` | 列表页：选择模式、框选、Shift/Ctrl 多选、批量删除 |
-| `src/components/GameCard.vue` | 卡片：新增 `selectable`/`selected` props，选中视觉反馈 |
-| `src/components/ScannerDialog.vue` | quickAdopt fetch 失败时回退 |
-| `src/components/ScrapeDialog.vue` | adopt 时 detail 为空时回退 |
+| 文件                               | 职责                                                   |
+| ---------------------------------- | ------------------------------------------------------ |
+| `src/pages/GameLibPage.vue`        | 列表页：选择模式、框选、Shift/Ctrl 多选、批量删除      |
+| `src/components/GameCard.vue`      | 卡片：新增 `selectable`/`selected` props，选中视觉反馈 |
+| `src/components/ScannerDialog.vue` | quickAdopt fetch 失败时回退                            |
+| `src/components/ScrapeDialog.vue`  | adopt 时 detail 为空时回退                             |
 
 ---
 
 ### 任务 1：GameCard 添加选中状态支持
 
 **文件：**
+
 - 修改：`src/components/GameCard.vue`
 
 - [ ] **步骤 1：添加 selectable 和 selected props，修改点击行为和视觉反馈**
@@ -35,11 +36,7 @@
     :class="{ 'game-card--selected': selected }"
     @click="handleClick"
   >
-    <q-img
-      :src="coverSrc"
-      :ratio="16 / 9"
-      class="game-cover"
-    >
+    <q-img :src="coverSrc" :ratio="16 / 9" class="game-cover">
       <template v-slot:error>
         <div class="absolute-full flex flex-center bg-grey-4 text-grey-6">
           <q-icon name="videogame_asset" size="48px" />
@@ -71,58 +68,63 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from 'vue';
 
 interface Game {
-  id: number
-  name: string
-  cover_path: string | null
-  library_name: string
-  library_path: string
-  sub_path: string
+  id: number;
+  name: string;
+  cover_path: string | null;
+  library_name: string;
+  library_path: string;
+  sub_path: string;
 }
 
-const props = withDefaults(defineProps<{
-  game: Game
-  selectable?: boolean
-  selected?: boolean
-}>(), {
-  selectable: false,
-  selected: false,
-})
+const props = withDefaults(
+  defineProps<{
+    game: Game;
+    selectable?: boolean;
+    selected?: boolean;
+  }>(),
+  {
+    selectable: false,
+    selected: false,
+  },
+);
 
 const emit = defineEmits<{
-  click: []
-  select: []
-}>()
+  click: [];
+  select: [];
+}>();
 
 const coverSrc = computed(() => {
   if (props.game.cover_path) {
-    return `/covers/${props.game.cover_path}`
+    return `/covers/${props.game.cover_path}`;
   }
-  return ''
-})
+  return '';
+});
 
-const hasElectronAPI = computed(() => !!window.electronAPI)
+const hasElectronAPI = computed(() => !!window.electronAPI);
 
 const handleClick = () => {
   if (props.selectable) {
-    emit('select')
+    emit('select');
   } else {
-    emit('click')
+    emit('click');
   }
-}
+};
 
 const openDir = async () => {
-  if (!window.electronAPI) return
-  const fullPath = props.game.library_path + '\\' + props.game.sub_path
-  await window.electronAPI.openPath(fullPath)
-}
+  if (!window.electronAPI) return;
+  const fullPath = props.game.library_path + '\\' + props.game.sub_path;
+  await window.electronAPI.openPath(fullPath);
+};
 </script>
 
 <style scoped>
 .game-card {
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
   position: relative;
 }
 .game-card:hover {
@@ -149,6 +151,7 @@ git commit -m "feat: add selectable/selected props to GameCard"
 ### 任务 2：GameLibPage 选择模式 + 批量删除
 
 **文件：**
+
 - 修改：`src/pages/GameLibPage.vue`
 
 - [ ] **步骤 1：实现选择模式、Shift/Ctrl 多选、框选、批量删除**
@@ -174,13 +177,7 @@ git commit -m "feat: add selectable/selected props to GameCard"
           </template>
         </q-input>
         <q-btn color="primary" label="Scan & Scrape" @click="showScanner = true" />
-        <q-btn
-          v-if="!selectMode"
-          flat
-          icon="checklist"
-          label="Select"
-          @click="enterSelectMode"
-        />
+        <q-btn v-if="!selectMode" flat icon="checklist" label="Select" @click="enterSelectMode" />
         <template v-else>
           <q-btn flat label="Cancel" @click="exitSelectMode" />
           <q-btn
@@ -216,11 +213,7 @@ git commit -m "feat: add selectable/selected props to GameCard"
         </div>
       </div>
 
-      <div
-        v-if="selectMode && dragSelecting"
-        class="drag-select-rect"
-        :style="dragRectStyle"
-      />
+      <div v-if="selectMode && dragSelecting" class="drag-select-rect" :style="dragRectStyle" />
 
       <div v-if="games.length === 0 && !loading" class="text-center text-grey q-mt-xl">
         <q-icon name="videogame_asset" size="64px" />
@@ -257,161 +250,170 @@ git commit -m "feat: add selectable/selected props to GameCard"
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import api from '../composables/useApi'
-import GameCard from '../components/GameCard.vue'
-import ScannerDialog from '../components/ScannerDialog.vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
+import api from '../composables/useApi';
+import GameCard from '../components/GameCard.vue';
+import ScannerDialog from '../components/ScannerDialog.vue';
 
 interface GameItem {
-  id: number; name: string; cover_path: string | null
-  library_name: string; library_id: number; sub_path: string
-  library_path: string
+  id: number;
+  name: string;
+  cover_path: string | null;
+  library_name: string;
+  library_id: number;
+  sub_path: string;
+  library_path: string;
 }
 
-const router = useRouter()
-const games = ref<GameItem[]>([])
-const loading = ref(false)
-const keyword = ref('')
-const page = ref(1)
-const pageSize = 24
-const total = ref(0)
-const showScanner = ref(false)
+const router = useRouter();
+const games = ref<GameItem[]>([]);
+const loading = ref(false);
+const keyword = ref('');
+const page = ref(1);
+const pageSize = 24;
+const total = ref(0);
+const showScanner = ref(false);
 
-const selectMode = ref(false)
-const selectedIds = ref<Set<number>>(new Set())
-const lastSelectedId = ref<number | null>(null)
-const confirmDelete = ref(false)
+const selectMode = ref(false);
+const selectedIds = ref<Set<number>>(new Set());
+const lastSelectedId = ref<number | null>(null);
+const confirmDelete = ref(false);
 
-const gridContainer = ref<HTMLElement | null>(null)
+const gridContainer = ref<HTMLElement | null>(null);
 
-const dragSelecting = ref(false)
-const dragStart = ref({ x: 0, y: 0 })
-const dragEnd = ref({ x: 0, y: 0 })
+const dragSelecting = ref(false);
+const dragStart = ref({ x: 0, y: 0 });
+const dragEnd = ref({ x: 0, y: 0 });
 
 const dragRectStyle = computed(() => {
-  const x = Math.min(dragStart.value.x, dragEnd.value.x)
-  const y = Math.min(dragStart.value.y, dragEnd.value.y)
-  const w = Math.abs(dragEnd.value.x - dragStart.value.x)
-  const h = Math.abs(dragEnd.value.y - dragStart.value.y)
+  const x = Math.min(dragStart.value.x, dragEnd.value.x);
+  const y = Math.min(dragStart.value.y, dragEnd.value.y);
+  const w = Math.abs(dragEnd.value.x - dragStart.value.x);
+  const h = Math.abs(dragEnd.value.y - dragStart.value.y);
   return {
     left: `${x}px`,
     top: `${y}px`,
     width: `${w}px`,
     height: `${h}px`,
-  }
-})
+  };
+});
 
 const enterSelectMode = () => {
-  selectMode.value = true
-}
+  selectMode.value = true;
+};
 
 const exitSelectMode = () => {
-  selectMode.value = false
-  selectedIds.value = new Set()
-  lastSelectedId.value = null
-}
+  selectMode.value = false;
+  selectedIds.value = new Set();
+  lastSelectedId.value = null;
+};
 
 const goDetail = (id: number) => {
-  void router.push(`/game/${id}`)
-}
+  void router.push(`/game/${id}`);
+};
 
 const toggleSelect = (id: number, event?: MouseEvent) => {
-  const newSet = new Set(selectedIds.value)
+  const newSet = new Set(selectedIds.value);
 
   if (event?.shiftKey && lastSelectedId.value !== null) {
-    const ids = games.value.map(g => g.id)
-    const fromIdx = ids.indexOf(lastSelectedId.value)
-    const toIdx = ids.indexOf(id)
+    const ids = games.value.map((g) => g.id);
+    const fromIdx = ids.indexOf(lastSelectedId.value);
+    const toIdx = ids.indexOf(id);
     if (fromIdx >= 0 && toIdx >= 0) {
-      const [lo, hi] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx]
+      const [lo, hi] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
       for (let i = lo; i <= hi; i++) {
-        newSet.add(ids[i]!)
+        newSet.add(ids[i]!);
       }
     }
   } else if (event?.ctrlKey || event?.metaKey) {
     if (newSet.has(id)) {
-      newSet.delete(id)
+      newSet.delete(id);
     } else {
-      newSet.add(id)
+      newSet.add(id);
     }
   } else {
     if (newSet.has(id) && newSet.size === 1) {
-      newSet.delete(id)
+      newSet.delete(id);
     } else {
-      newSet.clear()
-      newSet.add(id)
+      newSet.clear();
+      newSet.add(id);
     }
   }
 
-  selectedIds.value = newSet
-  lastSelectedId.value = id
-}
+  selectedIds.value = newSet;
+  lastSelectedId.value = id;
+};
 
 const onGridMouseDown = (e: MouseEvent) => {
-  if (!selectMode.value) return
-  if ((e.target as HTMLElement).closest('.game-card')) return
-  dragSelecting.value = true
-  const rect = gridContainer.value?.getBoundingClientRect()
-  if (!rect) return
-  dragStart.value = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-  dragEnd.value = { ...dragStart.value }
-}
+  if (!selectMode.value) return;
+  if ((e.target as HTMLElement).closest('.game-card')) return;
+  dragSelecting.value = true;
+  const rect = gridContainer.value?.getBoundingClientRect();
+  if (!rect) return;
+  dragStart.value = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  dragEnd.value = { ...dragStart.value };
+};
 
 const onGridMouseMove = (e: MouseEvent) => {
-  if (!dragSelecting.value) return
-  const rect = gridContainer.value?.getBoundingClientRect()
-  if (!rect) return
-  dragEnd.value = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-}
+  if (!dragSelecting.value) return;
+  const rect = gridContainer.value?.getBoundingClientRect();
+  if (!rect) return;
+  dragEnd.value = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+};
 
 const onGridMouseUp = () => {
-  if (!dragSelecting.value) return
-  dragSelecting.value = false
+  if (!dragSelecting.value) return;
+  dragSelecting.value = false;
 
-  const container = gridContainer.value
-  if (!container) return
-  const containerRect = container.getBoundingClientRect()
+  const container = gridContainer.value;
+  if (!container) return;
+  const containerRect = container.getBoundingClientRect();
 
-  const selX1 = Math.min(dragStart.value.x, dragEnd.value.x) + containerRect.left
-  const selY1 = Math.min(dragStart.value.y, dragEnd.value.y) + containerRect.top
-  const selX2 = Math.max(dragStart.value.x, dragEnd.value.x) + containerRect.left
-  const selY2 = Math.max(dragStart.value.y, dragEnd.value.y) + containerRect.top
+  const selX1 = Math.min(dragStart.value.x, dragEnd.value.x) + containerRect.left;
+  const selY1 = Math.min(dragStart.value.y, dragEnd.value.y) + containerRect.top;
+  const selX2 = Math.max(dragStart.value.x, dragEnd.value.x) + containerRect.left;
+  const selY2 = Math.max(dragStart.value.y, dragEnd.value.y) + containerRect.top;
 
-  const newSet = new Set(selectedIds.value)
-  const cards = container.querySelectorAll('[data-game-id]')
+  const newSet = new Set(selectedIds.value);
+  const cards = container.querySelectorAll('[data-game-id]');
   cards.forEach((card) => {
-    const cardRect = card.getBoundingClientRect()
-    const overlaps = !(cardRect.right < selX1 || cardRect.left > selX2 || cardRect.bottom < selY1 || cardRect.top > selY2)
+    const cardRect = card.getBoundingClientRect();
+    const overlaps = !(
+      cardRect.right < selX1 ||
+      cardRect.left > selX2 ||
+      cardRect.bottom < selY1 ||
+      cardRect.top > selY2
+    );
     if (overlaps) {
-      const id = Number((card as HTMLElement).dataset.gameId)
-      if (id) newSet.add(id)
+      const id = Number((card as HTMLElement).dataset.gameId);
+      if (id) newSet.add(id);
     }
-  })
-  selectedIds.value = newSet
-}
+  });
+  selectedIds.value = newSet;
+};
 
 const batchDelete = () => {
-  confirmDelete.value = true
-}
+  confirmDelete.value = true;
+};
 
 const doBatchDelete = async () => {
-  const ids = [...selectedIds.value]
-  if (ids.length === 0) return
-  await api.post('/games/batch-delete', { ids })
-  confirmDelete.value = false
-  exitSelectMode()
-  await loadGames()
-}
+  const ids = [...selectedIds.value];
+  if (ids.length === 0) return;
+  await api.post('/games/batch-delete', { ids });
+  confirmDelete.value = false;
+  exitSelectMode();
+  await loadGames();
+};
 
 const onKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && selectMode.value) {
-    exitSelectMode()
+    exitSelectMode();
   }
-}
+};
 
 const loadGames = async () => {
-  loading.value = true
+  loading.value = true;
   try {
     const res = await api.get('/games', {
       params: {
@@ -419,27 +421,27 @@ const loadGames = async () => {
         pageSize,
         keyword: keyword.value || undefined,
       },
-    })
-    games.value = res.data.games
-    total.value = res.data.total
+    });
+    games.value = res.data.games;
+    total.value = res.data.total;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const searchGames = () => {
-  page.value = 1
-  void loadGames()
-}
+  page.value = 1;
+  void loadGames();
+};
 
 onMounted(() => {
-  void loadGames()
-  window.addEventListener('keydown', onKeydown)
-})
+  void loadGames();
+  window.addEventListener('keydown', onKeydown);
+});
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', onKeydown)
-})
+  window.removeEventListener('keydown', onKeydown);
+});
 </script>
 
 <style scoped>
@@ -465,6 +467,7 @@ git commit -m "feat: add multi-select (box/shift/ctrl) and batch delete to game 
 ### 任务 3：ScannerDialog quickAdopt fetch 失败时回退
 
 **文件：**
+
 - 修改：`src/components/ScannerDialog.vue`
 
 - [ ] **步骤 1：在 quickAdopt 中 fetch 失败时用 SearchResult 构造降级 DetailResult**
@@ -516,6 +519,7 @@ git commit -m "feat: fallback to search result when fetch detail fails in quickA
 ### 任务 4：ScrapeDialog adopt 时 detail 为空回退
 
 **文件：**
+
 - 修改：`src/components/ScrapeDialog.vue`
 
 - [ ] **步骤 1：在 adopt 函数中 detail 为空时用 SearchResult 构造降级 DetailResult**
@@ -524,24 +528,24 @@ git commit -m "feat: fallback to search result when fetch detail fails in quickA
 
 ```typescript
 const adopt = () => {
-  if (!selectedResult.value || !detail.value) return
+  if (!selectedResult.value || !detail.value) return;
   emit('adopted', {
     source: activeSource.value,
     sourceId: selectedResult.value.id,
     name: selectedResult.value.name,
     makerName: selectedResult.value.makerName,
     coverUrl: selectedResult.value.coverUrl,
-    detail: detail.value
-  })
-  show.value = false
-}
+    detail: detail.value,
+  });
+  show.value = false;
+};
 ```
 
 替换为：
 
 ```typescript
 const adopt = () => {
-  if (!selectedResult.value) return
+  if (!selectedResult.value) return;
   const fallback: DetailResult = detail.value || {
     id: selectedResult.value.id,
     title: selectedResult.value.name,
@@ -550,7 +554,7 @@ const adopt = () => {
     genres: [],
     tags: [],
     description: '',
-  }
+  };
   emit('adopted', {
     source: activeSource.value,
     sourceId: selectedResult.value.id,
@@ -558,9 +562,9 @@ const adopt = () => {
     makerName: selectedResult.value.makerName,
     coverUrl: selectedResult.value.coverUrl,
     detail: fallback,
-  })
-  show.value = false
-}
+  });
+  show.value = false;
+};
 ```
 
 同时将 Adopt 按钮的 `:disable="!detail"` 移除，改为 `:disable="!selectedResult"`：
