@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import * as db from '../database/db.js';
 import { scanDirectory, expandDirectory } from '../scanner.js';
 import { ARCHIVE_EXTENSIONS, VOLUME_PATTERNS } from '../constants.js';
-import { runSimilarScan } from '../similar.js';
+import { requestFullScan, triggerSimilarScan } from '../similar-classifier.js';
 import { getUnknownR18Games, storeDetectionResults } from '../r18.js';
 import {
   createTask,
@@ -74,6 +74,7 @@ router.get('/', async (req, res, next) => {
       tagIds,
       scraped,
       duplicate,
+      r18,
       favoritesOnly,
       sortBy,
       sortOrder,
@@ -95,6 +96,7 @@ router.get('/', async (req, res, next) => {
       tagIds: tagIds ? String(tagIds).split(',').map(Number) : undefined,
       scraped: scraped === 'true' ? true : scraped === 'false' ? false : undefined,
       duplicate: duplicate === 'yes' ? true : duplicate === 'no' ? false : undefined,
+      r18: r18 === 'yes' ? true : r18 === 'no' ? false : undefined,
       favoritesOnly: favoritesOnly === 'true',
       excludeSubPaths,
       sortBy: sortBy || 'updated_at',
@@ -311,6 +313,7 @@ router.post('/', async (req, res, next) => {
     });
     const game = await db.getGameDetail(id);
     res.status(201).send(game);
+    triggerSimilarScan();
   } catch (err) {
     next(err);
   }
@@ -384,7 +387,7 @@ router.put('/:id/manual-cover', async (req, res, next) => {
 // carries the task id and progress arrives over SSE like any other task.
 router.post('/similar-scan', async (req, res, next) => {
   try {
-    const task = await runSimilarScan({ full: true });
+    const task = await requestFullScan();
     if (!task) return res.send({ skipped: true });
     return res.send({ taskId: task.id });
   } catch (err) {
@@ -414,6 +417,21 @@ router.post('/r18/detect', async (req, res, next) => {
     const outcome = await storeDetectionResults(results);
     console.log(`[r18-api] POST /r18/detect → ${results.length} results, updated=${outcome.updated} skipped=${outcome.skipped}`);
     res.send(outcome);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/:id/r18', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { r18 } = req.body;
+    if (r18 !== 0 && r18 !== 1) {
+      return res.status(400).send({ error: 'r18 must be 0 or 1' });
+    }
+    await db.knex('game').where({ id }).update({ r18, r18_source: 'manual' });
+    const game = await db.getGameDetail(id);
+    res.send(game);
   } catch (err) {
     next(err);
   }

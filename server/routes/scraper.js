@@ -1,5 +1,6 @@
 import express from 'express';
 import * as db from '../database/db.js';
+import { triggerSimilarScan } from '../similar-classifier.js';
 import { searchDLSite, searchDLSiteDetailed, fetchDLSiteDetail } from '../scraper/dlsite.js';
 import { searchBangumi, fetchBangumiDetail } from '../scraper/bangumi.js';
 import { searchVNDB, fetchVNDBDetail } from '../scraper/vndb.js';
@@ -433,6 +434,7 @@ router.post('/adopt', async (req, res, next) => {
     });
     const game = await db.getGameDetail(gameId);
     res.send(game);
+    triggerSimilarScan();
   } catch (err) {
     next(err);
   }
@@ -575,6 +577,7 @@ router.post('/adopt/batch', async (req, res, next) => {
     );
 
     res.send({ results });
+    triggerSimilarScan();
   } catch (err) {
     next(err);
   }
