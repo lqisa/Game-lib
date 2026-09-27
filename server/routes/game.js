@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import * as db from '../database/db.js';
 import { scanDirectory, expandDirectory } from '../scanner.js';
 import { ARCHIVE_EXTENSIONS, VOLUME_PATTERNS } from '../constants.js';
+import { runSimilarScan } from '../similar.js';
+import { getUnknownR18Games, storeDetectionResults } from '../r18.js';
 import {
   createTask,
   executeMoveTask,
@@ -373,6 +375,45 @@ router.put('/:id/manual-cover', async (req, res, next) => {
     }
 
     res.send(await db.getGameDetail(id));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Re-run the suspected-similar scan over the whole library. Background work: the response
+// carries the task id and progress arrives over SSE like any other task.
+router.post('/similar-scan', async (req, res, next) => {
+  try {
+    const task = await runSimilarScan({ full: true });
+    if (!task) return res.send({ skipped: true });
+    return res.send({ taskId: task.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The NSFW classifier runs in the renderer (nsfwjs over WebGL, no native dependency), so
+// the client asks for the games that still need a decision and posts the results back.
+router.get('/r18/pending', async (req, res, next) => {
+  try {
+    const limit = Number(req.query.limit) || 500;
+    const pending = await getUnknownR18Games(limit);
+    console.log(`[r18-api] GET /r18/pending → ${pending.length} games`);
+    res.send(pending);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/r18/detect', async (req, res, next) => {
+  try {
+    const { results } = req.body;
+    if (!Array.isArray(results)) {
+      return res.status(400).send({ error: 'results array is required' });
+    }
+    const outcome = await storeDetectionResults(results);
+    console.log(`[r18-api] POST /r18/detect → ${results.length} results, updated=${outcome.updated} skipped=${outcome.skipped}`);
+    res.send(outcome);
   } catch (err) {
     next(err);
   }

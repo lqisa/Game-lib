@@ -406,6 +406,58 @@ const initDatabase = async () => {
     await knex('setting').insert({ key: 'migration_v11', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v11 done.');
   }
+
+  // Migration v12: game_similar - suspected-similar PAIRS of games from different vendors
+  // (names >= 90%). Rows are only written for pairs that actually passed the threshold, so
+  // the table doubles as the "has this pair been computed" record.
+  const v12 = await knex('setting').where({ key: 'migration_v12' }).first();
+  if (!v12) {
+    console.log(' * Running migration v12: create game_similar table...');
+    const hasSimilar = await knex.schema.hasTable('game_similar');
+    if (!hasSimilar) {
+      await knex.schema.createTable('game_similar', (table) => {
+        table.integer('game_id_a').notNullable();
+        table.integer('game_id_b').notNullable();
+        table.float('score').notNullable();
+        table.dateTime('created_at').defaultTo(knex.fn.now());
+        table.primary(['game_id_a', 'game_id_b']);
+        table.foreign('game_id_a').references('id').inTable('game').onDelete('CASCADE');
+        table.foreign('game_id_b').references('id').inTable('game').onDelete('CASCADE');
+      });
+    }
+    await knex('setting').insert({ key: 'migration_v12', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v12 done.');
+  }
+
+  // Migration v13: per-game R18 flag. Three sources write it, in priority order: vendor
+  // metadata (DMM/DLsite are adult platforms outright, Bangumi carries an nsfw field per
+  // subject), the in-app NSFW classifier, and a later manual override. NULL means
+  // "unknown", which is what the classifier pass targets.
+  const v13 = await knex('setting').where({ key: 'migration_v13' }).first();
+  if (!v13) {
+    console.log(' * Running migration v13: add game.r18 / game.r18_source...');
+    const cols = await knex.raw('PRAGMA table_info("game")').then((r) => r.map((c) => c.name));
+    if (!cols.includes('r18')) {
+      await knex.raw('ALTER TABLE game ADD COLUMN r18 INTEGER');
+      await knex.raw('ALTER TABLE game ADD COLUMN r18_source TEXT');
+    }
+    // Backfill what vendor metadata already knows: the DMM and DLsite scrapers only talk
+    // to those sites' adult sections, so everything they return is R18 outright; Steam
+    // entries here are the all-ages releases. Bangumi is left NULL - it needs the per
+    // subject nsfw flag, which the classifier pass or a later fetch fills in.
+    await knex.raw(`
+      UPDATE game SET r18 = 1, r18_source = 'vendor'
+      WHERE r18 IS NULL
+        AND id IN (SELECT game_id FROM game_source WHERE source_type IN ('dmm', 'dlsite'))
+    `);
+    await knex.raw(`
+      UPDATE game SET r18 = 0, r18_source = 'vendor'
+      WHERE r18 IS NULL
+        AND id IN (SELECT game_id FROM game_source WHERE source_type = 'steam')
+    `);
+    await knex('setting').insert({ key: 'migration_v13', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v13 done.');
+  }
 };
 
 export { initDatabase };

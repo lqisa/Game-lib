@@ -11,7 +11,7 @@
             v-for="vis in visibleItems"
             :key="itemKey(vis.item)"
             :data-item-index="vis.__index"
-            :style="{ height: `${rowHeight}px`, overflow: 'hidden' }"
+            :style="{ height: `${rowHeight}px` }"
           >
             <slot :item="vis.item" :index="vis.__index" />
           </div>
@@ -82,6 +82,7 @@ const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(${cols.value}, 1fr)`,
   gap: `${props.gutter}px`,
   alignItems: 'start',
+  padding: `${props.gutter / 2}px`,
 }));
 
 interface VisibleItem {

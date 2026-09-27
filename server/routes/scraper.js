@@ -7,6 +7,7 @@ import { searchSteam, fetchSteamDetail } from '../scraper/steam.js';
 import { searchDMM, fetchDMMDetail } from '../scraper/dmm.js';
 import { checkExit } from '../scraper/region-check.js';
 import { downloadCover } from '../scraper/cover.js';
+import { applyVendorR18 } from '../r18.js';
 import {
   bestMatch,
   detectLanguage,
@@ -345,6 +346,9 @@ const adoptOne = async (data, trx, predownloadedCover) => {
   await d('game')
     .where({ id: gameId })
     .update({ description, cover_path: coverPath, updated_at: db.knex.fn.now() });
+  // Vendor metadata decides R18 at adoption time where it can; everything else stays
+  // unknown for the classifier pass.
+  await applyVendorR18(d, gameId, sourceType, data.nsfw);
 
   await d('game_source').where({ game_id: gameId }).del();
 

@@ -29,6 +29,10 @@ const createSchema = () =>
       table.text('description');
       table.integer('library_id').nullable();
       table.string('sub_path').notNullable();
+      // R18 flag: NULL = unknown (the NSFW pass targets these), 0/1 = decided. The source
+      // column records who decided it, because vendor metadata outranks a model guess.
+      table.integer('r18');
+      table.string('r18_source');
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
       table.dateTime('dir_created_at');
@@ -104,6 +108,17 @@ const createSchema = () =>
       table.integer('game_id').primary();
       table.dateTime('opened_at').defaultTo(knex.fn.now());
       table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+    })
+    .createTable('game_similar', (table) => {
+      // One row per suspected-similar PAIR of games (different vendors, names >= 90%).
+      // game_id_a is always the lower id, so a pair has exactly one row.
+      table.integer('game_id_a').notNullable();
+      table.integer('game_id_b').notNullable();
+      table.float('score').notNullable();
+      table.dateTime('created_at').defaultTo(knex.fn.now());
+      table.primary(['game_id_a', 'game_id_b']);
+      table.foreign('game_id_a').references('id').inTable('game').onDelete('CASCADE');
+      table.foreign('game_id_b').references('id').inTable('game').onDelete('CASCADE');
     });
 
 export { createSchema };

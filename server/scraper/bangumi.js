@@ -48,6 +48,9 @@ const fetchBangumiDetail = async (subjectId, token) => {
     genres: [],
     tags: [],
     description: detail.summary || '',
+    // Per-subject adult flag from the v0 API. Carried through to adoption so the R18
+    // column can be set from vendor metadata instead of waiting for the classifier.
+    nsfw: detail.nsfw === true,
   };
 
   if (Array.isArray(detail.infobox)) {

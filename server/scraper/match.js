@@ -106,12 +106,16 @@ const bestWindowRatio = (a, b) => {
  * Score two RAW names (cleaning happens inside). 0..1.
  * Takes the better of whole-name similarity and best-substring similarity.
  */
-const similarity = (a, b) => {
-  const ca = cleanName(a).toLowerCase();
-  const cb = cleanName(b).toLowerCase();
+// Score two ALREADY-CLEANED names. Split out of similarity() so bulk callers (the
+// similar-name scan compares every pair in the library) can clean each name once instead
+// of re-running the regexes for both sides of every pair.
+const similarityOfClean = (ca, cb) => {
   if (!ca || !cb) return 0;
   return Math.max(ratio(ca, cb), bestWindowRatio(ca, cb));
 };
+
+const similarity = (a, b) =>
+  similarityOfClean(cleanName(a).toLowerCase(), cleanName(b).toLowerCase());
 
 /**
  * A DLsite product code embedded in our file name is the strongest possible signal -
@@ -195,6 +199,7 @@ const detectLanguage = (name) => {
 export {
   cleanName,
   similarity,
+  similarityOfClean,
   bestMatch,
   detectLanguage,
   extractIdHint,

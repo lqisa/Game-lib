@@ -76,6 +76,13 @@
             dark ? 'Switch to Light' : 'Switch to Dark'
           }}</q-tooltip>
         </div>
+        <div class="m3-nav-item" @click="setHideR18(!hideR18)">
+          <q-icon :name="hideR18 ? 'visibility_off' : 'visibility'" class="m3-nav-icon" />
+          <span class="m3-nav-label">{{ hideR18 ? 'R18 off' : 'R18 on' }}</span>
+          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{
+            hideR18 ? 'Show R18 covers' : 'Hide R18 covers'
+          }}</q-tooltip>
+        </div>
         <div v-if="hasElectronAPI" class="m3-nav-item" @click="enterLightweightMode">
           <q-icon name="power_settings_new" class="m3-nav-icon" />
           <span class="m3-nav-label">Exit</span>
@@ -109,9 +116,11 @@ import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useGameListStore } from '../stores/gameListStore';
 import { useTaskStore } from '../stores/taskStore';
+import { useR18Toggle } from '../composables/useR18Toggle';
 import TaskPanel from '../components/TaskPanel.vue';
 
 const $q = useQuasar();
+const { hideR18, setHideR18 } = useR18Toggle();
 const router = useRouter();
 const route = useRoute();
 const drawer = ref(true);

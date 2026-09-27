@@ -5,6 +5,7 @@ node_modules
 .vscode/
 .kilo/
 .workbuddy-ai/
+.trae/
 
 # .env files
 .env*

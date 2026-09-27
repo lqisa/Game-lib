@@ -20,7 +20,9 @@ const createTask = (type, meta) => {
     label:
       type === 'move'
         ? `Moving: ${meta.source.split('\\').pop()}`
-        : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
+        : type === 'similar-scan'
+          ? 'Finding similar games'
+          : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
     progress: 0,
     detail: 'Waiting...',
     error: null,

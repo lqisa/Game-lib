@@ -86,6 +86,17 @@ async function startServer(): Promise<number> {
   const { initProxy } = await import(proxyUrl);
   await initProxy();
 
+  // Same hook as the dev server: one historical scan on first boot, then polling for new
+  // adoptions.
+  const similarUrl = pathToFileURL(path.resolve(serverDir, 'similar.js')).href;
+  const { maybeStartSimilarScan, startSimilarScanPolling } = await import(similarUrl);
+  void maybeStartSimilarScan();
+  startSimilarScanPolling();
+
+  const nsfwUrl = pathToFileURL(path.resolve(serverDir, 'nsfw-classifier.js')).href;
+  const { startNsfwPolling } = await import(nsfwUrl);
+  startNsfwPolling();
+
   const frontendDir = path.resolve(__dirname);
   const expressApp = createApp(frontendDir);
 

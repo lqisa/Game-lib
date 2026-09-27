@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import knex from 'knex';
 import { getDataDir, isTestEnv } from '../config.js';
+import { isArchivePath } from '../constants.js';
 
 const DB_DIR = getDataDir();
 const DB_PATH = path.join(DB_DIR, 'db.sqlite3');
@@ -100,7 +101,71 @@ const getGameDetail = async (id) => {
     duplicateSources = Object.values(groups);
   }
 
-  return { ...game, makers, genres, tags, sources, library, duplicateSources };
+  const similarGames = await getSimilarGames(id);
+
+  return {
+    ...game,
+    makers,
+    genres,
+    tags,
+    sources,
+    library,
+    duplicateSources,
+    similarGames,
+  };
+};
+
+/**
+ * The suspected-similar partners of one game, with everything the UI needs to compare the
+ * copies at a glance: folder-or-archive, and the creation date that usually says which
+ * copy is the newer download. Both are SHOWN, never acted on - the user decides, because
+ * a newer creation date does not guarantee a newer version.
+ */
+const getSimilarGames = async (gameId) => {
+  const rows = await db('game_similar')
+    .where('game_id_a', gameId)
+    .orWhere('game_id_b', gameId)
+    .select('game_id_a', 'game_id_b', 'score');
+  if (rows.length === 0) return [];
+
+  const otherIds = rows.map((row) => (row.game_id_a === gameId ? row.game_id_b : row.game_id_a));
+  const others = await db('game')
+    .whereIn('id', otherIds)
+    .select('id', 'name', 'cover_path', 'sub_path', 'dir_created_at');
+  const byId = new Map(others.map((g) => [g.id, g]));
+
+  const current = await db('game').where({ id: gameId }).select('id', 'name', 'cover_path', 'sub_path', 'dir_created_at').first();
+
+  const result = [];
+  if (current) {
+    result.push({
+      gameId: current.id,
+      name: current.name,
+      coverPath: current.cover_path,
+      isArchive: isArchivePath(current.sub_path),
+      dirCreatedAt: current.dir_created_at,
+      isSelf: true,
+    });
+  }
+  for (const row of rows) {
+    const otherId = row.game_id_a === gameId ? row.game_id_b : row.game_id_a;
+    const game = byId.get(otherId);
+    if (!game) continue;
+    result.push({
+      gameId: otherId,
+      name: game.name,
+      coverPath: game.cover_path,
+      isArchive: isArchivePath(game.sub_path),
+      dirCreatedAt: game.dir_created_at,
+      score: row.score,
+    });
+  }
+
+  return result.sort((a, b) => {
+    const da = a.dirCreatedAt ? new Date(a.dirCreatedAt).getTime() : 0;
+    const db2 = b.dirCreatedAt ? new Date(b.dirCreatedAt).getTime() : 0;
+    return db2 - da;
+  });
 };
 
 /**
@@ -203,27 +268,37 @@ const getGames = async ({
 
   query = applyScrapedFilter(query, scraped);
 
+  // Both signals mean the same thing to the user - "this game exists more than once in the
+  // library" - so the filter unions them: exact re-adoption of one vendor entry, and the
+  // suspected-similar cross-vendor pairs.
+  const exactDuplicateIds = function () {
+    this.select('gs.game_id')
+      .from('game_source as gs')
+      .whereIn(db.raw('(gs.source_type, gs.source_id)'), function () {
+        this.select('source_type', 'source_id')
+          .from('game_source')
+          .groupBy('source_type', 'source_id')
+          .havingRaw('COUNT(*) > 1');
+      });
+  };
+  const similarIdsA = function () {
+    this.select('game_id_a').from('game_similar');
+  };
+  const similarIdsB = function () {
+    this.select('game_id_b').from('game_similar');
+  };
+
   if (duplicate === true) {
-    query = query.whereIn('game.id', function () {
-      this.select('gs.game_id')
-        .from('game_source as gs')
-        .whereIn(db.raw('(gs.source_type, gs.source_id)'), function () {
-          this.select('source_type', 'source_id')
-            .from('game_source')
-            .groupBy('source_type', 'source_id')
-            .havingRaw('COUNT(*) > 1');
-        });
+    query = query.where(function () {
+      this.whereIn('game.id', exactDuplicateIds)
+        .orWhereIn('game.id', similarIdsA)
+        .orWhereIn('game.id', similarIdsB);
     });
   } else if (duplicate === false) {
-    query = query.whereNotIn('game.id', function () {
-      this.select('gs.game_id')
-        .from('game_source as gs')
-        .whereIn(db.raw('(gs.source_type, gs.source_id)'), function () {
-          this.select('source_type', 'source_id')
-            .from('game_source')
-            .groupBy('source_type', 'source_id')
-            .havingRaw('COUNT(*) > 1');
-        });
+    query = query.where(function () {
+      this.whereNotIn('game.id', exactDuplicateIds)
+        .whereNotIn('game.id', similarIdsA)
+        .whereNotIn('game.id', similarIdsB);
     });
   }
 
@@ -261,9 +336,22 @@ const getGames = async ({
     }
     const favoriteIds = await db('favorite').whereIn('game_id', gameIds).select('game_id');
     const favSet = new Set(favoriteIds.map((f) => f.game_id));
+    const similarRows = await db('game_similar')
+      .where(function () {
+        this.whereIn('game_id_a', gameIds).orWhereIn('game_id_b', gameIds);
+      })
+      .select('game_id_a', 'game_id_b');
+    const similarCount = {};
+    for (const row of similarRows) {
+      similarCount[row.game_id_a] = (similarCount[row.game_id_a] || 0) + 1;
+      similarCount[row.game_id_b] = (similarCount[row.game_id_b] || 0) + 1;
+    }
     for (const g of games) {
       g.sourceName = nameMap[g.id] || null;
       g.is_favorite = favSet.has(g.id);
+      // Folder or archive, derived from sub_path rather than stored so it cannot drift.
+      g.isArchive = isArchivePath(g.sub_path);
+      g.similarCount = similarCount[g.id] || 0;
     }
   }
 
@@ -573,6 +661,7 @@ const getDuplicateSources = async () => {
 };
 
 export {
+  getSimilarGames,
   db as knex,
   getGameDetail,
   getGames,

@@ -185,6 +185,24 @@
                 </div>
               </q-banner>
             </div>
+            <div v-if="game.similarGames?.length" class="q-mt-sm">
+              <q-banner dense class="bg-orange-1 text-orange-9 rounded-borders">
+                <template v-slot:avatar>
+                  <q-icon name="merge_type" color="warning" />
+                </template>
+                <div class="text-caption text-weight-medium q-mb-xs">Suspected duplicate</div>
+                <div v-for="s in game.similarGames" :key="s.gameId" class="row items-center q-mt-xs q-gutter-x-xs">
+                  <router-link v-if="!s.isSelf" :to="`/game/${s.gameId}`" class="text-blue text-caption col">{{
+                    s.name
+                  }}</router-link>
+                  <span v-else class="text-caption text-weight-medium col">{{ s.name }}</span>
+                  <q-badge :color="s.isArchive ? 'grey' : 'teal'" class="text-caption">{{
+                    s.isArchive ? 'archive' : 'folder'
+                  }}</q-badge>
+                  <span class="text-caption text-grey-7">{{ formatDate(s.dirCreatedAt) }}</span>
+                </div>
+              </q-banner>
+            </div>
           </div>
 
           <div
@@ -385,6 +403,16 @@ import { splitKeyword } from '../composables/useSplitKeyword';
 import { useExpressUrl } from '../composables/useExpressUrl';
 import { useTaskStore } from '../stores/taskStore';
 
+const formatDate = (value: unknown): string => {
+  if (!value) return 'unknown';
+  const d = new Date(value as string | number | Date);
+  if (isNaN(d.getTime())) return 'unknown';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 interface GameDetail {
   id: number;
   name: string;
@@ -406,6 +434,15 @@ interface GameDetail {
     sourceType: string;
     sourceId: string;
     games: { gameId: number; name: string }[];
+  }[];
+  similarGames: {
+    gameId: number;
+    name: string;
+    coverPath: string | null;
+    isArchive: boolean;
+    dirCreatedAt: string | null;
+    score?: number;
+    isSelf?: boolean;
   }[];
 }
 

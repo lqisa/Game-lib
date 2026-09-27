@@ -119,6 +119,13 @@ const ARCHIVE_EXTENSIONS = new Set([
   '.009',
 ]);
 
+// A game entry is backed either by a folder or by one of the archives above. Derived from
+// `sub_path` rather than stored, so it can never drift out of sync with the path.
+const isArchivePath = (subPath = '') => {
+  const dot = subPath.lastIndexOf('.');
+  return dot >= 0 && ARCHIVE_EXTENSIONS.has(subPath.slice(dot).toLowerCase());
+};
+
 const VOLUME_PATTERNS = [
   /^(.+)\.7z\.\d+$/,
   /^(.+)\.zip\.\d+$/i,
@@ -147,6 +154,7 @@ const COMPRESS_TOOL_PATHS = {
 };
 
 export {
+  isArchivePath,
   NON_GAME_DIRS,
   ARCHIVE_EXTENSIONS,
   VOLUME_PATTERNS,

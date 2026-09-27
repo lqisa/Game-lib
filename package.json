@@ -20,13 +20,17 @@
   },
   "dependencies": {
     "@quasar/extras": "^2.0.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "axios": "^1.18.0",
     "cheerio": "^1.2.0",
     "express": "^5.2.1",
     "https-proxy-agent": "^7.0.0",
     "knex": "^3.2.10",
+    "nsfwjs": "^4.4.0",
     "pinia": "^3.0.1",
     "quasar": "^2.20.0",
+    "sharp": "^0.35.4",
     "sqlite3": "^6.0.1",
     "vue": "^3.5.22",
     "vue-router": "^5.0.6"

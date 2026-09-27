@@ -12,9 +12,16 @@
            decodable image. Both fall back to the same placeholder instead of leaving the
            tile blank - the second case used to just hide the <img> and show nothing. -->
       <img
-        v-if="game.cover_path && !coverFailed"
+        v-if="game.cover_path && !coverFailed && !r18Hidden"
         v-lazy-img="coverSrc"
         class="game-cover__img"
+        draggable="false"
+        @error="coverFailed = true"
+      />
+      <img
+        v-else-if="r18Hidden && game.cover_path && !coverFailed"
+        v-lazy-img="coverSrc"
+        class="game-cover__img game-cover__r18-blur"
         draggable="false"
         @error="coverFailed = true"
       />
@@ -25,12 +32,27 @@
         draggable="false"
         alt=""
       />
+      <div v-if="r18Hidden" class="game-cover__r18-label">18+</div>
+      <div
+        v-if="!hideR18 && game.r18 === 1 && !(selectable && selected)"
+        class="absolute-top-left q-pa-xs"
+        style="z-index: 3"
+      >
+        <q-badge color="deep-orange" label="18+" />
+      </div>
       <div v-if="selectable && selected" class="absolute-top-left q-pa-xs" style="z-index: 2">
         <q-icon name="check_circle" color="primary" size="24px" />
       </div>
-      <div v-if="duplicate" class="absolute-top-right q-pa-xs" style="z-index: 2">
-        <q-icon name="content_copy" color="warning" size="18px">
+      <div
+        v-if="duplicate || game.similarCount"
+        class="absolute-top-right q-pa-xs"
+        style="z-index: 2"
+      >
+        <q-icon v-if="duplicate" name="content_copy" color="warning" size="18px">
           <q-tooltip>Shares a source with another game</q-tooltip>
+        </q-icon>
+        <q-icon v-if="game.similarCount" name="merge_type" color="warning" size="18px">
+          <q-tooltip>Suspected duplicate: a similar name exists under another vendor</q-tooltip>
         </q-icon>
       </div>
       <div class="game-cover__title">
@@ -48,6 +70,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useExpressUrl } from '../composables/useExpressUrl';
+import { useR18Toggle } from '../composables/useR18Toggle';
 
 interface Game {
   id: number;
@@ -57,6 +80,9 @@ interface Game {
   library_path: string;
   sub_path: string;
   sourceName?: string | null;
+  similarCount?: number;
+  isArchive?: boolean;
+  r18?: number | null;
 }
 
 const props = withDefaults(
@@ -79,6 +105,12 @@ const emit = defineEmits<{
 }>();
 
 const { getCoversUrl } = useExpressUrl();
+const { hideR18 } = useR18Toggle();
+
+// Hiding an R18 cover now uses frosted-glass blur instead of a placeholder: the image
+// still loads (for both the <img> and the backdrop), but is rendered with a heavy blur
+// filter and a centered "18+" label. A dedicated placeholder image can replace it later.
+const r18Hidden = computed(() => hideR18.value && props.game.r18 === 1);
 
 const coverSrc = computed(() => {
   if (props.game.cover_path) {
@@ -87,8 +119,6 @@ const coverSrc = computed(() => {
   return '';
 });
 
-// `url("")` would resolve to the page itself, so an absent cover yields `none` and the
-// tile falls back to the surface gradient.
 const coverFill = computed(() => (coverSrc.value ? `url("${coverSrc.value}")` : 'none'));
 
 // Set when a cover file exists but is not a decodable image, so the tile falls back to the
@@ -116,7 +146,6 @@ const handleClick = (e: MouseEvent) => {
     box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1);
   height: 100%;
   border-radius: var(--m3-shape-corner-sm);
-  overflow: hidden;
 }
 .game-card:hover {
   transform: translateY(-2px);
@@ -174,6 +203,25 @@ const handleClick = (e: MouseEvent) => {
   height: 100%;
   object-fit: cover;
   background: var(--m3-surface-container-highest);
+}
+
+.game-cover__r18-blur {
+  filter: blur(20px) saturate(0.4) brightness(0.5);
+  transform: scale(1.2);
+}
+
+.game-cover__r18-label {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  user-select: none;
 }
 
 .game-cover__name {
