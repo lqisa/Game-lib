@@ -1,6 +1,5 @@
 import * as db from './database/db.js';
 import { cleanName, similarityOfClean } from './scraper/match.js';
-import { createTask, getTask, updateTask } from './tasks.js';
 
 /**
  * Suspected-similar detection: two DIFFERENT game rows whose vendor names are >= 90%
@@ -20,9 +19,7 @@ const YIELD_EVERY = 4000;
 const INSERT_BATCH = 500;
 const SCAN_DONE_KEY = 'similar_scan_done';
 const SCAN_CURSOR_KEY = 'similar_scan_max_id';
-const SCAN_POLL_MS = 60_000;
 
-let scanRunning = false;
 
 const getCursorId = async () =>
   Number((await db.knex('setting').where({ key: SCAN_CURSOR_KEY }).first())?.value || 0);
@@ -203,86 +200,4 @@ export const computeSimilarPairs = async ({
   if (!cancelled) await setScanDone();
 
   return { comparisons, pairs, total, lastFullyScannedId, cancelled, skipped: false };
-};
-
-/**
- * The background-task wrapper. A poll with nothing new must not create a task, so the plan
- * is checked before one exists; cancellation arrives through the task's own status.
- */
-export const runSimilarScan = async ({ full = false } = {}) => {
-  if (scanRunning) return null;
-  const games = await loadGamesWithVendorNames();
-  const cursorId = await getCursorId();
-  const todoCount = games.filter((game) => full || game.id > cursorId).length;
-
-  // Nothing to compare (or nothing to compare against) - the cursor still advances so this
-  // work is not redone, and the first-boot marker is set even on an empty library.
-  if (games.length < 2 || todoCount === 0) {
-    if (games.length > 0) await setCursorId(games[games.length - 1].id);
-    await setScanDone();
-    return null;
-  }
-
-  scanRunning = true;
-  const mode = full ? 'full' : 'incremental';
-  const task = createTask('similar-scan', { mode, games: games.length });
-  const tally = { comparisons: 0, pairs: 0 };
-  updateTask(task.id, { status: 'running', detail: `${mode}: ${games.length} games` });
-
-  void (async () => {
-    try {
-      if (full) {
-        await db.knex('game_similar').del();
-        await db.knex('setting').where({ key: SCAN_CURSOR_KEY }).del();
-      }
-      const result = await computeSimilarPairs({
-        full,
-        isCancelled: () => getTask(task.id)?.status === 'cancelled',
-        onProgress: (comparisons, total) => {
-          tally.comparisons = comparisons;
-          const progress = total > 0 ? Math.min(99, Math.round((comparisons / total) * 100)) : 0;
-          updateTask(task.id, {
-            progress,
-            detail: `${comparisons} comparisons, ${tally.pairs} pairs`,
-          });
-        },
-      });
-      tally.pairs = result.pairs;
-      updateTask(task.id, {
-        status: 'completed',
-        progress: 100,
-        detail: `${result.comparisons} comparisons, ${result.pairs} similar pairs`,
-      });
-    } catch (err) {
-      updateTask(task.id, { status: 'failed', detail: err.message });
-    } finally {
-      scanRunning = false;
-    }
-  })();
-
-  return task;
-};
-
-/**
- * Startup hook: the very first boot after migration v12 runs one full scan so historical
- * data is covered without any user action. Later boots are no-ops (the marker setting is
- * set once the first scan completes) - polling handles new games from then on.
- */
-export const maybeStartSimilarScan = async () => {
-  const done = await db.knex('setting').where({ key: SCAN_DONE_KEY }).first();
-  if (done) return null;
-  return runSimilarScan({ full: true });
-};
-
-/**
- * Picks up newly adopted games without every adopt endpoint having to know about it. A
- * poll where nothing changed costs one query on game_source and writes nothing, so this
- * can run unconditionally.
- */
-export const startSimilarScanPolling = (intervalMs = SCAN_POLL_MS) => {
-  const timer = setInterval(() => {
-    void runSimilarScan({ full: false });
-  }, intervalMs);
-  timer.unref?.();
-  return timer;
 };
