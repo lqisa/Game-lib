@@ -19,7 +19,28 @@ let classifyFn = null;
 let sharp = null;
 let baselineTensors = 0;
 
+const formatMem = () => {
+  if (!tf) return 'n/a';
+  const m = tf.memory();
+  return `tensors:${m.numTensors} ${(m.numBytes / 1024 / 1024).toFixed(1)}MB`;
+};
+
+const formatProcessMem = () => {
+  const m = process.memoryUsage();
+  return `rss:${(m.rss / 1024 / 1024).toFixed(0)}MB heap:${(m.heapUsed / 1024 / 1024).toFixed(0)}MB`;
+};
+
 const initModel = async () => {
+  parentPort?.postMessage({
+    type: 'task-create',
+    task: { type: 'nsfw-scan', meta: { phase: 'model-load' } },
+  });
+  parentPort?.postMessage({
+    type: 'task-update',
+    id: '__latest__',
+    patch: { status: 'running', detail: 'Loading NSFW model...' },
+  });
+
   try {
     sharp = (await import('sharp')).default;
 
@@ -36,20 +57,19 @@ const initModel = async () => {
     log(
       `[nsfw-classifier] model loaded (wasm backend, worker), ${formatMem()}, process: ${formatProcessMem()}`,
     );
+    parentPort?.postMessage({
+      type: 'task-update',
+      id: '__latest__',
+      patch: { status: 'completed', progress: 100, detail: 'NSFW model loaded' },
+    });
   } catch (err) {
     warn('[nsfw-classifier] model load failed, disabled: ' + (err.message || err));
+    parentPort?.postMessage({
+      type: 'task-update',
+      id: '__latest__',
+      patch: { status: 'failed', detail: 'Model load failed: ' + (err.message || err) },
+    });
   }
-};
-
-const formatMem = () => {
-  if (!tf) return 'n/a';
-  const m = tf.memory();
-  return `tensors:${m.numTensors} ${(m.numBytes / 1024 / 1024).toFixed(1)}MB`;
-};
-
-const formatProcessMem = () => {
-  const m = process.memoryUsage();
-  return `rss:${(m.rss / 1024 / 1024).toFixed(0)}MB heap:${(m.heapUsed / 1024 / 1024).toFixed(0)}MB`;
 };
 
 const classifyImage = async (coverPath) => {
@@ -87,7 +107,6 @@ const cleanupLeakedTensors = () => {
   if (current <= baselineTensors) return;
 
   const engine = tf.engine();
-  const _leaked = current - baselineTensors;
   engine.startScope();
   engine.endScope();
 
@@ -104,11 +123,29 @@ const runRound = async () => {
   const pending = await getUnknownR18Games(BATCH_SIZE);
   if (pending.length === 0) return 0;
 
+  parentPort?.postMessage({
+    type: 'task-create',
+    task: { type: 'nsfw-scan', meta: { phase: 'classify', count: pending.length } },
+  });
+  parentPort?.postMessage({
+    type: 'task-update',
+    id: '__latest__',
+    patch: { status: 'running', detail: `Classifying covers: 0/${pending.length}`, progress: 0 },
+  });
+
   const results = [];
   for (const game of pending) {
     if (!game.cover_path) continue;
     const r18 = await classifyImage(game.cover_path);
     results.push({ gameId: game.id, r18 });
+    parentPort?.postMessage({
+      type: 'task-update',
+      id: '__latest__',
+      patch: {
+        detail: `Classifying covers: ${results.length}/${pending.length}`,
+        progress: Math.min(99, Math.round((results.length / pending.length) * 100)),
+      },
+    });
   }
 
   cleanupLeakedTensors();
@@ -116,6 +153,17 @@ const runRound = async () => {
   if (results.length > 0) {
     await storeDetectionResults(results);
   }
+
+  parentPort?.postMessage({
+    type: 'task-update',
+    id: '__latest__',
+    patch: {
+      status: 'completed',
+      progress: 100,
+      detail: `Classified ${results.length} covers`,
+    },
+  });
+
   return results.length;
 };
 
