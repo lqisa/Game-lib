@@ -88,10 +88,9 @@ async function startServer(): Promise<number> {
 
   // Same hook as the dev server: one historical scan on first boot, then polling for new
   // adoptions.
-  const similarUrl = pathToFileURL(path.resolve(serverDir, 'similar.js')).href;
-  const { maybeStartSimilarScan, startSimilarScanPolling } = await import(similarUrl);
-  void maybeStartSimilarScan();
-  startSimilarScanPolling();
+  const similarClassifierUrl = pathToFileURL(path.resolve(serverDir, 'similar-classifier.js')).href;
+  const { startSimilarWorker } = await import(similarClassifierUrl);
+  void startSimilarWorker();
 
   const nsfwUrl = pathToFileURL(path.resolve(serverDir, 'nsfw-classifier.js')).href;
   const { startNsfwPolling } = await import(nsfwUrl);

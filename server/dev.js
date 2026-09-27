@@ -3,7 +3,7 @@ import { initDatabase } from './database/init.js';
 import { initProxy } from './scraper/axios.js';
 import { seed } from './__tests__/seed.js';
 import { getDataDir, isTestEnv } from './config.js';
-import { maybeStartSimilarScan, startSimilarScanPolling } from './similar.js';
+import { startSimilarWorker } from './similar-classifier.js';
 import { startNsfwPolling } from './nsfw-classifier.js';
 
 const PORT = parseInt(process.env.VITE_API_PORT || '19700', 10);
@@ -21,8 +21,7 @@ if (isTestEnv()) {
 // Historical similar pairs are computed once on the first boot; polling picks up newly
 // adopted games afterwards. Skipped in tests so assertions see a quiet task list.
 if (!isTestEnv()) {
-  void maybeStartSimilarScan();
-  startSimilarScanPolling();
+  void startSimilarWorker();
   startNsfwPolling();
 }
 
