@@ -22,7 +22,9 @@ const createTask = (type, meta) => {
         ? `Moving: ${meta.source.split('\\').pop()}`
         : type === 'similar-scan'
           ? 'Finding similar games'
-          : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
+          : type === 'nsfw-scan'
+            ? 'Classifying covers'
+            : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
     progress: 0,
     detail: 'Waiting...',
     error: null,
