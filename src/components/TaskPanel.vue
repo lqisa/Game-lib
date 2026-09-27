@@ -19,7 +19,15 @@
           <q-item v-for="task in sortedTasks" :key="task.id" class="q-pa-xs">
             <q-item-section avatar>
               <q-icon
-                :name="task.type === 'move' ? 'drive_file_move' : 'archive'"
+                :name="
+                  task.type === 'move'
+                    ? 'drive_file_move'
+                    : task.type === 'similar-scan'
+                      ? 'content_copy'
+                      : task.type === 'nsfw-scan'
+                        ? 'visibility'
+                        : 'archive'
+                "
                 :color="statusColor(task)"
                 size="sm"
               />

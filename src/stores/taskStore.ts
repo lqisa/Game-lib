@@ -4,7 +4,7 @@ import { useExpressUrl } from '../composables/useExpressUrl';
 
 export interface Task {
   id: string;
-  type: 'move' | 'extract';
+  type: 'move' | 'extract' | 'similar-scan' | 'nsfw-scan';
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   label: string;
   progress: number;
@@ -13,13 +13,17 @@ export interface Task {
   createdAt: string;
   completedAt: string | null;
   meta: {
-    source: string;
-    dest: string;
-    gameId: number;
+    source?: string;
+    dest?: string;
+    gameId?: number;
     totalFiles?: number;
     copiedFiles?: number;
     archivePath?: string;
     passwordUsed?: string;
+    mode?: string;
+    phase?: string;
+    count?: number;
+    games?: number;
   };
 }
 
