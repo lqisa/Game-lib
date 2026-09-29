@@ -319,6 +319,51 @@
             </div>
           </div>
         </div>
+        <div class="filter-divider"></div>
+
+        <div style="padding: 14px 20px">
+          <div class="filter-section-header">
+            <div class="filter-section-icon" style="background: var(--m3-icon-duplicate-bg)">
+              <q-icon name="explicit" size="16px" color="red" />
+            </div>
+            <span class="filter-section-title">R18</span>
+          </div>
+          <div class="segmented-btn">
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.r18 === 'all'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.r18 = 'all'"
+            >
+              All
+            </div>
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.r18 === 'yes'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.r18 = 'yes'"
+            >
+              R18
+            </div>
+            <div
+              class="segmented-btn-item"
+              :class="
+                localFilter.r18 === 'no'
+                  ? 'segmented-btn-item--selected'
+                  : 'segmented-btn-item--unselected'
+              "
+              @click="localFilter.r18 = 'no'"
+            >
+              Safe
+            </div>
+          </div>
+        </div>
       </div>
 
       <div
@@ -350,6 +395,7 @@ interface FilterState {
   tagIds: number[];
   scraped: 'all' | 'yes' | 'no';
   duplicate: 'all' | 'yes' | 'no';
+  r18: 'all' | 'yes' | 'no';
 }
 
 const props = defineProps<{
@@ -375,6 +421,7 @@ const localFilter = ref<FilterState>({
   tagIds: [],
   scraped: 'yes',
   duplicate: 'all',
+  r18: 'all',
 });
 
 const libraries = ref<{ id: number; name: string; path: string }[]>([]);
@@ -405,6 +452,7 @@ const CHIP_COLORS = {
   tag: 'var(--m3-chip-tag)',
   scraped: 'var(--m3-chip-scraped)',
   duplicate: 'var(--m3-chip-duplicate)',
+  r18: 'var(--m3-chip-duplicate)',
 } as const;
 
 interface FilterChip {
@@ -511,6 +559,17 @@ const activeFilterChips = computed<FilterChip[]>(() => {
     });
   }
 
+  if (f.r18 !== 'all') {
+    chips.push({
+      key: 'r18',
+      label: f.r18 === 'yes' ? 'R18' : 'Safe',
+      color: CHIP_COLORS.r18,
+      remove: () => {
+        localFilter.value.r18 = 'all';
+      },
+    });
+  }
+
   return chips;
 });
 
@@ -611,6 +670,7 @@ watch(
         tagIds: [...props.filter.tagIds],
         scraped: props.filter.scraped,
         duplicate: props.filter.duplicate,
+        r18: props.filter.r18,
       };
       librarySearch.value = '';
       makerFilterOptions.value = makers.value;
@@ -632,6 +692,7 @@ const resetFilter = () => {
     tagIds: [],
     scraped: 'yes',
     duplicate: 'all',
+    r18: 'all',
   };
 };
 
@@ -659,6 +720,7 @@ const onDialogHide = () => {
     tagIds: [...props.filter.tagIds],
     scraped: props.filter.scraped,
     duplicate: props.filter.duplicate,
+    r18: props.filter.r18,
   };
 };
 </script>

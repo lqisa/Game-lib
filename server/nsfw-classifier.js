@@ -7,8 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let worker = null;
 let latestTaskId = null;
 
-export const initNsfwClassifier = async () => {
-};
+export const initNsfwClassifier = async () => {};
 
 export const startNsfwPolling = () => {
   if (worker) return;

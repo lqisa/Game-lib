@@ -56,20 +56,20 @@ nsfw-classifier.js     ←──spawn──→        nsfw-worker.js
 
 ## File Changes
 
-| File | Action | Description |
-|------|--------|-------------|
-| `similar-classifier.js` | **new** | Main-thread side: spawn worker, forward messages to tasks.js + console |
-| `similar-worker.js` | **new** | Worker entry: import db.js + match.js, execute scan, 5s debounce |
-| `similar.js` | **trim** | Keep `computeSimilarPairs` (tests), remove `runSimilarScan` / `maybeStartSimilarScan` / `startSimilarScanPolling` |
-| `nsfw-classifier.js` | **edit** | Add task message handling: `task-create` / `task-update` → tasks.js |
-| `nsfw-worker.js` | **edit** | Create/update tasks for model load, each classification round, and errors |
-| `tasks.js` | **edit** | Add `nsfw-scan` and `similar-scan` to task label map |
-| `dev.js` | **edit** | Import from `similar-classifier.js` |
-| `electron-main.ts` | **edit** | Import from `similar-classifier.js` |
-| `routes/game.js` | **edit** | `POST /similar-scan` → `requestFullScan()`, `POST /` → `triggerSimilarScan()` |
-| `routes/scraper.js` | **edit** | After adopt/batch-adopt → `triggerSimilarScan()` |
-| `src/stores/taskStore.ts` | **edit** | Add `similar-scan` and `nsfw-scan` to Task type union |
-| `src/components/TaskPanel.vue` | **edit** | Add icons for `similar-scan` / `nsfw-scan` task types |
+| File                           | Action   | Description                                                                                                       |
+| ------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `similar-classifier.js`        | **new**  | Main-thread side: spawn worker, forward messages to tasks.js + console                                            |
+| `similar-worker.js`            | **new**  | Worker entry: import db.js + match.js, execute scan, 5s debounce                                                  |
+| `similar.js`                   | **trim** | Keep `computeSimilarPairs` (tests), remove `runSimilarScan` / `maybeStartSimilarScan` / `startSimilarScanPolling` |
+| `nsfw-classifier.js`           | **edit** | Add task message handling: `task-create` / `task-update` → tasks.js                                               |
+| `nsfw-worker.js`               | **edit** | Create/update tasks for model load, each classification round, and errors                                         |
+| `tasks.js`                     | **edit** | Add `nsfw-scan` and `similar-scan` to task label map                                                              |
+| `dev.js`                       | **edit** | Import from `similar-classifier.js`                                                                               |
+| `electron-main.ts`             | **edit** | Import from `similar-classifier.js`                                                                               |
+| `routes/game.js`               | **edit** | `POST /similar-scan` → `requestFullScan()`, `POST /` → `triggerSimilarScan()`                                     |
+| `routes/scraper.js`            | **edit** | After adopt/batch-adopt → `triggerSimilarScan()`                                                                  |
+| `src/stores/taskStore.ts`      | **edit** | Add `similar-scan` and `nsfw-scan` to Task type union                                                             |
+| `src/components/TaskPanel.vue` | **edit** | Add icons for `similar-scan` / `nsfw-scan` task types                                                             |
 
 ## Worker Protocol
 
@@ -81,9 +81,15 @@ Both workers use the same message format. The main-thread classifier files
 
 ```js
 // Similar scan only:
-{ type: 'trigger-scan' }            // Game added; debounce 5s then incremental
-{ type: 'run-scan', full, taskId }  // API/manual trigger; immediate, taskId from main
-{ type: 'cancel', taskId }          // Cancel running scan
+{
+  type: 'trigger-scan';
+} // Game added; debounce 5s then incremental
+{
+  type: ('run-scan', full, taskId);
+} // API/manual trigger; immediate, taskId from main
+{
+  type: ('cancel', taskId);
+} // Cancel running scan
 ```
 
 ### worker → main (both workers)
@@ -105,14 +111,14 @@ and sends it in `task-create` so it can update it later.
 
 ### NSFW task lifecycle
 
-| Phase | Task type | Status | Detail |
-|-------|-----------|--------|--------|
-| Model loading | `nsfw-scan` | `running` | "Loading NSFW model..." |
-| Model loaded | `nsfw-scan` | `running` | "Classifying covers: 0/N" |
-| Each round | `nsfw-scan` | `running` | "Classifying covers: X/N" (progress %) |
-| All done | `nsfw-scan` | `completed` | "Classified N covers" |
-| Model fail | `nsfw-scan` | `failed` | error message |
-| Round error | `nsfw-scan` | `running` | continues, error logged |
+| Phase         | Task type   | Status      | Detail                                 |
+| ------------- | ----------- | ----------- | -------------------------------------- |
+| Model loading | `nsfw-scan` | `running`   | "Loading NSFW model..."                |
+| Model loaded  | `nsfw-scan` | `running`   | "Classifying covers: 0/N"              |
+| Each round    | `nsfw-scan` | `running`   | "Classifying covers: X/N" (progress %) |
+| All done      | `nsfw-scan` | `completed` | "Classified N covers"                  |
+| Model fail    | `nsfw-scan` | `failed`    | error message                          |
+| Round error   | `nsfw-scan` | `running`   | continues, error logged                |
 
 The NSFW task stays alive across rounds (it's a long-running daemon). It transitions
 to `completed` when an idle round finds zero pending covers. If new covers arrive later
@@ -131,7 +137,10 @@ let debounceTimer = null;
 const DEBOUNCE_MS = 5_000;
 
 const onTriggerScan = () => {
-  if (scanRunning) { needsRescan = true; return; }
+  if (scanRunning) {
+    needsRescan = true;
+    return;
+  }
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
@@ -141,22 +150,26 @@ const onTriggerScan = () => {
 
 const afterScan = () => {
   scanRunning = false;
-  if (needsRescan) { needsRescan = false; onTriggerScan(); }
+  if (needsRescan) {
+    needsRescan = false;
+    onTriggerScan();
+  }
 };
 ```
 
 ## First Boot
 
 `startSimilarWorker()` spawns the worker, then checks `similar_scan_done` setting:
+
 - Missing → send `{ type: 'run-scan', full: true, taskId }` for full scan
 - Present → no trigger; wait for game changes
 
 ## Trigger Points
 
-| Location | Event | Call |
-|----------|-------|------|
+| Location                  | Event                       | Call                   |
+| ------------------------- | --------------------------- | ---------------------- |
 | `routes/scraper.js` adopt | Single/batch adopt complete | `triggerSimilarScan()` |
-| `routes/game.js` POST / | Manual game creation | `triggerSimilarScan()` |
+| `routes/game.js` POST /   | Manual game creation        | `triggerSimilarScan()` |
 
 Delete: `game_similar` rows removed by `ON DELETE CASCADE` on foreign keys. No worker trigger needed.
 
@@ -191,11 +204,13 @@ The main-thread handler maps them to `createTask`/`updateTask`.
 Add `nsfw-scan` and `similar-scan` to the `createTask` label map:
 
 ```js
-label:
-  type === 'move' ? `Moving: ...`
-  : type === 'similar-scan' ? 'Finding similar games'
-  : type === 'nsfw-scan' ? 'Classifying covers'
-  : `Extracting: ...`
+label: type === 'move'
+  ? `Moving: ...`
+  : type === 'similar-scan'
+    ? 'Finding similar games'
+    : type === 'nsfw-scan'
+      ? 'Classifying covers'
+      : `Extracting: ...`;
 ```
 
 ## Frontend Changes
@@ -211,6 +226,7 @@ type: 'move' | 'extract' | 'similar-scan' | 'nsfw-scan';
 ### TaskPanel.vue
 
 Add icons for the new task types:
+
 - `similar-scan` → `content_copy` (duplicate detection)
 - `nsfw-scan` → `visibility` (content classification)
 

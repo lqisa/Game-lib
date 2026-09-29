@@ -458,6 +458,14 @@ const initDatabase = async () => {
     await knex('setting').insert({ key: 'migration_v13', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v13 done.');
   }
+
+  const hasGameTable = await knex.schema.hasTable('game');
+  if (hasGameTable) {
+    const cols = await knex.raw('PRAGMA table_info("game")').then((r) => r.map((c) => c.name));
+    if (cols.includes('r18')) {
+      await knex.raw('CREATE INDEX IF NOT EXISTS idx_game_r18 ON game(r18)');
+    }
+  }
 };
 
 export { initDatabase };

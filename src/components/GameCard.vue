@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useExpressUrl } from '../composables/useExpressUrl';
 import { useR18Toggle } from '../composables/useR18Toggle';
 
@@ -83,6 +83,7 @@ interface Game {
   similarCount?: number;
   isArchive?: boolean;
   r18?: number | null;
+  coverMissing?: boolean;
 }
 
 const props = withDefaults(
@@ -122,11 +123,15 @@ const coverSrc = computed(() => {
 const coverFill = computed(() => (coverSrc.value ? `url("${coverSrc.value}")` : 'none'));
 
 // Set when a cover file exists but is not a decodable image, so the tile falls back to the
-// placeholder rather than going blank. No reset-on-change is needed: both lists key their
-// items by game id (`item-key` on VirtualGrid), so an instance is never rebound to another
-// game - scrolling creates fresh instances instead (measured: 32 cards -> 40 after scroll,
-// with the bound game id never changing on an existing instance).
+// placeholder rather than going blank. It must be cleared when the cover changes: the grid keys
+// its items by game id, so the instance survives a repair - and a re-download usually lands on
+// the very same file name, which leaves cover_path unchanged. `coverMissing` going false is that
+// same "the file is back" signal coming from the list.
 const coverFailed = ref(false);
+
+watch([() => props.game.cover_path, () => props.game.coverMissing], () => {
+  coverFailed.value = false;
+});
 
 const handleClick = (e: MouseEvent) => {
   if (props.selectable) {

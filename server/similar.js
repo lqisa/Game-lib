@@ -20,7 +20,6 @@ const INSERT_BATCH = 500;
 const SCAN_DONE_KEY = 'similar_scan_done';
 const SCAN_CURSOR_KEY = 'similar_scan_max_id';
 
-
 const getCursorId = async () =>
   Number((await db.knex('setting').where({ key: SCAN_CURSOR_KEY }).first())?.value || 0);
 
@@ -33,6 +32,21 @@ const setCursorId = (value) =>
 
 const setScanDone = () =>
   db.knex('setting').insert({ key: SCAN_DONE_KEY, value: '1' }).onConflict('key').merge();
+
+/**
+ * Reset the stored state before a full recompute. Extracted so the worker and the tests agree on
+ * what "starting a full scan" means.
+ *
+ * The pairs go so the scan cannot keep stale ones, and `similar_scan_done` goes so a scan that is
+ * interrupted - the app closes, the worker dies - is retried as a full scan instead of being
+ * mistaken for a finished one. The cursor is deliberately kept: it is the incremental watermark,
+ * and clearing it made the next incremental trigger treat the whole library as new and walk it
+ * again under an "incremental" label, with the pairs table still empty.
+ */
+export const prepareFullScan = async () => {
+  await db.knex('game_similar').del();
+  await db.knex('setting').where({ key: SCAN_DONE_KEY }).del();
+};
 
 /**
  * One entry per game that has at least one vendor name. Names are cleaned ONCE here; the

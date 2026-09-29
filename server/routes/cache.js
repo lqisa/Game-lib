@@ -3,11 +3,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 import * as db from '../database/db.js';
 import { scraperAxios } from '../scraper/axios.js';
-import { getDataDir } from '../config.js';
+import { COVERS_DIR, coverNamesFromResults } from '../scraper/cover.js';
 
 const router = express.Router();
-
-const COVERS_DIR = path.join(getDataDir(), 'covers');
 
 if (!fs.existsSync(COVERS_DIR)) {
   fs.mkdirSync(COVERS_DIR, { recursive: true });
@@ -34,6 +32,23 @@ const downloadCover = async (coverUrl, source, sourceId) => {
   } catch (err) {
     console.error('search cover download failed:', err.message);
     return null;
+  }
+};
+
+// Two keywords that returned the same entry share one thumbnail, so a file only goes once no
+// cached row mentions it any more.
+const removeUnreferencedThumbnails = async (names) => {
+  for (const name of names) {
+    const stillCached = await db
+      .knex('search_cache')
+      .where('results', 'like', `%${name}%`)
+      .first('key');
+    if (stillCached) continue;
+    try {
+      fs.rmSync(path.join(COVERS_DIR, name), { force: true });
+    } catch (err) {
+      console.warn(`could not remove cached thumbnail ${name}:`, err.message);
+    }
   }
 };
 
@@ -101,7 +116,15 @@ router.delete('/search', async (req, res, next) => {
       return res.status(400).send({ error: 'keys is required' });
     }
     const keyArray = String(keys).split(',');
+    // The cached results carry a local thumbnail each, so dropping the rows has to drop the files
+    // too - otherwise every search leaves its covers in the covers directory for good.
+    const thumbnails = new Set();
+    for (const key of keyArray) {
+      const row = await db.getSearchCache(key);
+      for (const name of coverNamesFromResults(row?.results)) thumbnails.add(name);
+    }
     await db.deleteSearchCache(keyArray);
+    await removeUnreferencedThumbnails(thumbnails);
     res.send({ ok: true });
   } catch (err) {
     next(err);

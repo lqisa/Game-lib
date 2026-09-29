@@ -2,6 +2,8 @@ import express from 'express';
 import { getAllTasks, cancelTask, removeTask, onTaskChange } from '../tasks.js';
 import { getSseToken } from '../config.js';
 
+import { startBackgroundWorkers } from '../background-manager.js';
+
 const router = express.Router();
 
 // SSE token validation middleware
@@ -9,10 +11,17 @@ const validateSseToken = (req, res, next) => {
   const token = req.query.token;
   const expectedToken = getSseToken();
   if (!expectedToken || token !== expectedToken) {
+    console.warn(`[SSE] Token mismatch: received "${token}", expected "${expectedToken}"`);
     return res.status(401).send({ error: 'Invalid SSE token' });
   }
+  console.log('[SSE] Token validation passed, proceeding to handler');
   next();
 };
+
+router.post('/start-workers', (_req, res) => {
+  startBackgroundWorkers();
+  res.send({ ok: true });
+});
 
 router.get('/', (_req, res) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -37,6 +46,7 @@ router.delete('/:id', (req, res) => {
 });
 
 router.get('/events', validateSseToken, (req, res) => {
+  console.log('[SSE] Client connected, sending snapshot');
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -48,9 +58,13 @@ router.get('/events', validateSseToken, (req, res) => {
   const snapshot = getAllTasks().map(({ childProcess, ...rest }) => rest);
   res.write(`data: ${JSON.stringify({ type: 'snapshot', tasks: snapshot })}\n\n`);
 
-  const onChange = (task) => {
+  const onChange = (task, event) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { childProcess, ...rest } = task;
+    if (event === 'remove') {
+      res.write(`data: ${JSON.stringify({ type: 'remove', id: rest.id })}\n\n`);
+      return;
+    }
     res.write(`data: ${JSON.stringify({ type: 'update', task: rest })}\n\n`);
   };
 

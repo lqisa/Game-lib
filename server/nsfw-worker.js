@@ -74,17 +74,17 @@ const initModel = async () => {
 
 const classifyImage = async (coverPath) => {
   const fullPath = path.join(getDataDir(), 'covers', coverPath);
-  if (!fs.existsSync(fullPath)) return 0;
+  // No file, no verdict. Returning 0 here wrote the game down as "safe" for good, because only
+  // rows whose r18 is still NULL are ever looked at again.
+  if (!fs.existsSync(fullPath)) return null;
 
   let inputTensor;
   try {
-    const rgb = await sharp(fullPath)
-      .resize(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE)
-      .raw()
-      .toBuffer();
+    const rgb = await sharp(fullPath).resize(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE).raw().toBuffer();
 
     inputTensor = tf.tidy(() =>
-      tf.tensor3d(new Uint8Array(rgb), [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3], 'int32')
+      tf
+        .tensor3d(new Uint8Array(rgb), [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3], 'int32')
         .toFloat()
         .div(255),
     );
@@ -95,7 +95,9 @@ const classifyImage = async (coverPath) => {
     const sexy = predictions.find((p) => p.className === 'Sexy')?.probability ?? 0;
     return porn + sexy > R18_THRESHOLD ? 1 : 0;
   } catch {
-    return 0;
+    // A cover that cannot be decoded is the same thing: no answer, not a "safe" answer. A later
+    // pass can still decide it, once the file is readable again.
+    return null;
   } finally {
     if (inputTensor) inputTensor.dispose();
   }
@@ -113,7 +115,9 @@ const cleanupLeakedTensors = () => {
   const after = tf.memory().numTensors;
   const cleaned = current - after;
   if (cleaned > 0) {
-    log(`[nsfw-classifier] cleaned ${cleaned} leaked tensors (was ${current}, baseline ${baselineTensors})`);
+    log(
+      `[nsfw-classifier] cleaned ${cleaned} leaked tensors (was ${current}, baseline ${baselineTensors})`,
+    );
   }
 };
 
@@ -134,18 +138,30 @@ const runRound = async () => {
   });
 
   const results = [];
+  let checked = 0;
+  let unreadable = 0;
   for (const game of pending) {
     if (!game.cover_path) continue;
     const r18 = await classifyImage(game.cover_path);
-    results.push({ gameId: game.id, r18 });
-    parentPort?.postMessage({
-      type: 'task-update',
-      id: '__latest__',
-      patch: {
-        detail: `Classifying covers: ${results.length}/${pending.length}`,
-        progress: Math.min(99, Math.round((results.length / pending.length) * 100)),
-      },
-    });
+    checked += 1;
+    if (r18 === null) {
+      // Leave it unknown and try again another round rather than storing a verdict nothing supports.
+      unreadable += 1;
+    } else {
+      results.push({ gameId: game.id, r18 });
+    }
+    if (checked % 10 === 0 || checked === pending.length) {
+      parentPort?.postMessage({
+        type: 'task-update',
+        id: '__latest__',
+        patch: {
+          detail: `Classifying covers: ${checked}/${pending.length}`,
+          progress: Math.min(99, Math.round((checked / pending.length) * 100)),
+        },
+      });
+    }
+    // Yield brief moment to avoid starvation of OS scheduling and CPU
+    await new Promise((resolve) => setTimeout(resolve, 30));
   }
 
   cleanupLeakedTensors();
@@ -160,7 +176,10 @@ const runRound = async () => {
     patch: {
       status: 'completed',
       progress: 100,
-      detail: `Classified ${results.length} covers`,
+      detail:
+        unreadable > 0
+          ? `Classified ${results.length} covers (${unreadable} unreadable, left unknown)`
+          : `Classified ${results.length} covers`,
     },
   });
 
@@ -172,26 +191,40 @@ const startPolling = async () => {
 
   let idleTicks = 0;
   const loop = () => {
-    void runRound().then((classified) => {
-      if (classified > 0) {
-        idleTicks = 0;
-        log(
-          `[nsfw-classifier] classified ${classified} covers, ${formatMem()}, process: ${formatProcessMem()}`,
-        );
-      } else {
-        idleTicks++;
-        if (idleTicks <= 3 || idleTicks % 10 === 0) {
+    void runRound()
+      .then((classified) => {
+        if (classified > 0) {
+          idleTicks = 0;
           log(
-            `[nsfw-classifier] idle (no pending covers), tick #${idleTicks}, next check in ${IDLE_INTERVAL_MS / 1000}s`,
+            `[nsfw-classifier] classified ${classified} covers, ${formatMem()}, process: ${formatProcessMem()}`,
           );
+        } else {
+          idleTicks++;
+          if (idleTicks <= 3 || idleTicks % 10 === 0) {
+            log(
+              `[nsfw-classifier] idle (no pending covers), tick #${idleTicks}, next check in ${IDLE_INTERVAL_MS / 1000}s`,
+            );
+          }
         }
-      }
-      const next = classified > 0 ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS;
-      setTimeout(loop, next);
-    });
+        const next = classified > 0 ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS;
+        setTimeout(loop, next);
+      })
+      .catch((err) => {
+        // A round that throws - a locked database, a query error - must not end the polling. The
+        // loop used to die right here, leaving a worker that looked alive and never classified
+        // anything again, with one warning line as the only trace.
+        warn(`[nsfw-classifier] round failed: ${err.message || err}`);
+        setTimeout(loop, IDLE_INTERVAL_MS);
+      });
   };
-  log(`[nsfw-classifier] polling started in worker (active=${ACTIVE_INTERVAL_MS}ms, idle=${IDLE_INTERVAL_MS}ms)`);
+  log(
+    `[nsfw-classifier] polling started in worker (active=${ACTIVE_INTERVAL_MS}ms, idle=${IDLE_INTERVAL_MS}ms)`,
+  );
   loop();
 };
 
-startPolling();
+// Polling only belongs to the worker thread this module is written to be. Importing it - a test
+// does exactly that - must not load a model, which would be a multi-second CPU and disk burst.
+if (parentPort) startPolling();
+
+export { classifyImage };

@@ -59,7 +59,33 @@ const shouldCompress = (sourcePath) => {
 
 import { COVERS_DIR, imageExtension } from '../scraper/cover.js';
 
+// Lower-cased because Windows resolves cover names case-insensitively. A missing directory
+// yields an empty set, which reports every cover as missing - the safe direction, since the
+// repair pass checks the disk itself before downloading anything.
+const listCoverFiles = () => {
+  try {
+    return new Set(fs.readdirSync(COVERS_DIR).map((name) => name.toLowerCase()));
+  } catch {
+    return new Set();
+  }
+};
+
 const router = express.Router();
+
+// Cover files are not rows, so nothing cascades when a game goes: without this the covers
+// directory only grows with files no game points at. A file is kept while any remaining game
+// still names it - the same cover can be shared by two rows.
+const removeCoverFiles = async (coverPaths) => {
+  for (const coverPath of new Set(coverPaths.filter(Boolean))) {
+    const stillUsed = await db.knex('game').where({ cover_path: coverPath }).first('id');
+    if (stillUsed) continue;
+    try {
+      fs.rmSync(path.join(COVERS_DIR, path.basename(coverPath)), { force: true });
+    } catch (err) {
+      console.warn(`could not remove cover file ${coverPath}:`, err.message);
+    }
+  }
+};
 
 router.get('/', async (req, res, next) => {
   try {
@@ -102,6 +128,17 @@ router.get('/', async (req, res, next) => {
       sortBy: sortBy || 'updated_at',
       sortOrder: sortOrder || 'desc',
     });
+
+    // A cover_path can outlive its file: a swapped data directory, a manual clean, a scrape that
+    // died between writing the row and the file. The client only sees the string, so a stale path
+    // is indistinguishable from a healthy cover there - the card would keep its placeholder
+    // forever and the repair pass would never hear about it. One directory read answers every row.
+    const coverFiles = listCoverFiles();
+    for (const game of result.games) {
+      game.coverMissing =
+        Boolean(game.cover_path) && !coverFiles.has(String(game.cover_path).toLowerCase());
+    }
+
     res.send(result);
   } catch (err) {
     next(err);
@@ -415,7 +452,9 @@ router.post('/r18/detect', async (req, res, next) => {
       return res.status(400).send({ error: 'results array is required' });
     }
     const outcome = await storeDetectionResults(results);
-    console.log(`[r18-api] POST /r18/detect → ${results.length} results, updated=${outcome.updated} skipped=${outcome.skipped}`);
+    console.log(
+      `[r18-api] POST /r18/detect → ${results.length} results, updated=${outcome.updated} skipped=${outcome.skipped}`,
+    );
     res.send(outcome);
   } catch (err) {
     next(err);
@@ -439,7 +478,10 @@ router.put('/:id/r18', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    await db.deleteGame(Number(req.params.id));
+    const id = Number(req.params.id);
+    const game = await db.knex('game').where({ id }).first('cover_path');
+    await db.deleteGame(id);
+    await removeCoverFiles([game?.cover_path]);
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -452,7 +494,9 @@ router.post('/batch-delete', async (req, res, next) => {
     if (!Array.isArray(ids)) {
       return res.status(400).send({ error: 'ids must be an array' });
     }
+    const rows = await db.knex('game').whereIn('id', ids).select('cover_path');
     await db.batchDeleteGames(ids);
+    await removeCoverFiles(rows.map((row) => row.cover_path));
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -752,6 +796,20 @@ router.put('/:id/relocate', async (req, res, next) => {
     const isArchive = ARCHIVE_EXTENSIONS.has(ext);
 
     if (isArchive) {
+      // The archive file being gone means this .rar row is history: the user extracted it by hand
+      // and deleted the file. There is nothing to extract, and treating the target as an extraction
+      // destination is what let a doomed run's cleanup delete a directory the user had filled.
+      if (!fs.existsSync(currentFullPath)) {
+        if (!fs.existsSync(normalizedNew)) {
+          return res.status(400).send({
+            error: 'Source archive no longer exists and the target path does not exist either',
+          });
+        }
+        await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
+        const updated = await db.getGameDetail(Number(id));
+        return res.send({ ...updated, operation: 'update_only', taskId: null });
+      }
+
       const destExists = fs.existsSync(normalizedNew);
       if (destExists) {
         const stat = fs.statSync(normalizedNew);

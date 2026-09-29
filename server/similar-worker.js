@@ -1,25 +1,20 @@
 import { parentPort } from 'node:worker_threads';
-import { computeSimilarPairs } from './similar.js';
-import * as db from './database/db.js';
+import { computeSimilarPairs, prepareFullScan } from './similar.js';
 
 const log = (text) => parentPort?.postMessage({ type: 'log', text });
 const warn = (text) => parentPort?.postMessage({ type: 'warn', text });
 
-const SCAN_DONE_KEY = 'similar_scan_done';
-const SCAN_CURSOR_KEY = 'similar_scan_max_id';
 const DEBOUNCE_MS = 5_000;
 
 let scanRunning = false;
 let needsRescan = false;
 let debounceTimer = null;
-let activeTaskId = null;
 let pairsFound = 0;
 
 const runScan = async ({ full = false, taskId = null } = {}) => {
   if (scanRunning) return;
 
   scanRunning = true;
-  activeTaskId = taskId;
   pairsFound = 0;
   const mode = full ? 'full' : 'incremental';
 
@@ -38,8 +33,7 @@ const runScan = async ({ full = false, taskId = null } = {}) => {
 
   try {
     if (full) {
-      await db.knex('game_similar').del();
-      await db.knex('setting').where({ key: SCAN_CURSOR_KEY }).del();
+      await prepareFullScan();
     }
 
     const result = await computeSimilarPairs({
@@ -74,7 +68,6 @@ const runScan = async ({ full = false, taskId = null } = {}) => {
     });
   } finally {
     scanRunning = false;
-    activeTaskId = null;
     if (needsRescan) {
       needsRescan = false;
       onTriggerScan();

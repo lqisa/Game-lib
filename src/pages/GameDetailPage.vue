@@ -191,10 +191,17 @@
                   <q-icon name="merge_type" color="warning" />
                 </template>
                 <div class="text-caption text-weight-medium q-mb-xs">Suspected duplicate</div>
-                <div v-for="s in game.similarGames" :key="s.gameId" class="row items-center q-mt-xs q-gutter-x-xs">
-                  <router-link v-if="!s.isSelf" :to="`/game/${s.gameId}`" class="text-blue text-caption col">{{
-                    s.name
-                  }}</router-link>
+                <div
+                  v-for="s in game.similarGames"
+                  :key="s.gameId"
+                  class="row items-center q-mt-xs q-gutter-x-xs"
+                >
+                  <router-link
+                    v-if="!s.isSelf"
+                    :to="`/game/${s.gameId}`"
+                    class="text-blue text-caption col"
+                    >{{ s.name }}</router-link
+                  >
                   <span v-else class="text-caption text-weight-medium col">{{ s.name }}</span>
                   <q-badge :color="s.isArchive ? 'grey' : 'teal'" class="text-caption">{{
                     s.isArchive ? 'archive' : 'folder'
@@ -219,6 +226,23 @@
               >
                 <q-icon name="folder" size="xs" class="q-mr-xs" />
                 {{ game.name }}
+              </div>
+
+              <div class="row items-center q-gutter-x-sm q-mb-sm">
+                <span class="text-caption" style="color: var(--m3-on-surface-variant)">R18:</span>
+                <q-btn-toggle
+                  :model-value="game.r18 === 1 ? 1 : 0"
+                  dense
+                  flat
+                  no-caps
+                  size="sm"
+                  :options="r18Options"
+                  :toggle-color="game.r18 === 1 ? 'negative' : 'positive'"
+                  @update:model-value="setR18"
+                />
+                <span v-if="game.r18_source" class="text-caption text-grey-5"
+                  >({{ game.r18_source }})</span
+                >
               </div>
 
               <div v-if="game.makers?.length" class="q-mb-sm">
@@ -417,6 +441,8 @@ interface GameDetail {
   id: number;
   name: string;
   cover_path: string | null;
+  r18: number | null;
+  r18_source: string | null;
   description: string | null;
   sub_path: string;
   makers: { id: number; name: string }[];
@@ -538,6 +564,21 @@ const editingPath = ref(false);
 const editPathValue = ref('');
 const relocating = ref(false);
 const $q = useQuasar();
+
+const r18Options = [
+  { label: 'Safe', value: 0 },
+  { label: '18+', value: 1 },
+];
+
+const setR18 = async (value: number) => {
+  if (!game.value) return;
+  try {
+    const res = await api.put(`/games/${game.value.id}/r18`, { r18: value });
+    game.value = res.data;
+  } catch {
+    $q.notify({ type: 'negative', message: 'Failed to update R18 status' });
+  }
+};
 const confirmRelocate = ref(false);
 const relocateMoveFiles = ref(false);
 const relocateCompressFiles = ref(false);

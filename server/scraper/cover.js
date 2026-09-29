@@ -184,9 +184,26 @@ const fetchCoverUrlFromSource = async (sourceType, sourceId, bangumiToken = '') 
   return null;
 };
 
+/**
+ * The cover file names a cached set of search results points at. Search results keep a local
+ * thumbnail (`search_<source>_<id>.<ext>` - see routes/cache.js) instead of the remote URL, so
+ * anything that has to know which files are still in use - dropping a cache row, sweeping the
+ * covers directory - has to read them the same way.
+ */
+const coverNamesFromResults = (results) => {
+  const names = new Set();
+  for (const result of results ?? []) {
+    const url = typeof result?.coverUrl === 'string' ? result.coverUrl : '';
+    const match = url.match(/\/covers\/(.+)$/);
+    if (match?.[1]) names.add(path.basename(match[1]));
+  }
+  return names;
+};
+
 export {
   COVERS_DIR,
   coverExists,
+  coverNamesFromResults,
   downloadCover,
   resolveCoverUrl,
   fetchCoverUrlFromSource,

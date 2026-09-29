@@ -134,7 +134,10 @@ const getSimilarGames = async (gameId) => {
     .select('id', 'name', 'cover_path', 'sub_path', 'dir_created_at');
   const byId = new Map(others.map((g) => [g.id, g]));
 
-  const current = await db('game').where({ id: gameId }).select('id', 'name', 'cover_path', 'sub_path', 'dir_created_at').first();
+  const current = await db('game')
+    .where({ id: gameId })
+    .select('id', 'name', 'cover_path', 'sub_path', 'dir_created_at')
+    .first();
 
   const result = [];
   if (current) {
@@ -214,6 +217,7 @@ const getGames = async ({
   tagIds,
   scraped,
   duplicate,
+  r18,
   favoritesOnly,
   excludeSubPaths,
   sortBy = 'updated_at',
@@ -302,6 +306,14 @@ const getGames = async ({
     });
   }
 
+  if (r18 === true) {
+    query = query.where('game.r18', 1);
+  } else if (r18 === false) {
+    query = query.where(function () {
+      this.where('game.r18', 0).orWhereNull('game.r18');
+    });
+  }
+
   if (favoritesOnly) {
     query = query.whereIn('game.id', function () {
       this.select('game_id').from('favorite');
@@ -325,14 +337,19 @@ const getGames = async ({
 
   if (games.length > 0) {
     const gameIds = games.map((g) => g.id);
-    const sourceNames = await db('game_source')
+    // One pass answers both things the list needs about a game's sources: the name to show
+    // (first named source wins) and whether a source exists at all. The latter decides whether
+    // a missing cover can ever be repaired, so it must not be read off `sourceName` - a source
+    // whose name is null would then look like no source at all.
+    const sourceRows = await db('game_source')
       .whereIn('game_id', gameIds)
-      .whereNotNull('name')
       .orderBy('id')
       .select('game_id', 'name');
     const nameMap = {};
-    for (const s of sourceNames) {
-      if (!nameMap[s.game_id]) nameMap[s.game_id] = s.name;
+    const sourceIdSet = new Set();
+    for (const s of sourceRows) {
+      sourceIdSet.add(s.game_id);
+      if (s.name && !nameMap[s.game_id]) nameMap[s.game_id] = s.name;
     }
     const favoriteIds = await db('favorite').whereIn('game_id', gameIds).select('game_id');
     const favSet = new Set(favoriteIds.map((f) => f.game_id));
@@ -348,6 +365,9 @@ const getGames = async ({
     }
     for (const g of games) {
       g.sourceName = nameMap[g.id] || null;
+      // Whether a cover can be fetched at all: the repair pass resolves covers through the
+      // source, so a game without one has nothing to repair, only something to scrape.
+      g.hasSource = sourceIdSet.has(g.id);
       g.is_favorite = favSet.has(g.id);
       // Folder or archive, derived from sub_path rather than stored so it cannot drift.
       g.isArchive = isArchivePath(g.sub_path);

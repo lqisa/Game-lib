@@ -16,6 +16,7 @@ interface ElectronAPI {
   onMoveInProgress(callback: () => void): void;
   forceQuit(): Promise<void>;
   getSseToken(): Promise<string>;
+  readyForBackgroundTasks?(): Promise<void>;
 }
 
 interface Window {

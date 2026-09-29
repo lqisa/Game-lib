@@ -8,8 +8,8 @@ import { EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY, COMPRESS_TOOL_PATHS } from '.
 const tasks = new Map();
 const listeners = new Set();
 
-const notify = (task) => {
-  for (const fn of listeners) fn(task);
+const notify = (task, event = 'update') => {
+  for (const fn of listeners) fn(task, event);
 };
 
 const createTask = (type, meta) => {
@@ -66,12 +66,17 @@ const cancelTask = (id) => {
 
 const removeTask = (id) => {
   const task = tasks.get(id);
-  if (!task) return;
-  if (task.status === 'running' && task.type === 'move') return;
+  if (!task) return false;
+  if (task.status === 'running' && task.type === 'move') return false;
   if (task.childProcess && task.status === 'running') {
     task.childProcess.kill();
   }
   tasks.delete(id);
+  // Say so. A removal nobody hears about leaves the row in the task panel until the client
+  // reconnects and gets a fresh snapshot - which is exactly why deleting looked like it did
+  // nothing, and why clicking again answered 404.
+  notify(task, 'remove');
+  return true;
 };
 
 const hasRunningMoveTasks = () =>
@@ -427,6 +432,17 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
 
 const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryId, newSubPath) => {
   try {
+    // Nothing to extract: fail here rather than let a doomed run reach the cleanup step below,
+    // which is what removed a user's folder when the archive had already been deleted by hand.
+    if (!fs.existsSync(archivePath)) {
+      updateTask(taskId, {
+        status: 'failed',
+        error: 'Source archive not found',
+        detail: 'Extraction failed',
+      });
+      return;
+    }
+
     const ext = path.extname(archivePath).toLowerCase();
     const tools = await getEffectiveTools();
     const tool = selectTool(ext, tools);
@@ -451,7 +467,19 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
       progress: 0,
     });
 
+    // Only a directory this task is responsible for may be removed on failure or cancellation:
+    // one that did not exist or was empty when the run started. Anything else is the user's own
+    // data - a hand-extracted copy, or a folder they confirmed with force - and a failed password
+    // or a missing volume must not turn into a wipe. The failure is reported on the task instead.
+    let destWasEmpty = false;
+    try {
+      destWasEmpty = !fs.existsSync(dest) || fs.readdirSync(dest).length === 0;
+    } catch {
+      destWasEmpty = false;
+    }
+
     const cleanupDest = async () => {
+      if (!destWasEmpty) return;
       try {
         if (fs.existsSync(dest)) {
           await fs.promises.rm(dest, { recursive: true, force: true });

@@ -16,6 +16,7 @@ import crypto from 'node:crypto';
 import type http from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerQuasarRuntime, resolveElectronAssetsPath } from '#q-app/electron/main';
+import { API_PORTS } from '../server/ports.js';
 import { getDataDir, ensureDir } from '../server/config.js';
 import { decideListenRetry, portInUseMessage } from '../server/port-policy.js';
 
@@ -38,11 +39,11 @@ app.on('second-instance', () => {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const platform = process.platform || os.platform();
 
-const EXPRESS_PORT = 19700;
+const EXPRESS_PORT = import.meta.env.QUASAR_DEV ? API_PORTS.dev : API_PORTS.prod;
 // The port the Express server actually bound to. In production it can differ from
 // EXPRESS_PORT (see the EADDRINUSE retry in startServer), so the window must always be
 // loaded from this value rather than the constant.
-let expressPort = EXPRESS_PORT;
+let expressPort: number = EXPRESS_PORT;
 let currentServer: http.Server | null = null;
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -54,6 +55,7 @@ let hasRunningTasksFn: (() => boolean) | null = null;
 // Queued or in-flight tasks of any type - the exit guards use this one.
 let hasActiveTasksFn: (() => boolean) | null = null;
 let sseToken: string;
+let startBackgroundWorkersFn: (() => void) | null = null;
 
 interface WindowBounds {
   x?: number;
@@ -86,15 +88,15 @@ async function startServer(): Promise<number> {
   const { initProxy } = await import(proxyUrl);
   await initProxy();
 
-  // Same hook as the dev server: one historical scan on first boot, then polling for new
-  // adoptions.
-  const similarClassifierUrl = pathToFileURL(path.resolve(serverDir, 'similar-classifier.js')).href;
-  const { startSimilarWorker } = await import(similarClassifierUrl);
-  void startSimilarWorker();
+  const bgManagerUrl = pathToFileURL(path.resolve(serverDir, 'background-manager.js')).href;
+  const { startBackgroundWorkers } = await import(bgManagerUrl);
+  startBackgroundWorkersFn = startBackgroundWorkers;
 
-  const nsfwUrl = pathToFileURL(path.resolve(serverDir, 'nsfw-classifier.js')).href;
-  const { startNsfwPolling } = await import(nsfwUrl);
-  startNsfwPolling();
+  // Conservative fallback watchdog: if frontend doesn't report render readiness within 15s,
+  // trigger workers anyway so background jobs aren't delayed indefinitely.
+  setTimeout(() => {
+    startBackgroundWorkersFn?.();
+  }, 15000);
 
   const frontendDir = path.resolve(__dirname);
   const expressApp = createApp(frontendDir);
@@ -197,10 +199,13 @@ function createTray() {
 
 async function createWindow() {
   if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
     return;
   }
+
+  const preloadPath = path.join(__dirname, 'electron-preload.cjs');
 
   mainWindow = new BrowserWindow({
     icon: resolveElectronAssetsPath('icons/icon.png'),
@@ -212,7 +217,7 @@ async function createWindow() {
     show: false,
     webPreferences: {
       contextIsolation: true,
-      preload: path.join(import.meta.dirname, 'electron-preload.cjs'),
+      preload: preloadPath,
       backgroundThrottling: true,
       spellcheck: false,
     },
@@ -221,6 +226,12 @@ async function createWindow() {
   if (savedBounds?.isMaximized) {
     mainWindow.maximize();
   }
+
+  mainWindow.once('ready-to-show', () => {
+    if (!lightweightMode) {
+      mainWindow?.show();
+    }
+  });
 
   mainWindow.on('resize', scheduleSaveWindowBounds);
   mainWindow.on('move', scheduleSaveWindowBounds);
@@ -237,17 +248,31 @@ async function createWindow() {
     }
   });
 
-  if (import.meta.env.QUASAR_DEV) {
-    await mainWindow.loadURL(import.meta.env.QUASAR_APP_URL);
-  } else {
-    await mainWindow.loadURL(`http://127.0.0.1:${expressPort}`);
+  const targetUrl = import.meta.env.QUASAR_DEV
+    ? import.meta.env.QUASAR_APP_URL
+    : `http://127.0.0.1:${expressPort}`;
+
+  const maxRetries = import.meta.env.QUASAR_DEV ? 10 : 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await mainWindow.loadURL(targetUrl);
+      break;
+    } catch (err) {
+      console.warn(
+        `[mainWindow] loadURL attempt ${attempt}/${maxRetries} failed:`,
+        (err as Error).message,
+      );
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
   }
 
   if (import.meta.env.QUASAR_DEBUG) {
     mainWindow.webContents.openDevTools();
   }
 
-  if (!lightweightMode) {
+  if (!lightweightMode && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
     mainWindow.show();
   }
 }
@@ -383,6 +408,10 @@ void app.whenReady().then(async () => {
 
   // Pass SSE token to Express server via env
   process.env.SSE_TOKEN = sseToken;
+
+  ipcMain.handle('app:readyForBackgroundTasks', () => {
+    startBackgroundWorkersFn?.();
+  });
 
   // Also write token to file for dev mode (separate Node process)
   try {

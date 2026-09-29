@@ -1,13 +1,11 @@
 import express from 'express';
-import path from 'node:path';
-import fs from 'node:fs';
 import * as db from '../database/db.js';
 import {
-  COVERS_DIR,
   coverExists,
   downloadCover,
   resolveCoverUrl,
   fetchCoverUrlFromSource,
+  DETAIL_FETCH_SOURCES,
 } from '../scraper/cover.js';
 
 const router = express.Router();
@@ -43,14 +41,6 @@ const mapWithConcurrency = async (items, concurrency, worker) => {
   return results;
 };
 
-router.get('/:filename', (req, res) => {
-  const filePath = path.join(COVERS_DIR, req.params.filename);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send({ error: 'Cover not found' });
-  }
-  res.sendFile(filePath);
-});
-
 /**
  * Re-download covers that are missing on disk, so a cover lost to a network failure or to the
  * app being closed mid-scrape heals itself instead of needing a manual re-scrape.
@@ -60,7 +50,14 @@ router.get('/:filename', (req, res) => {
  *             that have no cover_path at all.
  *   limit   - how many covers to download in this call (default 8, max 30).
  *
- * returns { repaired: [{gameId, coverPath}], missing, attempted, unresolvable }
+ * returns { repaired: [{gameId, coverPath}], missing, attempted, hopelessIds, noSource }
+ *   noSource    - ids from the request with no game_source row. Nothing can be resolved for them,
+ *                 so this is said per game: a request-level counter cannot tell "nothing to go on"
+ *                 from "the download failed", which left callers asking about the same game on
+ *                 every list load.
+ *   hopelessIds - ids whose source offers nothing to derive a URL from and nothing to re-read.
+ *                 Also per game, and deliberately narrow: anything that might work on a later pass
+ *                 stays out, so a caller crossing these off cannot lose a repairable game.
  */
 router.post('/repair', async (req, res, next) => {
   try {
@@ -70,12 +67,14 @@ router.post('/repair', async (req, res, next) => {
       : null;
 
     if (requestedIds && requestedIds.length === 0) {
-      return res.send({ repaired: [], missing: 0, attempted: 0, unresolvable: 0 });
+      return res.send({ repaired: [], missing: 0, attempted: 0, hopelessIds: [], noSource: [] });
     }
 
+    // LEFT JOIN, not JOIN: a game that was never scraped has no row to join to, and it still
+    // has to come back - it is exactly the case the caller has to be told apart.
     let query = db
       .knex('game as g')
-      .join('game_source as gs', 'gs.game_id', 'g.id')
+      .leftJoin('game_source as gs', 'gs.game_id', 'g.id')
       .select(
         'g.id as gameId',
         'g.cover_path as coverPath',
@@ -92,12 +91,36 @@ router.post('/repair', async (req, res, next) => {
 
     const rows = await query;
 
-    // Only rows whose file is actually absent need work, and skip ones we failed on recently.
-    const candidates = rows.filter((row) => !coverExists(row.coverPath));
+    const sourcedIds = new Set(rows.filter((row) => row.sourceType).map((row) => row.gameId));
+    const noSource = requestedIds
+      ? requestedIds.filter((id) => !sourcedIds.has(id))
+      : [...new Set(rows.filter((row) => !row.sourceType).map((row) => row.gameId))];
+
+    // Only rows whose file is actually absent need work, and only a row with a source can
+    // have one: re-reading a source-less game is a network call that can never produce a cover.
+    const repairable = rows.filter((row) => row.sourceType && !coverExists(row.coverPath));
+
+    // One entry per game. Several sources are alternatives for the same cover, so treating them as
+    // separate rows downloaded the same file twice in parallel and let the loser write last. A row
+    // that can build its URL without a network read is preferred, so picking one source does not
+    // lock the game to a vendor whose URL is dead.
+    const byGame = new Map();
+    for (const row of repairable) {
+      const kept = byGame.get(row.gameId);
+      if (!kept) {
+        byGame.set(row.gameId, row);
+        continue;
+      }
+      const keptResolves = resolveCoverUrl(kept.sourceType, kept.sourceId, kept.rawData);
+      if (!keptResolves && resolveCoverUrl(row.sourceType, row.sourceId, row.rawData)) {
+        byGame.set(row.gameId, row);
+      }
+    }
+    const candidates = [...byGame.values()];
     const batch = candidates.filter((row) => !recentlyFailed(row.gameId)).slice(0, limit);
 
     let detailFetchesLeft = MAX_DETAIL_FETCHES;
-    let unresolvable = 0;
+    const hopelessIds = [];
     const bangumiToken = (await db.getSetting('bangumi_token')) || '';
 
     const results = await mapWithConcurrency(batch, 3, async (row) => {
@@ -119,9 +142,12 @@ router.post('/repair', async (req, res, next) => {
       }
 
       if (!coverPath) {
-        // "No URL anywhere" is genuinely unresolvable; a failed download is just a failure.
-        if (!recorded) unresolvable += 1;
         recentFailures.set(row.gameId, Date.now());
+        // Only say "this can never be resolved" when that is actually what happened: the source has
+        // no URL to derive and no entry that could be re-read. A failed download, a failed re-read
+        // and a row that never got its turn at the detail quota can all work next time, and calling
+        // those hopeless would make the caller cross them off for good.
+        if (!recorded && !DETAIL_FETCH_SOURCES.has(row.sourceType)) hopelessIds.push(row.gameId);
         return null;
       }
       await db.knex('game').where({ id: row.gameId }).update({ cover_path: coverPath });
@@ -135,7 +161,7 @@ router.post('/repair', async (req, res, next) => {
       console.log(` * Repaired ${repaired.length} cover(s)`);
     }
 
-    res.send({ repaired, missing, attempted: batch.length, unresolvable });
+    res.send({ repaired, missing, attempted: batch.length, hopelessIds, noSource });
   } catch (err) {
     next(err);
   }

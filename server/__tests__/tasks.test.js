@@ -218,6 +218,27 @@ describe('onTaskChange', () => {
     unsubA();
     unsubB();
   });
+
+  it('should tell listeners a change is an update', () => {
+    const task = createTask('extract', { archivePath: 'X.rar' });
+    const events = [];
+    const unsub = onTaskChange((_t, event) => events.push(event));
+    updateTask(task.id, { progress: 42 });
+    assert.deepEqual(events, ['update']);
+    unsub();
+  });
+
+  it('should tell listeners a task was removed', () => {
+    // Without this the row can only disappear when the client reconnects and gets a fresh
+    // snapshot - the delete looked like it did nothing, and clicking again hit a 404.
+    const task = createTask('move', { source: 'A', dest: 'B' });
+    updateTask(task.id, { status: 'completed' });
+    const events = [];
+    const unsub = onTaskChange((t, event) => events.push({ id: t.id, event }));
+    removeTask(task.id);
+    assert.deepEqual(events, [{ id: task.id, event: 'remove' }]);
+    unsub();
+  });
 });
 
 describe('detectExtractTools', () => {

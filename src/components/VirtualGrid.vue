@@ -24,6 +24,7 @@
 <script setup lang="ts" generic="T">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { getGridCols } from '../composables/useGridLayout';
+import type { VirtualGridExposed } from './VirtualGrid.types';
 
 const props = withDefaults(
   defineProps<{
@@ -135,8 +136,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateSize);
 });
 
-defineExpose({
+defineExpose<VirtualGridExposed<T>>({
   containerRef,
+  getVisibleItems: () => visibleItems.value,
   scrollTo: (top: number) => {
     if (containerRef.value) {
       containerRef.value.scrollTop = top;

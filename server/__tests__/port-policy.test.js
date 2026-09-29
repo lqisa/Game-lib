@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { decideListenRetry, portInUseMessage } from '../port-policy.js';
+import { API_PORTS } from '../ports.js';
 
-const START_PORT = 19700;
+const START_PORT = API_PORTS.dev;
 
 describe('decideListenRetry', () => {
   it('retries startPort + 1 once in production on EADDRINUSE', () => {
@@ -71,7 +72,7 @@ describe('decideListenRetry', () => {
 
 describe('portInUseMessage', () => {
   it('names the port and tells the user how to recover', () => {
-    const message = portInUseMessage(19700);
+    const message = portInUseMessage(API_PORTS.dev);
     assert.match(message, /19700/);
     assert.match(message, /already in use/);
     assert.match(message, /npm run dev:server/);

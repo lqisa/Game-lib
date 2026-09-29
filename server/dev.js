@@ -2,11 +2,11 @@ import { createApp } from './app.js';
 import { initDatabase } from './database/init.js';
 import { initProxy } from './scraper/axios.js';
 import { seed } from './__tests__/seed.js';
+import { API_PORTS } from './ports.js';
 import { getDataDir, isTestEnv } from './config.js';
-import { startSimilarWorker } from './similar-classifier.js';
-import { startNsfwPolling } from './nsfw-classifier.js';
+import { startBackgroundWorkers } from './background-manager.js';
 
-const PORT = parseInt(process.env.VITE_API_PORT || '19700', 10);
+const PORT = isTestEnv() ? API_PORTS.test : API_PORTS.dev;
 
 await initDatabase();
 await initProxy();
@@ -18,11 +18,12 @@ if (isTestEnv()) {
   console.log('✓ E2E seed data created for test environment');
 }
 
-// Historical similar pairs are computed once on the first boot; polling picks up newly
-// adopted games afterwards. Skipped in tests so assertions see a quiet task list.
+// Background workers are triggered by the frontend render-complete callback (POST /api/tasks/start-workers)
+// or by this conservative fallback timer if the client does not report.
 if (!isTestEnv()) {
-  void startSimilarWorker();
-  startNsfwPolling();
+  setTimeout(() => {
+    startBackgroundWorkers();
+  }, 15000);
 }
 
 const app = createApp(null);

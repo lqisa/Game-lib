@@ -53,19 +53,21 @@ export const getUnknownR18Games = async (limit = 500) =>
 export const storeDetectionResults = async (results) => {
   let updated = 0;
   let skipped = 0;
-  const r18Count = results.filter(r => r.r18 === 1).length;
-  const safeCount = results.filter(r => r.r18 === 0).length;
+  const r18Count = results.filter((r) => r.r18 === 1).length;
+  const safeCount = results.filter((r) => r.r18 === 0).length;
   console.log(`[r18] storing ${results.length} results (r18=${r18Count}, safe=${safeCount})`);
-  for (const { gameId, r18 } of results) {
-    if (!Number.isInteger(gameId) || (r18 !== 0 && r18 !== 1)) {
-      skipped++;
-      continue;
+  await db.knex.transaction(async (trx) => {
+    for (const { gameId, r18 } of results) {
+      if (!Number.isInteger(gameId) || (r18 !== 0 && r18 !== 1)) {
+        skipped++;
+        continue;
+      }
+      const count = await trx('game')
+        .where({ id: gameId })
+        .whereNull('r18')
+        .update({ r18, r18_source: 'ml' });
+      updated += count;
     }
-    updated += await db
-      .knex('game')
-      .where({ id: gameId })
-      .whereNull('r18')
-      .update({ r18, r18_source: 'ml' });
-  }
+  });
   return { updated, skipped };
 };

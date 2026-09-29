@@ -180,6 +180,15 @@ onMounted(() => {
       });
     });
   }
+
+  // Fallback for non-root routes (e.g. directly landing on /settings)
+  if (route.path !== '/') {
+    setTimeout(() => {
+      if (window.electronAPI?.readyForBackgroundTasks) {
+        void window.electronAPI.readyForBackgroundTasks();
+      }
+    }, 1000);
+  }
 });
 </script>
 

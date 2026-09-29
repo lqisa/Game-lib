@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
 import { closePool } from '../database/db.js';
-import { computeSimilarPairs } from '../similar.js';
+import { computeSimilarPairs, prepareFullScan } from '../similar.js';
 
 /**
  * The suspected-similar scan. The interesting rules are the ones the plan settled on:
@@ -140,7 +140,9 @@ describe('similar-name scan', () => {
     await computeSimilarPairs({ full: true });
 
     const similar = await db.getSimilarGames(g1);
-    assert.equal(similar.length, 2);
+    assert.equal(similar.length, 3);
+    const g1Info = similar.find((s) => s.gameId === g1);
+    assert.equal(g1Info.isSelf, true, 'current game is included with isSelf flag');
     const g2Info = similar.find((s) => s.gameId === g2);
     assert.equal(g2Info.isArchive, true, 'zip sub_path is reported as an archive');
     assert.ok('dirCreatedAt' in g2Info, 'creation date is exposed for the keep/delete decision');
@@ -172,5 +174,39 @@ describe('similar-name scan', () => {
     assert.equal(byId.get(g4).similarCount, 0);
     assert.equal(byId.get(g2).isArchive, true);
     assert.equal(byId.get(g1).isArchive, false);
+  });
+});
+
+describe('starting a full scan', () => {
+  beforeEach(async () => {
+    await db.knex('game_source').del();
+    await db.knex('game').del();
+    await db.knex('library').del();
+    await db.insertLibrary({ name: 'L', path: 'D:/tmp/L' });
+    libraryId = (await db.knex('library').orderBy('id', 'desc').first()).id;
+    await resetScanState();
+  });
+
+  const settingValue = async (key) =>
+    (await db.knex('setting').where({ key }).first())?.value ?? null;
+
+  it('keeps the incremental cursor so an interrupted scan cannot pass as incremental', async () => {
+    // The pairs have to go (a full scan recomputes them) and the done flag has to go (so an
+    // interrupted scan is retried as a full one at the next start). The cursor must NOT: clearing
+    // it made the next incremental trigger see "everything is above the cursor" and quietly walk
+    // the whole library again, under an "incremental" label.
+    const a = await seedVendorGame('Stale A', [['bangumi', '900', 'Stale A']]);
+    const b = await seedVendorGame('Stale B', [['dlsite', 'RJ900', 'Stale B']]);
+    await db.knex('setting').insert({ key: 'similar_scan_max_id', value: '42' });
+    await db.knex('setting').insert({ key: 'similar_scan_done', value: '1' });
+    await db
+      .knex('game_similar')
+      .insert({ game_id_a: Math.min(a, b), game_id_b: Math.max(a, b), score: 0.99 });
+
+    await prepareFullScan();
+
+    assert.equal(await settingValue('similar_scan_max_id'), '42', 'the cursor survives');
+    assert.equal(await settingValue('similar_scan_done'), null, 'a full scan is pending again');
+    assert.deepEqual(await pairIds(), [], 'the stale pairs are gone');
   });
 });

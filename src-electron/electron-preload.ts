@@ -57,4 +57,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   forceQuit: (): Promise<void> => ipcRenderer.invoke('app:forceQuit'),
   getSseToken: (): Promise<string> => ipcRenderer.invoke('app:getSseToken'),
+  readyForBackgroundTasks: (): Promise<void> => ipcRenderer.invoke('app:readyForBackgroundTasks'),
 });

@@ -120,6 +120,14 @@ const cancelTask = async (id: string) => {
 };
 
 const removeTask = async (id: string) => {
-  await api.delete(`/tasks/${id}`);
+  try {
+    await api.delete(`/tasks/${id}`);
+  } catch (err) {
+    // 404 means the server no longer has it, which is what the click asked for - the row must go
+    // either way, or a stale row can never be cleared. Any other failure keeps the row visible, so
+    // a refused delete does not look like a successful one.
+    if ((err as { response?: { status?: number } })?.response?.status !== 404) return;
+  }
+  taskStore.tasks.delete(id);
 };
 </script>

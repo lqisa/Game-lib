@@ -88,17 +88,36 @@ export const useTaskStore = defineStore('task', () => {
     const url = token ? `${getApiUrl('/tasks/events')}?token=${token}` : getApiUrl('/tasks/events');
     eventSource = new EventSource(url);
 
+    let batchMap: Map<string, Task> | null = null;
+
+    const flushBatch = () => {
+      if (!batchMap) return;
+      const updates = batchMap;
+      batchMap = null;
+      for (const [id, task] of updates) {
+        tasks.value.set(id, task);
+      }
+    };
+
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'snapshot') {
+          batchMap = null;
           const newMap = new Map<string, Task>();
           for (const task of data.tasks) {
             newMap.set(task.id, task);
           }
           tasks.value = newMap;
+        } else if (data.type === 'remove') {
+          // The server announces removals so the row goes away without waiting for a reconnect.
+          tasks.value.delete(data.id);
         } else if (data.type === 'update') {
-          tasks.value.set(data.task.id, data.task);
+          if (!batchMap) {
+            batchMap = new Map();
+            void Promise.resolve().then(flushBatch);
+          }
+          batchMap.set(data.task.id, data.task);
         }
       } catch {
         /* ignore SSE parse errors */

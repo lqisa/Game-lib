@@ -263,6 +263,7 @@ import { getGridCols, useViewportWidth } from '../composables/useGridLayout';
 import { useGameListStore } from '../stores/gameListStore';
 import GameCard from '../components/GameCard.vue';
 import VirtualGrid from '../components/VirtualGrid.vue';
+import type { VirtualGridExposed } from '../components/VirtualGrid.types';
 import ScannerDialog from '../components/ScannerDialog.vue';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
 import FilterDialog from '../components/FilterDialog.vue';
@@ -277,6 +278,13 @@ interface GameItem {
   sub_path: string;
   library_path: string;
   is_favorite: boolean;
+  // A cover is fetched through the game's source, so this decides whether a missing cover is
+  // repairable at all. Sent by GET /games for exactly that reason.
+  hasSource: boolean;
+  // cover_path names a file that is not on disk (swapped data directory, manual clean, a scrape
+  // that died between the row and the write). Sent by GET /games, because the string alone cannot
+  // say whether the cover is there.
+  coverMissing: boolean;
 }
 
 interface FilterState {
@@ -287,6 +295,7 @@ interface FilterState {
   tagIds: number[];
   scraped: 'all' | 'yes' | 'no';
   duplicate: 'all' | 'yes' | 'no';
+  r18: 'all' | 'yes' | 'no';
 }
 
 const router = useRouter();
@@ -329,6 +338,7 @@ const DEFAULT_FILTER: FilterState = {
   tagIds: [],
   scraped: 'all',
   duplicate: 'all',
+  r18: 'all',
 };
 
 const currentFilter = ref<FilterState>({ ...DEFAULT_FILTER });
@@ -390,6 +400,7 @@ const activeFilterCount = computed(() => {
   if (f.tagIds.length > 0) count++;
   if (f.scraped !== 'all') count++;
   if (f.duplicate !== 'all') count++;
+  if (f.r18 !== 'all') count++;
   return count;
 });
 
@@ -412,9 +423,7 @@ const confirmSingleDeleteId = ref<number | null>(null);
 const showSingleDeleteDialog = ref(false);
 
 const gridContainer = ref<HTMLElement | null>(null);
-const virtualGrid = ref<{ scrollTo: (top: number) => void; getScrollTop: () => number } | null>(
-  null,
-);
+const virtualGrid = ref<VirtualGridExposed<GameItem> | null>(null);
 const viewportWidth = useViewportWidth();
 
 const CARD_ASPECT = 2.8 / 4;
@@ -629,6 +638,8 @@ const loadGames = async () => {
     else if (f.scraped === 'no') params.scraped = 'false';
     if (f.duplicate === 'yes') params.duplicate = 'yes';
     else if (f.duplicate === 'no') params.duplicate = 'no';
+    if (f.r18 === 'yes') params.r18 = 'yes';
+    else if (f.r18 === 'no') params.r18 = 'no';
     if (favoritesMode.value) params.favoritesOnly = 'true';
     params.sortBy = sortBy.value;
     params.sortOrder = sortOrder.value;
@@ -637,45 +648,143 @@ const loadGames = async () => {
     if (seq !== loadGamesSeq) return;
     games.value = res.data.games;
     gameListStore.filteredCount = res.data.games.length;
-    coverRepairRounds = 0;
-    void repairMissingCovers(seq);
   } finally {
     if (seq === loadGamesSeq) loading.value = false;
     void loadDuplicates();
   }
 };
 
-// A cover can be missing because the download failed (network) or because the app was closed
-// while it was still running. Ask the server to re-fetch the ones for the games on screen and
-// patch them in place, so the placeholder turns into the real image without a manual re-scrape.
-let coverRepairRounds = 0;
-const COVER_REPAIR_ROUNDS = 3;
+// Repair covers for visible games that are missing cover art on disk.
+// ── Strategy ──
+// • Driven by virtual-scroll visibility: only games in or near the viewport are checked.
+// • A cover is fetched through the game's source, so a game without one (never scraped, not a
+//   lost cover) is skipped here and never asked about - the server cannot resolve anything for
+//   it, and asking on every list load was pure noise. The list reports `hasSource` per game.
+// • A cover_path whose file is gone counts as repairable too (`coverMissing`): the server can
+//   re-download it, and leaving it out was what kept those cards on a placeholder forever.
+// • Games that have a source but whose cover download failed are retried with backoff.
+// • The server already has its own 10-min failure-TTL; our backoff avoids hammering it.
 
-const repairMissingCovers = async (seq: number) => {
-  const ids = games.value.map((g) => g.id);
-  if (ids.length === 0) return;
+interface RepairRecord {
+  at: number;
+  retries: number;
+}
+const repRec = new Map<number, RepairRecord>();
+const unscrapedIds = new Set<number>();
+let repairPending = false;
+const BACKOFF_MS = [30_000, 120_000, 300_000, 600_000];
+
+// Where "ask the server to fetch this cover" is decided - one definition, used by the repair pass
+// and by the watcher that schedules it.
+const needsCoverRepair = (item: GameItem) =>
+  (!item.cover_path || item.coverMissing) && item.hasSource;
+
+const rememberFailure = (id: number, at: number) => {
+  const prev = repRec.get(id) ?? { at: 0, retries: 0 };
+  repRec.set(id, { at, retries: prev.retries + 1 });
+};
+
+const lazyRepairCovers = async () => {
+  if (repairPending) return;
+  const visItems = virtualGrid.value?.getVisibleItems();
+  if (!visItems || visItems.length === 0) return;
+
+  const now = Date.now();
+  const needsRepair: number[] = [];
+  for (const vis of visItems) {
+    const id = vis.item.id;
+    if (unscrapedIds.has(id)) continue;
+    // Nothing to repair without a source (see the strategy note above). This is not remembered
+    // in unscrapedIds on purpose: the flag comes from the list, which reloads, so a game that
+    // gets scraped later must become repairable again without a page reload.
+    if (!needsCoverRepair(vis.item)) continue;
+    const rec = repRec.get(id);
+    if (rec) {
+      const delay = BACKOFF_MS[Math.min(rec.retries, BACKOFF_MS.length - 1)] ?? 600_000;
+      if (now - rec.at < delay) continue;
+    }
+    needsRepair.push(id);
+    if (needsRepair.length >= 8) break;
+  }
+  if (needsRepair.length === 0) return;
+
+  repairPending = true;
   try {
-    const res = await api.post('/cover/repair', { gameIds: ids, limit: 8 });
-    if (seq !== loadGamesSeq) return;
+    // A row that has to re-read its source can spend 15s downloading, 3 x 15s retrying the entry
+    // and 15s again - so the default 30s request timeout aborts batches the server is still
+    // working on, and (before the catch below) the abort was invisible to the backoff.
+    const res = await api.post(
+      '/cover/repair',
+      { gameIds: needsRepair, limit: 8 },
+      { timeout: 90_000 },
+    );
     const repaired: { gameId: number; coverPath: string }[] = res.data?.repaired ?? [];
+    // Both are per game, and both mean "stop asking": noSource for a game the repair pass has no
+    // source for at all, hopelessIds for one whose source offers nothing to derive or re-read.
+    // A request-level counter could not tell either of those from a game whose download simply
+    // failed, so those ids came back on every list load, forever.
+    const giveUpIds = new Set<number>([
+      ...(res.data?.noSource ?? []),
+      ...(res.data?.hopelessIds ?? []),
+    ]);
+
     if (repaired.length > 0) {
       const byId = new Map(repaired.map((r) => [r.gameId, r.coverPath]));
       for (const game of games.value) {
         const coverPath = byId.get(game.id);
-        if (coverPath && game.cover_path !== coverPath) game.cover_path = coverPath;
+        if (!coverPath) continue;
+        if (game.cover_path !== coverPath) game.cover_path = coverPath;
+        // A re-download can land on the same file name, so this flag - not cover_path - is what
+        // tells the card that the placeholder can go.
+        game.coverMissing = false;
       }
     }
-    // More are still missing - check again shortly, a few times per visit.
-    if ((res.data?.missing ?? 0) > 0 && coverRepairRounds < COVER_REPAIR_ROUNDS) {
-      coverRepairRounds++;
-      window.setTimeout(() => {
-        void repairMissingCovers(seq);
-      }, 4000);
+
+    for (const id of needsRepair) {
+      if (repaired.some((r) => r.gameId === id)) {
+        repRec.delete(id);
+        continue;
+      }
+      if (giveUpIds.has(id)) {
+        unscrapedIds.add(id);
+        repRec.delete(id);
+        continue;
+      }
+      rememberFailure(id, now);
     }
   } catch {
-    // non-critical: the covers simply stay as they are
+    // Non-critical for the covers, but the batch must not be retried straight away: the request
+    // can time out while the server is still downloading, and without a backoff the next
+    // visibility change would ask for the same rows again.
+    for (const id of needsRepair) rememberFailure(id, Date.now());
+  } finally {
+    repairPending = false;
   }
 };
+
+// Watch visible items and repair covers for games that scroll into view
+let repairDebounce: ReturnType<typeof setTimeout> | null = null;
+watch(
+  () => virtualGrid.value?.getVisibleItems(),
+  (visItems) => {
+    if (!visItems || visItems.length === 0) return;
+    const now = Date.now();
+    const hasPending = visItems.some((vis) => {
+      const id = vis.item.id;
+      if (unscrapedIds.has(id)) return false;
+      if (!needsCoverRepair(vis.item)) return false;
+      const rec = repRec.get(id);
+      if (!rec) return true;
+      const delay = BACKOFF_MS[Math.min(rec.retries, BACKOFF_MS.length - 1)] ?? 600_000;
+      return now - rec.at >= delay;
+    });
+    if (!hasPending) return;
+    if (repairDebounce) clearTimeout(repairDebounce);
+    repairDebounce = setTimeout(() => {
+      void lazyRepairCovers();
+    }, 300);
+  },
+);
 
 const searchGames = () => {
   games.value = [];
@@ -749,8 +858,11 @@ const SCROLL_KEY_FAV = '__game_lib_scroll_fav__';
 const getScrollKey = () => (favoritesMode.value ? SCROLL_KEY_FAV : SCROLL_KEY);
 
 const saveScrollPosition = () => {
-  const scrollTop = virtualGrid.value?.getScrollTop() ?? 0;
-  sessionStorage.setItem(getScrollKey(), String(scrollTop));
+  // The grid is gone once the page unmounts, and `?? 0` would then store a made-up "top of the
+  // list" over the real position `onBeforeUnmount` just saved - which is why coming back from a
+  // detail page landed at the top instead of where the user was.
+  if (!virtualGrid.value) return;
+  sessionStorage.setItem(getScrollKey(), String(virtualGrid.value.getScrollTop()));
 };
 
 let scrollSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -911,10 +1023,26 @@ const onDropAdopt = async (data: DropAdoptData) => {
   }
 };
 
+let hasNotifiedReady = false;
+const notifyInitialRenderComplete = () => {
+  if (hasNotifiedReady) return;
+  hasNotifiedReady = true;
+  void nextTick(() => {
+    if (window.electronAPI?.readyForBackgroundTasks) {
+      void window.electronAPI.readyForBackgroundTasks();
+    } else {
+      void api.post('/tasks/start-workers').catch(() => {});
+    }
+  });
+};
+
 onMounted(() => {
   restoreFilterState();
   restoringScroll.value = true;
-  void loadGames().then(() => restoreScroll());
+  void loadGames().then(() => {
+    restoreScroll();
+    notifyInitialRenderComplete();
+  });
   window.addEventListener('keydown', onKeydown);
 });
 
@@ -925,6 +1053,11 @@ onUnmounted(() => {
 onBeforeUnmount(() => {
   saveScrollPosition();
   saveFilterState();
+  // Pending debounces outlive the component otherwise: the scroll one would overwrite the
+  // position saved above, and the search one would fire a request for a list nobody is on.
+  if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+  if (searchTimer) clearTimeout(searchTimer);
+  if (repairDebounce) clearTimeout(repairDebounce);
   gameListStore.filteredCount = 0;
 });
 </script>

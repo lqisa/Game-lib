@@ -129,6 +129,7 @@ await db('game').where(...)  // TypeError: db is not a function
 nsfwjs 使用 TensorFlow.js 的 WebGL 后端。连续分类大量图片时，中间 tensor 不清理会导致 WebGL 资源泄漏 → context lost。
 
 **必须**：
+
 1. 每轮用 `tf.tidy()` 包裹，自动清理中间 tensor
 2. 批次大小不超过 50（原 500 会导致 WebGL 崩溃）
 3. 每张图之间节流 50ms

@@ -210,5 +210,48 @@ describe('Task Routes', () => {
         assert.ok(!('childProcess' in t));
       }
     });
+
+    it('should send a remove event when a task is deleted', async () => {
+      // The delete request answers 204 and the task is gone on the server, so without this event
+      // the row sits in the panel until the client happens to reconnect and re-snapshot.
+      const task = createTask('move', { source: 'A', dest: 'B' });
+      updateTask(task.id, { status: 'completed' });
+
+      const url = new URL('/api/tasks/events', baseUrl);
+      url.searchParams.set('token', process.env.SSE_TOKEN || 'test-token');
+      const res = await fetch(url);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      let data = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        data += decoder.decode(value, { stream: true });
+        if (data.includes('\n\n')) break; // the snapshot
+      }
+
+      await request('DELETE', `/api/tasks/${task.id}`);
+
+      // Bounded read: a missing event has to fail the assertion, not hang the run.
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline && !data.includes('"remove"')) {
+        const chunk = await Promise.race([
+          reader.read(),
+          new Promise((resolve) => setTimeout(() => resolve({ done: true }), 250)),
+        ]);
+        if (chunk.done) break;
+        data += decoder.decode(chunk.value, { stream: true });
+      }
+      reader.cancel();
+
+      const events = data
+        .split('\n\n')
+        .filter((s) => s.startsWith('data: '))
+        .map((s) => JSON.parse(s.replace('data: ', '')));
+      const removed = events.find((e) => e.type === 'remove');
+      assert.ok(removed, 'a deleted task must be announced');
+      assert.equal(removed.id, task.id);
+    });
   });
 });

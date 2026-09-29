@@ -23,9 +23,11 @@
 ### Task 1: Create similar-worker.js
 
 **Files:**
+
 - Create: `server/similar-worker.js`
 
 **Interfaces:**
+
 - Consumes: `computeSimilarPairs` from `similar.js`, `db.js` for settings, `parentPort` from `node:worker_threads`
 - Produces: Worker thread that handles `{ type: 'trigger-scan' }`, `{ type: 'run-scan', full, taskId }`, `{ type: 'cancel', taskId }` messages; sends `{ type: 'task-create' }`, `{ type: 'task-update' }`, `{ type: 'log' }`, `{ type: 'warn' }` back
 
@@ -119,7 +121,10 @@ const runScan = async ({ full = false, taskId = null } = {}) => {
 };
 
 const onTriggerScan = () => {
-  if (scanRunning) { needsRescan = true; return; }
+  if (scanRunning) {
+    needsRescan = true;
+    return;
+  }
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
@@ -131,11 +136,17 @@ parentPort?.on('message', (msg) => {
   if (msg.type === 'trigger-scan') {
     onTriggerScan();
   } else if (msg.type === 'run-scan') {
-    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
     runScan({ full: msg.full, taskId: msg.taskId });
   } else if (msg.type === 'cancel') {
     needsRescan = false;
-    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
   }
 });
 
@@ -159,9 +170,11 @@ git commit -m "feat: add similar-worker.js with debounce and task protocol"
 ### Task 2: Create similar-classifier.js
 
 **Files:**
+
 - Create: `server/similar-classifier.js`
 
 **Interfaces:**
+
 - Consumes: `tasks.js` (createTask, updateTask), `db.js` (for first-boot check), `node:worker_threads`
 - Produces: `startSimilarWorker()`, `triggerSimilarScan()`, `requestFullScan()`
 
@@ -254,14 +267,17 @@ git commit -m "feat: add similar-classifier.js main-thread side"
 ### Task 3: Trim similar.js
 
 **Files:**
+
 - Modify: `server/similar.js` — remove `runSimilarScan`, `maybeStartSimilarScan`, `startSimilarScanPolling`, and related imports/variables
 
 **Interfaces:**
+
 - Produces: `computeSimilarPairs` (unchanged, used by tests and worker)
 
 - [ ] **Step 1: Remove the task/polling functions from similar.js**
 
 Remove these items from `server/similar.js`:
+
 - `import { createTask, getTask, updateTask } from './tasks.js';`
 - `let scanRunning = false;`
 - `const SCAN_POLL_MS = 60_000;`
@@ -288,14 +304,17 @@ git commit -m "refactor: trim similar.js to pure computation (computeSimilarPair
 ### Task 4: Update tasks.js label map
 
 **Files:**
+
 - Modify: `server/tasks.js` — add `nsfw-scan` to the `createTask` label logic
 
 **Interfaces:**
+
 - Produces: `createTask` now handles `type === 'similar-scan'` and `type === 'nsfw-scan'`
 
 - [ ] **Step 1: Update the label logic in createTask**
 
 Current code (line ~17):
+
 ```js
 label:
   type === 'move'
@@ -306,6 +325,7 @@ label:
 ```
 
 Change to:
+
 ```js
 label:
   type === 'move'
@@ -334,9 +354,11 @@ git commit -m "feat: add nsfw-scan label to createTask"
 ### Task 5: Update nsfw-worker.js with task protocol
 
 **Files:**
+
 - Modify: `server/nsfw-worker.js` — add `task-create`/`task-update` messages for model loading, classification rounds, and errors
 
 **Interfaces:**
+
 - Consumes: `parentPort`, `r18.js` (getUnknownR18Games, storeDetectionResults)
 - Produces: `task-create` / `task-update` messages alongside existing `log`/`warn`
 
@@ -425,13 +447,11 @@ const classifyImage = async (coverPath) => {
 
   let inputTensor;
   try {
-    const rgb = await sharp(fullPath)
-      .resize(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE)
-      .raw()
-      .toBuffer();
+    const rgb = await sharp(fullPath).resize(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE).raw().toBuffer();
 
     inputTensor = tf.tidy(() =>
-      tf.tensor3d(new Uint8Array(rgb), [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3], 'int32')
+      tf
+        .tensor3d(new Uint8Array(rgb), [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3], 'int32')
         .toFloat()
         .div(255),
     );
@@ -460,7 +480,9 @@ const cleanupLeakedTensors = () => {
   const after = tf.memory().numTensors;
   const cleaned = current - after;
   if (cleaned > 0) {
-    log(`[nsfw-classifier] cleaned ${cleaned} leaked tensors (was ${current}, baseline ${baselineTensors})`);
+    log(
+      `[nsfw-classifier] cleaned ${cleaned} leaked tensors (was ${current}, baseline ${baselineTensors})`,
+    );
   }
 };
 
@@ -537,7 +559,9 @@ const startPolling = async () => {
       setTimeout(loop, next);
     });
   };
-  log(`[nsfw-classifier] polling started in worker (active=${ACTIVE_INTERVAL_MS}ms, idle=${IDLE_INTERVAL_MS}ms)`);
+  log(
+    `[nsfw-classifier] polling started in worker (active=${ACTIVE_INTERVAL_MS}ms, idle=${IDLE_INTERVAL_MS}ms)`,
+  );
   loop();
 };
 
@@ -561,9 +585,11 @@ git commit -m "feat: nsfw-worker reports progress via task-create/task-update pr
 ### Task 6: Update nsfw-classifier.js to handle task messages
 
 **Files:**
+
 - Modify: `server/nsfw-classifier.js` — add `task-create`/`task-update` message handling
 
 **Interfaces:**
+
 - Produces: `startNsfwPolling()` (unchanged signature), now also forwards task messages to tasks.js
 
 - [ ] **Step 1: Update nsfw-classifier.js message handler**
@@ -580,8 +606,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let worker = null;
 let latestTaskId = null;
 
-export const initNsfwClassifier = async () => {
-};
+export const initNsfwClassifier = async () => {};
 
 export const startNsfwPolling = () => {
   if (worker) return;
@@ -636,24 +661,30 @@ git commit -m "feat: nsfw-classifier handles task-create/task-update from worker
 ### Task 7: Update dev.js and electron-main.ts
 
 **Files:**
+
 - Modify: `server/dev.js` — replace similar.js imports with similar-classifier.js
 - Modify: `src-electron/electron-main.ts` — replace similar.js imports with similar-classifier.js
 
 **Interfaces:**
+
 - Consumes: `similar-classifier.js` (startSimilarWorker), `nsfw-classifier.js` (startNsfwPolling)
 
 - [ ] **Step 1: Update dev.js**
 
 Replace import:
+
 ```js
 import { maybeStartSimilarScan, startSimilarScanPolling } from './similar.js';
 ```
+
 With:
+
 ```js
 import { startSimilarWorker } from './similar-classifier.js';
 ```
 
 Replace startup block:
+
 ```js
 if (!isTestEnv()) {
   void maybeStartSimilarScan();
@@ -661,7 +692,9 @@ if (!isTestEnv()) {
   startNsfwPolling();
 }
 ```
+
 With:
+
 ```js
 if (!isTestEnv()) {
   void startSimilarWorker();
@@ -672,6 +705,7 @@ if (!isTestEnv()) {
 - [ ] **Step 2: Update electron-main.ts**
 
 Replace lines 91-97:
+
 ```js
 const similarUrl = pathToFileURL(path.resolve(serverDir, 'similar.js')).href;
 const { maybeStartSimilarScan, startSimilarScanPolling } = await import(similarUrl);
@@ -682,7 +716,9 @@ const nsfwUrl = pathToFileURL(path.resolve(serverDir, 'nsfw-classifier.js')).hre
 const { startNsfwPolling } = await import(nsfwUrl);
 startNsfwPolling();
 ```
+
 With:
+
 ```js
 const similarClassifierUrl = pathToFileURL(path.resolve(serverDir, 'similar-classifier.js')).href;
 const { startSimilarWorker } = await import(similarClassifierUrl);
@@ -710,24 +746,30 @@ git commit -m "refactor: switch to similar-classifier worker in dev.js and elect
 ### Task 8: Update routes — game.js and scraper.js
 
 **Files:**
+
 - Modify: `server/routes/game.js` — replace `runSimilarScan` import with `requestFullScan` from similar-classifier, add `triggerSimilarScan` on game creation
 - Modify: `server/routes/scraper.js` — add `triggerSimilarScan` after adopt/batch-adopt
 
 **Interfaces:**
+
 - Consumes: `similar-classifier.js` (requestFullScan, triggerSimilarScan)
 
 - [ ] **Step 1: Update game.js**
 
 Replace import (line 7):
+
 ```js
 import { runSimilarScan } from '../similar.js';
 ```
+
 With:
+
 ```js
 import { requestFullScan, triggerSimilarScan } from '../similar-classifier.js';
 ```
 
 Replace the `/similar-scan` handler (lines 387-393):
+
 ```js
 router.post('/similar-scan', async (req, res, next) => {
   try {
@@ -739,7 +781,9 @@ router.post('/similar-scan', async (req, res, next) => {
   }
 });
 ```
+
 With:
+
 ```js
 router.post('/similar-scan', async (req, res, next) => {
   try {
@@ -757,20 +801,23 @@ Find the `POST /` route for game creation and add `triggerSimilarScan()` after t
 - [ ] **Step 2: Update scraper.js**
 
 Add import at top:
+
 ```js
 import { triggerSimilarScan } from '../similar-classifier.js';
 ```
 
 After the single adopt handler succeeds (around line 438), add `triggerSimilarScan()` after `res.send(game)`:
+
 ```js
-    res.send(game);
-    triggerSimilarScan();
+res.send(game);
+triggerSimilarScan();
 ```
 
 After the batch-adopt handler succeeds, add `triggerSimilarScan()` after the response is sent:
+
 ```js
-    res.send(results);
-    triggerSimilarScan();
+res.send(results);
+triggerSimilarScan();
 ```
 
 - [ ] **Step 3: Verify syntax**
@@ -790,24 +837,30 @@ git commit -m "feat: routes use similar-classifier for scan triggers"
 ### Task 9: Update frontend — taskStore.ts and TaskPanel.vue
 
 **Files:**
+
 - Modify: `src/stores/taskStore.ts` — add `similar-scan` and `nsfw-scan` to Task type union
 - Modify: `src/components/TaskPanel.vue` — add icons for new task types
 
 **Interfaces:**
+
 - Consumes: SSE task updates (already working, just need type + icon support)
 
 - [ ] **Step 1: Update taskStore.ts Task type**
 
 Change the `type` field from:
+
 ```ts
 type: 'move' | 'extract';
 ```
+
 To:
+
 ```ts
 type: 'move' | 'extract' | 'similar-scan' | 'nsfw-scan';
 ```
 
 Update the `meta` type to accommodate all task types:
+
 ```ts
 meta: {
     source?: string;
@@ -827,20 +880,16 @@ meta: {
 - [ ] **Step 2: Update TaskPanel.vue icon logic**
 
 Change the icon binding from:
+
 ```vue
 :name="task.type === 'move' ? 'drive_file_move' : 'archive'"
 ```
+
 To:
+
 ```vue
-:name="
-  task.type === 'move'
-    ? 'drive_file_move'
-    : task.type === 'similar-scan'
-      ? 'content_copy'
-      : task.type === 'nsfw-scan'
-        ? 'visibility'
-        : 'archive'
-"
+:name=" task.type === 'move' ? 'drive_file_move' : task.type === 'similar-scan' ? 'content_copy' :
+task.type === 'nsfw-scan' ? 'visibility' : 'archive' "
 ```
 
 - [ ] **Step 3: Verify TypeScript compiles**
@@ -860,6 +909,7 @@ git commit -m "feat: add similar-scan and nsfw-scan task types to frontend"
 ### Task 10: Run existing tests
 
 **Files:**
+
 - Test: `server/__tests__/similar-scan.test.js`
 
 - [ ] **Step 1: Run the similar-scan tests**

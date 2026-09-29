@@ -8,7 +8,14 @@ import gameRouter from '../routes/game.js';
 import * as db from '../database/db.js';
 import { initDatabase } from '../database/init.js';
 import { closePool } from '../database/db.js';
-import { getTask, getAllTasks, updateTask, removeTask, createTask } from '../tasks.js';
+import {
+  getTask,
+  getAllTasks,
+  updateTask,
+  removeTask,
+  createTask,
+  executeExtractTask,
+} from '../tasks.js';
 
 const request = async (method, url, body) => {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -318,6 +325,90 @@ describe('Game Relocate Route', () => {
     await db.knex('game').where({ id: archiveGameId }).del();
     await teardownGame(tmpDir, libId, 0);
     server.close();
+  });
+
+  it('updates the record instead of extracting when the archive is already gone', async () => {
+    // The user extracted by hand and deleted the .rar. There is nothing to extract, and treating
+    // the target as an extraction destination is what let a later failure delete their folder.
+    await initDatabase();
+    const app = express();
+    app.use(express.json());
+    app.use('/api/games', gameRouter);
+    const server = await new Promise((r) => {
+      const s = app.listen(0, '127.0.0.1', () => r(s));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const { tmpDir, libDir, libId } = await setupGame(base);
+
+    const archiveDir = path.join(libDir, 'GoneArchive');
+    fs.mkdirSync(archiveDir, { recursive: true });
+    const archivePath = path.join(archiveDir, 'gone.7z');
+    fs.writeFileSync(archivePath, 'fake archive');
+
+    const [gid2] = await db.knex('game').insert(
+      {
+        name: 'GoneArchive_' + Date.now(),
+        library_id: libId,
+        sub_path: 'GoneArchive/gone.7z',
+      },
+      ['id'],
+    );
+    const goneGameId = gid2.id || gid2;
+
+    // What the user did by hand: extract elsewhere, then throw the archive away.
+    const destDir = path.join(tmpDir, 'RepoB', 'GoneArchive');
+    fs.mkdirSync(destDir, { recursive: true });
+    const userFile = path.join(destDir, 'save-data.txt');
+    fs.writeFileSync(userFile, 'precious');
+    fs.rmSync(archivePath);
+
+    try {
+      const res = await request('PUT', `${base}/api/games/${goneGameId}/relocate`, {
+        newPath: destDir,
+        moveFiles: true,
+      });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.operation, 'update_only', 'nothing to extract, so nothing to run');
+      assert.equal(res.body.taskId, null);
+      assert.ok(fs.existsSync(userFile), 'the folder the user extracted must be left alone');
+      const row = await db.knex('game').where({ id: goneGameId }).first();
+      assert.equal(row.sub_path, destDir, 'the record follows the new path');
+    } finally {
+      // Closed in a finally so a failing assertion cannot leave the listener holding the test
+      // process open.
+      await db.knex('game').where({ id: goneGameId }).del();
+      await teardownGame(tmpDir, libId, 0);
+      server.close();
+    }
+  });
+
+  it('never removes a target directory that already had content', async (t) => {
+    // cleanupDest used to remove whatever sat at the target, so a failed extraction - a wrong
+    // password, a missing volume, an archive that will not open - wiped a folder the user had
+    // filled themselves.
+    await initDatabase();
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gamelib-extract-'));
+    const archivePath = path.join(tmpDir, 'broken.7z');
+    fs.writeFileSync(archivePath, 'not really an archive');
+    const dest = path.join(tmpDir, 'dest');
+    fs.mkdirSync(dest, { recursive: true });
+    const userFile = path.join(dest, 'keep-me.txt');
+    fs.writeFileSync(userFile, 'precious');
+
+    const task = createTask('extract', { archivePath, dest });
+    try {
+      await executeExtractTask(task.id, archivePath, dest, 0, null, 'x');
+      const finished = getTask(task.id);
+      if (finished?.error?.includes('No extraction tool')) {
+        return t.skip('no extraction tool on this machine');
+      }
+      assert.ok(fs.existsSync(userFile), "the user's file must survive a failed extraction");
+      assert.equal(finished?.status, 'failed');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      cleanupTasks();
+    }
   });
 
   it('should update path when source does not exist and moveFiles is true', async () => {
