@@ -125,6 +125,9 @@ const TABLE_DDL = {
       table.text('genres').notNullable().defaultTo('[]');
       table.text('tags').notNullable().defaultTo('[]');
       table.text('description');
+      // Vendor adult flag carried through the cache (Bangumi publishes one per entry). NULL means
+      // the vendor does not say, which leaves the decision to the per-vendor rule or the classifier.
+      table.integer('nsfw');
       table.dateTime('created_at').defaultTo(knex.fn.now());
       table.dateTime('updated_at').defaultTo(knex.fn.now());
       table.primary(['library_id', 'sub_path']);
@@ -459,6 +462,22 @@ const initDatabase = async () => {
     console.log(' * Migration v13 done.');
   }
 
+  // Migration v14: the adopt cache carries the vendor adult flag. A reopened scan dialog (or an
+  // offline run) rebuilds its adopt payload from this cache, so a flag that is not stored here is
+  // lost before the batch adopt can put it into the R18 column.
+  const v14 = await knex('setting').where({ key: 'migration_v14' }).first();
+  if (!v14) {
+    console.log(' * Running migration v14: add adopt_cache.nsfw...');
+    const cols = await knex
+      .raw('PRAGMA table_info("adopt_cache")')
+      .then((r) => r.map((c) => c.name));
+    if (!cols.includes('nsfw')) {
+      await knex.raw('ALTER TABLE adopt_cache ADD COLUMN nsfw INTEGER');
+    }
+    await knex('setting').insert({ key: 'migration_v14', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v14 done.');
+  }
+
   const hasGameTable = await knex.schema.hasTable('game');
   if (hasGameTable) {
     const cols = await knex.raw('PRAGMA table_info("game")').then((r) => r.map((c) => c.name));
@@ -467,5 +486,4 @@ const initDatabase = async () => {
     }
   }
 };
-
 export { initDatabase };

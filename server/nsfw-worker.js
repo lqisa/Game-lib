@@ -72,6 +72,28 @@ const initModel = async () => {
   }
 };
 
+/**
+ * The tensor the model is fed. Split out so it can be tested without loading a model, and kept
+ * at 0..255: nsfwjs divides by 255 itself (`core.js`: normalizationOffset = tf.scalar(255)), and
+ * scaling here as well fed the network an almost black image - the output stopped depending on
+ * the input at all, so every cover came back "safe".
+ */
+const buildInputTensor = (tfModule, rgb, size) =>
+  tfModule.tidy(() => tfModule.tensor3d(new Uint8Array(rgb), [size, size, 3], 'int32').toFloat());
+
+/**
+ * The verdict, split out so it can be tested without a model.
+ *
+ * Adult *illustration* lands in the model's Hentai class - measured on a cover whose vendor calls
+ * it R18: hentai 0.982, porn 0.007, sexy 0.000 - so judging on the photographic classes alone
+ * called every illustrated cover safe. All ages covers score <= 0.005 there.
+ */
+const isR18 = (predictions) => {
+  const probabilityOf = (name) => predictions?.find((p) => p.className === name)?.probability ?? 0;
+  const adult = probabilityOf('Hentai') + probabilityOf('Porn') + probabilityOf('Sexy');
+  return adult > R18_THRESHOLD ? 1 : 0;
+};
+
 const classifyImage = async (coverPath) => {
   const fullPath = path.join(getDataDir(), 'covers', coverPath);
   // No file, no verdict. Returning 0 here wrote the game down as "safe" for good, because only
@@ -82,12 +104,7 @@ const classifyImage = async (coverPath) => {
   try {
     const rgb = await sharp(fullPath).resize(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE).raw().toBuffer();
 
-    inputTensor = tf.tidy(() =>
-      tf
-        .tensor3d(new Uint8Array(rgb), [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3], 'int32')
-        .toFloat()
-        .div(255),
-    );
+    inputTensor = buildInputTensor(tf, rgb, MODEL_INPUT_SIZE);
 
     const predictions = await classifyFn(inputTensor);
 
@@ -227,4 +244,4 @@ const startPolling = async () => {
 // does exactly that - must not load a model, which would be a multi-second CPU and disk burst.
 if (parentPort) startPolling();
 
-export { classifyImage };
+export { classifyImage, buildInputTensor, isR18 };

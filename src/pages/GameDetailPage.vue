@@ -943,6 +943,9 @@ const onReScrape = async (data: AdoptData) => {
     genres: data.detail.genres,
     tags: data.detail.tags,
     description: data.detail.description,
+    // Vendor metadata decides R18 where it exists (Bangumi's per-entry nsfw flag); without it the
+    // server falls back to the per-vendor rule.
+    nsfw: data.detail.nsfw,
   });
   await loadGame();
 };

@@ -972,6 +972,7 @@ interface DropAdoptData {
     genres: string[];
     tags: string[];
     description: string;
+    nsfw?: boolean | undefined;
   };
 }
 
@@ -1016,6 +1017,7 @@ const onDropAdopt = async (data: DropAdoptData) => {
       genres: data.detail.genres,
       tags: data.detail.tags,
       description: data.detail.description,
+      nsfw: data.detail.nsfw,
     });
     await loadGames();
   } catch {

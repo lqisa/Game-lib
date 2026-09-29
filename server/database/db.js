@@ -590,6 +590,7 @@ const setAdoptCache = async ({
   genres,
   tags,
   description,
+  nsfw,
 }) => {
   const data = {
     game_id: gameId || 0,
@@ -604,6 +605,8 @@ const setAdoptCache = async ({
     genres: JSON.stringify(genres || []),
     tags: JSON.stringify(tags || []),
     description: description || null,
+    // 1/0 when the vendor publishes a flag, NULL when it does not ("no opinion", not "safe").
+    nsfw: typeof nsfw === 'boolean' ? (nsfw ? 1 : 0) : null,
     updated_at: db.fn.now(),
   };
   await db('adopt_cache').insert(data).onConflict(['library_id', 'sub_path']).merge();

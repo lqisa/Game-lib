@@ -445,6 +445,8 @@ interface AdoptCacheEntry {
   genres: string[];
   tags: string[];
   description: string | null;
+  /** Vendor adult flag as stored: 1/0, or null when the vendor publishes none. */
+  nsfw: number | null;
 }
 
 interface ScanRow {
@@ -476,6 +478,8 @@ interface SubmitGame {
   genres: string[];
   tags: string[];
   description: string;
+  /** Vendor adult flag, straight from the detail read (Bangumi publishes one per entry). */
+  nsfw?: boolean | undefined;
 }
 
 interface ConflictInfo {
@@ -761,6 +765,7 @@ const preloadAdoptCache = async () => {
             genres: cached.genres || [],
             tags: cached.tags || [],
             description: cached.description || '',
+            nsfw: cached.nsfw === 1,
           },
         };
         row.status = 'adopted';
@@ -888,6 +893,7 @@ const scanDir = async () => {
                   genres: cached.genres || [],
                   tags: cached.tags || [],
                   description: cached.description || '',
+                  nsfw: cached.nsfw === 1,
                 },
               };
               row.status = 'adopted';
@@ -1017,6 +1023,7 @@ const expandRow = async (row: ScanRow) => {
                   genres: cached.genres || [],
                   tags: cached.tags || [],
                   description: cached.description || '',
+                  nsfw: cached.nsfw === 1,
                 },
               };
               child.status = 'adopted';
@@ -1077,6 +1084,7 @@ const saveAdoptCache = (row: ScanRow) => {
       genres: d.detail.genres,
       tags: d.detail.tags,
       description: d.detail.description,
+      nsfw: d.detail.nsfw,
     })
     .catch(() => {});
 };
@@ -1446,6 +1454,7 @@ const submitAdopted = async () => {
           genres: d.detail.genres,
           tags: d.detail.tags,
           description: d.detail.description,
+          nsfw: d.detail.nsfw,
         };
       });
 

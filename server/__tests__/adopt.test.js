@@ -157,3 +157,150 @@ describe('POST /api/scraper/adopt/batch persists the cover URL', () => {
     assert.deepEqual(JSON.parse(batch.raw_data), JSON.parse(single.raw_data));
   });
 });
+
+/**
+ * Where an R18 flag comes from at adoption time: the vendor's own metadata when it publishes one
+ * (Bangumi's per-entry nsfw), otherwise the per-vendor rule (DMM/DLsite adult sites, Steam all
+ * ages). Both adopt paths have to apply it - the batch path used to write only the description,
+ * cover and relations, so every game adopted in a batch was left unknown for the classifier.
+ */
+describe('adoption sets the R18 flag from vendor metadata', () => {
+  const gameRow = (id) => db.knex('game').where({ id }).first('r18', 'r18_source');
+
+  it('uses the explicit flag on the batch path', async () => {
+    const gameId = await resetGame();
+    await request('/api/scraper/adopt/batch', {
+      games: [
+        {
+          gameId,
+          sourceType: 'bangumi',
+          sourceId: '240066',
+          name: 'Adult Bangumi Entry',
+          coverUrl: '',
+          makers: [],
+          genres: [],
+          tags: [],
+          description: '',
+          nsfw: true,
+        },
+      ],
+    });
+
+    const row = await gameRow(gameId);
+    assert.equal(row.r18, 1);
+    assert.equal(row.r18_source, 'vendor');
+  });
+
+  it('uses the explicit flag on the single path too', async () => {
+    const gameId = await resetGame();
+    await request('/api/scraper/adopt', {
+      gameId,
+      sourceType: 'bangumi',
+      sourceId: '523908',
+      name: 'All ages Bangumi Entry',
+      coverUrl: '',
+      makers: [],
+      genres: [],
+      tags: [],
+      description: '',
+      nsfw: false,
+    });
+
+    const row = await gameRow(gameId);
+    assert.equal(row.r18, 0);
+    assert.equal(row.r18_source, 'vendor');
+  });
+
+  it('leaves Bangumi unknown when the flag is missing, so the classifier can decide', async () => {
+    const gameId = await resetGame();
+    await request('/api/scraper/adopt/batch', {
+      games: [
+        {
+          gameId,
+          sourceType: 'bangumi',
+          sourceId: '1',
+          name: 'No flag',
+          coverUrl: '',
+          makers: [],
+          genres: [],
+          tags: [],
+          description: '',
+        },
+      ],
+    });
+
+    const row = await gameRow(gameId);
+    assert.equal(row.r18, null);
+    assert.equal(row.r18_source, null);
+  });
+
+  it('still applies the per-vendor rule on the batch path', async () => {
+    const gameId = await resetGame();
+    await request('/api/scraper/adopt/batch', {
+      games: [
+        {
+          gameId,
+          sourceType: 'dlsite',
+          sourceId: 'RJ123456',
+          name: 'Adult platform',
+          coverUrl: '',
+          makers: [],
+          genres: [],
+          tags: [],
+          description: '',
+        },
+      ],
+    });
+
+    const row = await gameRow(gameId);
+    assert.equal(row.r18, 1);
+    assert.equal(row.r18_source, 'vendor');
+  });
+});
+
+describe('the adopt cache carries the vendor flag', () => {
+  it('round-trips nsfw through the cache', async () => {
+    // A dialog reopened later (or an offline run) rebuilds its adopt payload from this cache, so a
+    // flag that is not stored here is gone before the batch adopt can use it.
+    const gameId = await resetGame();
+    await db.setAdoptCache({
+      gameId,
+      libraryId: 0,
+      subPath: 'cached/entry',
+      sourceType: 'bangumi',
+      sourceId: '240066',
+      sourceUrl: 'https://bgm.tv/subject/240066',
+      name: 'Cached Adult Entry',
+      coverUrl: 'bangumi_240066.jpg',
+      makers: [],
+      genres: [],
+      tags: [],
+      description: 'desc',
+      nsfw: true,
+    });
+
+    const [entry] = await db.getAdoptCache([gameId]);
+    assert.equal(entry.nsfw, 1);
+  });
+
+  it('stores null when the vendor publishes no flag', async () => {
+    const gameId = await resetGame();
+    await db.setAdoptCache({
+      gameId,
+      libraryId: 0,
+      subPath: 'cached/plain',
+      sourceType: 'dlsite',
+      sourceId: 'RJ123456',
+      sourceUrl: null,
+      name: 'Cached Plain Entry',
+      coverUrl: null,
+      makers: [],
+      genres: [],
+      tags: [],
+      description: null,
+    });
+
+    const [entry] = await db.getAdoptCache([gameId]);
+    assert.equal(entry.nsfw, null);
+  });
+});

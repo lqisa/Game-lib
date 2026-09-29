@@ -184,6 +184,7 @@ router.post('/adopt', async (req, res, next) => {
       genres,
       tags,
       description,
+      nsfw,
     } = req.body;
     if (!sourceType || !sourceId) {
       return res.status(400).send({ error: 'sourceType, sourceId are required' });
@@ -204,6 +205,7 @@ router.post('/adopt', async (req, res, next) => {
       genres,
       tags,
       description,
+      nsfw,
     });
     res.send({ ok: true });
   } catch (err) {

@@ -15,6 +15,12 @@ export interface DetailResult {
   genres: string[];
   tags: string[];
   description: string;
+  /**
+   * Per-entry adult flag where the vendor publishes one (Bangumi's `nsfw`). Carried to adoption so
+   * the R18 column comes from metadata instead of the cover classifier - which is the only source
+   * for Bangumi today, and the reason its ~1285 games were all left "unknown".
+   */
+  nsfw?: boolean;
 }
 
 export interface AdoptData {

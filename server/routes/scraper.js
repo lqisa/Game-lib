@@ -522,6 +522,12 @@ router.post('/adopt/batch', async (req, res, next) => {
                 .where({ id: gameId })
                 .update({ description, cover_path: coverPath, updated_at: db.knex.fn.now() });
 
+              // Same as the single-adopt path: vendor metadata decides R18 where it can, and
+              // anything else stays unknown for the classifier. This call used to be missing here,
+              // so every game adopted in a batch - including DLsite's adult-only entries - was
+              // left unknown and then judged by the cover classifier.
+              await applyVendorR18(trx, gameId, sourceType, game.nsfw);
+
               await trx('game_source').where({ game_id: gameId }).del();
 
               await trx('game_source')

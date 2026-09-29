@@ -3,31 +3,46 @@
  *
  * The covers directory holds two kinds of file: a game's cover, named by `game.cover_path`, and a
  * search-result thumbnail, named by the `coverUrl` inside a `search_cache` row (see routes/cache.js).
- * Everything else is debris - deleted games, a replaced manual cover, keywords whose cache rows are
- * long gone - and it adds up: the dev library had 6749 orphaned files, about 926 MB.
+ * Everything else is debris - a deleted game, a replaced manual cover, a keyword whose cache rows are
+ * long gone. Both kinds of reference are counted here, which is what keeps the sweep honest: on the
+ * dev library that was 511 files / ~70 MB, not the ~6700 files an earlier count claimed by looking
+ * at `game.cover_path` alone (most `search_*` thumbnails were still referenced by a live cache row).
  *
- * Dry run by default; pass --apply to delete. Files touched within the grace period are left alone,
- * so a download that is still in flight cannot be removed from under itself.
+ * Dry run by default; `--apply` deletes, and takes a database snapshot first. Files touched within
+ * the grace period are left alone, so a download that is still in flight cannot be removed from
+ * under itself. Note what the snapshot does and does not cover: it protects the database, while the
+ * deleted files are only ever ones that no row and no cached search result mentions any more.
  *
- *   node server/scripts/clean-orphan-covers.js
- *   node server/scripts/clean-orphan-covers.js --apply
+ * Which library is touched has to be named explicitly - see target-db.js - so a bare run inside the
+ * repo cannot sweep the dev copy by accident.
+ *
+ *   GAME_LIB_PROD=1 node server/scripts/clean-orphan-covers.js
+ *   GAME_LIB_PROD=1 node server/scripts/clean-orphan-covers.js --apply
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { COVERS_DIR, coverNamesFromResults } from '../scraper/cover.js';
-import * as db from '../database/db.js';
-import { closePool } from '../database/db.js';
+import { resolveTargetDatabase, backupDatabase } from './target-db.js';
 
 const GRACE_MINUTES = 10;
-const apply = process.argv.includes('--apply');
+const argv = process.argv.slice(2);
+const apply = argv.includes('--apply');
+
+const target = resolveTargetDatabase(argv);
+console.log(`database : ${target.dbPath}`);
+console.log(`mode     : ${apply ? 'APPLY (deletes files)' : 'dry run (no writes)'}`);
+
+// Both modules fix their paths on import, so they are loaded after the target is known.
+const { COVERS_DIR, coverNamesFromResults } = await import('../scraper/cover.js');
+const db = await import('../database/db.js');
+const { knex, closePool } = db;
 
 const referencedNames = async () => {
   const names = new Set();
-  const games = await db.knex('game').whereNotNull('cover_path').select('cover_path');
+  const games = await knex('game').whereNotNull('cover_path').select('cover_path');
   for (const row of games) {
     if (row.cover_path) names.add(path.basename(row.cover_path).toLowerCase());
   }
-  const cached = await db.knex('search_cache').select('results');
+  const cached = await knex('search_cache').select('results');
   for (const row of cached) {
     let results = [];
     try {
@@ -73,6 +88,9 @@ const main = async () => {
     console.log('\nDry run - nothing was deleted. Re-run with --apply to delete these files.');
     return;
   }
+
+  const backupPath = await backupDatabase(knex, target.dbPath);
+  console.log(`backup   : ${backupPath}`);
 
   let removed = 0;
   for (const name of orphans) {
