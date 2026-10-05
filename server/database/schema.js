@@ -109,6 +109,11 @@ const createSchema = () =>
       table.dateTime('opened_at').defaultTo(knex.fn.now());
       table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
     })
+    .createTable('archive', (table) => {
+      table.integer('game_id').primary();
+      table.dateTime('created_at').defaultTo(knex.fn.now());
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+    })
     .createTable('game_similar', (table) => {
       // One row per suspected-similar PAIR of games (different vendors, names >= 90%).
       // game_id_a is always the lower id, so a pair has exactly one row.

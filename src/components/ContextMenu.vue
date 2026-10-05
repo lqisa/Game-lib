@@ -7,12 +7,34 @@
     @hide="$emit('close')"
   >
     <q-list dense style="min-width: 180px; padding: 8px 0">
-      <template v-if="favoritesMode">
+      <template v-if="archivedMode">
+        <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('unarchive', game.id)">
+          <q-item-section avatar>
+            <q-icon name="unarchive" style="color: var(--m3-on-surface-variant)" />
+          </q-item-section>
+          <q-item-section>Unarchive</q-item-section>
+        </q-item>
+        <q-separator />
+        <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('delete-game', game.id)">
+          <q-item-section avatar>
+            <q-icon name="delete" style="color: var(--m3-error)" />
+          </q-item-section>
+          <q-item-section>Delete Game</q-item-section>
+        </q-item>
+      </template>
+      <template v-else-if="favoritesMode">
         <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('unfavorite', game.id)">
           <q-item-section avatar>
             <q-icon name="heart_broken" style="color: var(--m3-error)" />
           </q-item-section>
           <q-item-section>Unfavorite</q-item-section>
+        </q-item>
+        <q-separator />
+        <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('archive', game.id)">
+          <q-item-section avatar>
+            <q-icon name="archive" style="color: var(--m3-on-surface-variant)" />
+          </q-item-section>
+          <q-item-section>Archive</q-item-section>
         </q-item>
       </template>
       <template v-else>
@@ -33,6 +55,13 @@
           <q-item-section>{{
             game.is_favorite ? 'Remove from Favorites' : 'Add to Favorites'
           }}</q-item-section>
+        </q-item>
+        <q-separator />
+        <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('archive', game.id)">
+          <q-item-section avatar>
+            <q-icon name="archive" style="color: var(--m3-on-surface-variant)" />
+          </q-item-section>
+          <q-item-section>Archive</q-item-section>
         </q-item>
         <q-separator />
         <q-item clickable v-close-popup class="m3-menu-item" @click="$emit('delete-game', game.id)">
@@ -56,6 +85,7 @@ interface GameItem {
 defineProps<{
   game: GameItem;
   favoritesMode: boolean;
+  archivedMode: boolean;
 }>();
 
 defineEmits<{
@@ -63,6 +93,8 @@ defineEmits<{
   'delete-game': [id: number];
   'toggle-favorite': [id: number];
   unfavorite: [id: number];
+  archive: [id: number];
+  unarchive: [id: number];
 }>();
 </script>
 

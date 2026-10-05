@@ -21,6 +21,8 @@ const ALL_TABLES = [
   'search_cache',
   'adopt_cache',
   'favorite',
+  'recently',
+  'archive',
 ];
 
 const TABLE_DDL = {
@@ -142,6 +144,12 @@ const TABLE_DDL = {
     knex.schema.createTable('recently', (table) => {
       table.integer('game_id').primary();
       table.dateTime('opened_at').defaultTo(knex.fn.now());
+      table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
+    }),
+  archive: (knex) =>
+    knex.schema.createTable('archive', (table) => {
+      table.integer('game_id').primary();
+      table.dateTime('created_at').defaultTo(knex.fn.now());
       table.foreign('game_id').references('id').inTable('game').onDelete('CASCADE');
     }),
 };
@@ -476,6 +484,25 @@ const initDatabase = async () => {
     }
     await knex('setting').insert({ key: 'migration_v14', value: '1' }).onConflict('key').ignore();
     console.log(' * Migration v14 done.');
+  }
+
+  // Migration v15: add archive table (side table like favorite, v7). A game in here is
+  // "played and shelved": hidden from the regular list, favorites and recently, and only
+  // visible through the Archive view.
+  const v15 = await knex('setting').where({ key: 'migration_v15' }).first();
+  if (!v15) {
+    console.log(' * Running migration v15: add archive table...');
+    await knex.raw('PRAGMA foreign_keys = OFF');
+    await knex.raw(`
+      CREATE TABLE IF NOT EXISTS archive (
+        game_id INTEGER PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (game_id) REFERENCES game(id) ON DELETE CASCADE
+      )
+    `);
+    await knex.raw('PRAGMA foreign_keys = ON');
+    await knex('setting').insert({ key: 'migration_v15', value: '1' }).onConflict('key').ignore();
+    console.log(' * Migration v15 done.');
   }
 
   const hasGameTable = await knex.schema.hasTable('game');

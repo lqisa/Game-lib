@@ -219,6 +219,7 @@ const getGames = async ({
   duplicate,
   r18,
   favoritesOnly,
+  archivedOnly,
   excludeSubPaths,
   sortBy = 'updated_at',
   sortOrder = 'desc',
@@ -320,6 +321,19 @@ const getGames = async ({
     });
   }
 
+  // Archived games are the user's "played and shelved" shelf: they only surface through the
+  // Archive view, so every other view (games, favorites, search, filters) subtracts them here
+  // - before counting and paginating, like the sub_path exclusions below.
+  if (archivedOnly) {
+    query = query.whereIn('game.id', function () {
+      this.select('game_id').from('archive');
+    });
+  } else {
+    query = query.whereNotIn('game.id', function () {
+      this.select('game_id').from('archive');
+    });
+  }
+
   // Blacklisted / archived sub_paths are excluded here (before counting and paginating)
   // so that `total` reflects the real number of visible games.
   if (excludeSubPaths && excludeSubPaths.length > 0) {
@@ -353,6 +367,8 @@ const getGames = async ({
     }
     const favoriteIds = await db('favorite').whereIn('game_id', gameIds).select('game_id');
     const favSet = new Set(favoriteIds.map((f) => f.game_id));
+    const archivedIds = await db('archive').whereIn('game_id', gameIds).select('game_id');
+    const archivedSet = new Set(archivedIds.map((a) => a.game_id));
     const similarRows = await db('game_similar')
       .where(function () {
         this.whereIn('game_id_a', gameIds).orWhereIn('game_id_b', gameIds);
@@ -369,6 +385,7 @@ const getGames = async ({
       // source, so a game without one has nothing to repair, only something to scrape.
       g.hasSource = sourceIdSet.has(g.id);
       g.is_favorite = favSet.has(g.id);
+      g.is_archived = archivedSet.has(g.id);
       // Folder or archive, derived from sub_path rather than stored so it cannot drift.
       g.isArchive = isArchivePath(g.sub_path);
       g.similarCount = similarCount[g.id] || 0;
@@ -415,6 +432,24 @@ const batchRemoveFavorites = async (ids) => {
   await db('favorite').whereIn('game_id', ids).del();
 };
 
+const addArchived = async (gameId) =>
+  db('archive').insert({ game_id: gameId }).onConflict('game_id').ignore();
+
+const removeArchived = async (gameId) => db('archive').where({ game_id: gameId }).del();
+
+const batchAddArchived = async (ids) => {
+  if (ids.length === 0) return;
+  await db('archive')
+    .insert(ids.map((id) => ({ game_id: id })))
+    .onConflict('game_id')
+    .ignore();
+};
+
+const batchRemoveArchived = async (ids) => {
+  if (ids.length === 0) return;
+  await db('archive').whereIn('game_id', ids).del();
+};
+
 // The Recently list is capped: only the 100 most recently opened games are kept, and the
 // oldest rows are dropped as new ones come in. The cap lives here (not in the route) so every
 // write path stays bounded, no matter who calls it.
@@ -424,6 +459,10 @@ const getRecently = async (limit = MAX_RECENT) =>
   db('recently')
     .join('game', 'recently.game_id', 'game.id')
     .leftJoin('library', 'game.library_id', 'library.id')
+    // Archived games are shelved: they leave the Recently rail along with the other lists.
+    .whereNotIn('game.id', function () {
+      this.select('game_id').from('archive');
+    })
     .select(
       'game.*',
       'recently.opened_at',
@@ -698,6 +737,10 @@ export {
   removeFavorite,
   batchAddFavorites,
   batchRemoveFavorites,
+  addArchived,
+  removeArchived,
+  batchAddArchived,
+  batchRemoveArchived,
   MAX_RECENT,
   getRecently,
   touchRecently,

@@ -102,6 +102,7 @@ router.get('/', async (req, res, next) => {
       duplicate,
       r18,
       favoritesOnly,
+      archivedOnly,
       sortBy,
       sortOrder,
     } = req.query;
@@ -124,6 +125,7 @@ router.get('/', async (req, res, next) => {
       duplicate: duplicate === 'yes' ? true : duplicate === 'no' ? false : undefined,
       r18: r18 === 'yes' ? true : r18 === 'no' ? false : undefined,
       favoritesOnly: favoritesOnly === 'true',
+      archivedOnly: archivedOnly === 'true',
       excludeSubPaths,
       sortBy: sortBy || 'updated_at',
       sortOrder: sortOrder || 'desc',
@@ -541,6 +543,50 @@ router.post('/batch-unfavorite', async (req, res, next) => {
       return res.status(400).send({ error: 'ids must be an array' });
     }
     await db.batchRemoveFavorites(ids);
+    res.status(200).send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/archive', async (req, res, next) => {
+  try {
+    await db.addArchived(Number(req.params.id));
+    res.status(200).send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id/archive', async (req, res, next) => {
+  try {
+    await db.removeArchived(Number(req.params.id));
+    res.status(200).send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/batch-archive', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) {
+      return res.status(400).send({ error: 'ids must be an array' });
+    }
+    await db.batchAddArchived(ids);
+    res.status(200).send({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/batch-unarchive', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) {
+      return res.status(400).send({ error: 'ids must be an array' });
+    }
+    await db.batchRemoveArchived(ids);
     res.status(200).send({ ok: true });
   } catch (err) {
     next(err);

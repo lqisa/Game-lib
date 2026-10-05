@@ -11,8 +11,11 @@
           style="color: var(--m3-on-surface-variant)"
         />
         <q-toolbar-title>
-          Game Lib<template v-if="$route.path === '/' && gameListStore.favoritesMode">
-            - Favorites</template
+          Game Lib<template v-if="$route.path === '/' && gameListStore.favoritesMode"
+            >- Favorites</template
+          >
+          <template v-else-if="$route.path === '/' && gameListStore.archivedMode"
+            >- Archived</template
           >
           <span v-if="showGameCount" class="q-ml-sm" style="color: var(--m3-on-surface-variant)"
             >({{ filteredCount }})</span
@@ -26,8 +29,10 @@
         <div class="col column items-center">
           <div
             class="m3-nav-item"
-            :class="{ 'm3-nav-item--active': !gameListStore.favoritesMode && $route.path === '/' }"
-            @click="navigateTo('/', false)"
+            :class="{
+              'm3-nav-item--active': gameListStore.mode === 'games' && $route.path === '/',
+            }"
+            @click="navigateTo('/', 'games')"
           >
             <q-icon name="videogame_asset" class="m3-nav-icon" />
             <span class="m3-nav-label">Games</span>
@@ -37,13 +42,28 @@
           </div>
           <div
             class="m3-nav-item"
-            :class="{ 'm3-nav-item--active': gameListStore.favoritesMode && $route.path === '/' }"
-            @click="navigateTo('/', true)"
+            :class="{
+              'm3-nav-item--active': gameListStore.mode === 'favorites' && $route.path === '/',
+            }"
+            @click="navigateTo('/', 'favorites')"
           >
             <q-icon name="star" class="m3-nav-icon" />
             <span class="m3-nav-label">Favorites</span>
             <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
               >Favorites</q-tooltip
+            >
+          </div>
+          <div
+            class="m3-nav-item"
+            :class="{
+              'm3-nav-item--active': gameListStore.mode === 'archived' && $route.path === '/',
+            }"
+            @click="navigateTo('/', 'archived')"
+          >
+            <q-icon name="archive" class="m3-nav-icon" />
+            <span class="m3-nav-label">Archive</span>
+            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
+              >Archived Games</q-tooltip
             >
           </div>
           <div
@@ -115,6 +135,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useGameListStore } from '../stores/gameListStore';
+import type { GameListMode } from '../stores/gameListStore';
 import { useTaskStore } from '../stores/taskStore';
 import { useR18Toggle } from '../composables/useR18Toggle';
 import TaskPanel from '../components/TaskPanel.vue';
@@ -136,11 +157,12 @@ const showGameCount = computed(() => route.path === '/');
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
-const navigateTo = (path: string, favorites: boolean) => {
-  gameListStore.favoritesMode = favorites;
+const navigateTo = (path: string, listMode: GameListMode) => {
   // Record which rail entry owns the list page, so the list can reset view-only state
-  // (selection mode in particular) instead of leaking it across Games and Favorites.
-  gameListStore.mode = favorites ? 'favorites' : 'games';
+  // (selection mode in particular) instead of leaking it across Games, Favorites and Archive.
+  gameListStore.favoritesMode = listMode === 'favorites';
+  gameListStore.archivedMode = listMode === 'archived';
+  gameListStore.mode = listMode;
   void router.push(path);
 };
 

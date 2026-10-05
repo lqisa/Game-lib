@@ -50,7 +50,7 @@
       <q-space />
 
       <q-btn
-        v-if="!favoritesMode"
+        v-if="!favoritesMode && !archivedMode"
         unelevated
         class="m3-btn--filled"
         label="Scan &amp; Scrape"
@@ -67,7 +67,28 @@
       />
       <template v-else>
         <q-btn flat label="Cancel" class="m3-btn--text" @click="exitSelectMode" />
-        <template v-if="favoritesMode">
+        <template v-if="archivedMode">
+          <q-btn
+            unelevated
+            class="m3-btn--tonal"
+            icon="unarchive"
+            :label="`Unarchive (${selectedIds.size})`"
+            :disable="selectedIds.size === 0"
+            @click="confirmUnarchiveDialog = true"
+          />
+          <q-btn
+            unelevated
+            style="
+              background: var(--m3-error-container) !important;
+              color: var(--m3-on-error-container) !important;
+            "
+            icon="delete"
+            :label="`Delete (${selectedIds.size})`"
+            :disable="selectedIds.size === 0"
+            @click="confirmDeleteDialog = true"
+          />
+        </template>
+        <template v-else-if="favoritesMode">
           <q-btn
             unelevated
             class="m3-btn--tonal"
@@ -76,8 +97,24 @@
             :disable="selectedIds.size === 0"
             @click="confirmUnfavoriteDialog = true"
           />
+          <q-btn
+            unelevated
+            class="m3-btn--tonal"
+            icon="archive"
+            :label="`Archive (${selectedIds.size})`"
+            :disable="selectedIds.size === 0"
+            @click="confirmArchiveDialog = true"
+          />
         </template>
         <template v-else>
+          <q-btn
+            unelevated
+            class="m3-btn--tonal"
+            icon="archive"
+            :label="`Archive (${selectedIds.size})`"
+            :disable="selectedIds.size === 0"
+            @click="confirmArchiveDialog = true"
+          />
           <q-btn
             unelevated
             style="
@@ -117,7 +154,7 @@
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDrop"
     >
-      <div v-if="dragOver && !favoritesMode" class="drop-overlay flex flex-center">
+      <div v-if="dragOver && !favoritesMode && !archivedMode" class="drop-overlay flex flex-center">
         <div class="text-center">
           <q-icon name="cloud_upload" size="64px" color="primary" />
           <div class="text-h6 text-primary q-mt-sm">Drop folder to search</div>
@@ -165,7 +202,9 @@
         style="color: var(--m3-on-surface-variant)"
       >
         <q-icon name="videogame_asset" size="64px" />
-        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface)">No games found</div>
+        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface)">
+          {{ archivedMode ? 'No archived games' : 'No games found' }}
+        </div>
         <div class="text-body2">Add a game library in Settings, then scan for games.</div>
       </div>
 
@@ -210,6 +249,37 @@
       </q-card>
     </q-dialog>
 
+    <q-dialog v-model="confirmArchiveDialog" persistent>
+      <q-card>
+        <q-card-section class="row items-center">
+          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface)"
+            >Archive {{ selectedIds.size }} game(s)? Archived games only appear in the Archive
+            view.</span
+          >
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
+          <q-btn unelevated class="m3-btn--tonal" label="Archive" @click="doBatchArchive" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <q-dialog v-model="confirmUnarchiveDialog" persistent>
+      <q-card>
+        <q-card-section class="row items-center">
+          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
+          <span style="color: var(--m3-on-surface)"
+            >Restore {{ selectedIds.size }} game(s) from the archive?</span
+          >
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
+          <q-btn unelevated class="m3-btn--tonal" label="Unarchive" @click="doBatchUnarchive" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <q-dialog v-model="showSingleDeleteDialog" persistent>
       <q-card>
         <q-card-section class="row items-center">
@@ -245,10 +315,13 @@
       v-if="contextMenuGame"
       :game="contextMenuGame"
       :favorites-mode="favoritesMode"
+      :archived-mode="archivedMode"
       @close="contextMenuGame = null"
       @delete-game="handleDeleteGame"
       @toggle-favorite="handleToggleFavorite"
       @unfavorite="handleUnfavorite"
+      @archive="handleArchive"
+      @unarchive="handleUnarchive"
     />
   </q-page>
 </template>
@@ -261,6 +334,7 @@ import { storeToRefs } from 'pinia';
 import api from '../composables/useApi';
 import { getGridCols, useViewportWidth } from '../composables/useGridLayout';
 import { useGameListStore } from '../stores/gameListStore';
+import type { GameListMode } from '../stores/gameListStore';
 import GameCard from '../components/GameCard.vue';
 import VirtualGrid from '../components/VirtualGrid.vue';
 import type { VirtualGridExposed } from '../components/VirtualGrid.types';
@@ -278,6 +352,7 @@ interface GameItem {
   sub_path: string;
   library_path: string;
   is_favorite: boolean;
+  is_archived: boolean;
   // A cover is fetched through the game's source, so this decides whether a missing cover is
   // repairable at all. Sent by GET /games for exactly that reason.
   hasSource: boolean;
@@ -300,7 +375,7 @@ interface FilterState {
 
 const router = useRouter();
 const gameListStore = useGameListStore();
-const { favoritesMode } = storeToRefs(gameListStore);
+const { favoritesMode, archivedMode, mode } = storeToRefs(gameListStore);
 const games = ref<GameItem[]>([]);
 const loading = ref(false);
 const restoringScroll = ref(false);
@@ -352,7 +427,10 @@ const sortOptions = [
 
 const SORT_KEY = '__game_lib_sort__';
 const SORT_KEY_FAV = '__game_lib_sort_fav__';
-const getSortKey = () => (favoritesMode.value ? SORT_KEY_FAV : SORT_KEY);
+const SORT_KEY_ARCH = '__game_lib_sort_arch__';
+const sortKeyFor = (m: GameListMode) =>
+  m === 'favorites' ? SORT_KEY_FAV : m === 'archived' ? SORT_KEY_ARCH : SORT_KEY;
+const getSortKey = () => sortKeyFor(mode.value);
 
 const loadSortPrefs = (): { sortBy: string; sortOrder: 'asc' | 'desc' } => {
   try {
@@ -416,6 +494,8 @@ const selectedIds = ref<Set<number>>(new Set());
 const lastSelectedId = ref<number | null>(null);
 const confirmDeleteDialog = ref(false);
 const confirmUnfavoriteDialog = ref(false);
+const confirmArchiveDialog = ref(false);
+const confirmUnarchiveDialog = ref(false);
 
 const contextMenuGame = ref<GameItem | null>(null);
 const contextMenuPos = ref({ x: 0, y: 0 });
@@ -574,6 +654,24 @@ const doBatchUnfavorite = async () => {
   await loadGames();
 };
 
+const doBatchArchive = async () => {
+  const ids = [...selectedIds.value];
+  if (ids.length === 0) return;
+  await api.post('/games/batch-archive', { ids });
+  confirmArchiveDialog.value = false;
+  exitSelectMode();
+  await loadGames();
+};
+
+const doBatchUnarchive = async () => {
+  const ids = [...selectedIds.value];
+  if (ids.length === 0) return;
+  await api.post('/games/batch-unarchive', { ids });
+  confirmUnarchiveDialog.value = false;
+  exitSelectMode();
+  await loadGames();
+};
+
 const onContextMenu = (game: GameItem, e: MouseEvent) => {
   e.preventDefault();
   contextMenuGame.value = game;
@@ -594,6 +692,21 @@ const handleToggleFavorite = async (id: number) => {
 
 const handleUnfavorite = async (id: number) => {
   await api.delete(`/games/${id}/favorite`);
+  games.value = games.value.filter((g) => g.id !== id);
+  gameListStore.filteredCount = games.value.length;
+};
+
+// Archiving removes the game from the current list (Games/Favorites no longer include it), so
+// the row goes away immediately - the same "the list can't show what it just filtered out"
+// behavior as unfavorite/delete above.
+const handleArchive = async (id: number) => {
+  await api.post(`/games/${id}/archive`);
+  games.value = games.value.filter((g) => g.id !== id);
+  gameListStore.filteredCount = games.value.length;
+};
+
+const handleUnarchive = async (id: number) => {
+  await api.delete(`/games/${id}/archive`);
   games.value = games.value.filter((g) => g.id !== id);
   gameListStore.filteredCount = games.value.length;
 };
@@ -641,6 +754,7 @@ const loadGames = async () => {
     if (f.r18 === 'yes') params.r18 = 'yes';
     else if (f.r18 === 'no') params.r18 = 'no';
     if (favoritesMode.value) params.favoritesOnly = 'true';
+    if (archivedMode.value) params.archivedOnly = 'true';
     params.sortBy = sortBy.value;
     params.sortOrder = sortOrder.value;
 
@@ -815,8 +929,11 @@ watch(sortBy, () => {
 
 const FILTER_KEY = '__game_lib_filter__';
 const FILTER_KEY_FAV = '__game_lib_filter_fav__';
+const FILTER_KEY_ARCH = '__game_lib_filter_arch__';
 
-const getFilterKey = () => (favoritesMode.value ? FILTER_KEY_FAV : FILTER_KEY);
+const filterKeyFor = (m: GameListMode) =>
+  m === 'favorites' ? FILTER_KEY_FAV : m === 'archived' ? FILTER_KEY_ARCH : FILTER_KEY;
+const getFilterKey = () => filterKeyFor(mode.value);
 
 // Filter selections are stored in localStorage (like the sort prefs) so they survive an
 // app restart. sessionStorage is cleared when the window closes, which silently reset
@@ -854,8 +971,11 @@ const restoreFilterState = () => {
 
 const SCROLL_KEY = '__game_lib_scroll__';
 const SCROLL_KEY_FAV = '__game_lib_scroll_fav__';
+const SCROLL_KEY_ARCH = '__game_lib_scroll_arch__';
 
-const getScrollKey = () => (favoritesMode.value ? SCROLL_KEY_FAV : SCROLL_KEY);
+const scrollKeyFor = (m: GameListMode) =>
+  m === 'favorites' ? SCROLL_KEY_FAV : m === 'archived' ? SCROLL_KEY_ARCH : SCROLL_KEY;
+const getScrollKey = () => scrollKeyFor(mode.value);
 
 const saveScrollPosition = () => {
   // The grid is gone once the page unmounts, and `?? 0` would then store a made-up "top of the
@@ -871,17 +991,15 @@ const onGridScroll = () => {
   scrollSaveTimer = setTimeout(saveScrollPosition, 100);
 };
 
-watch(favoritesMode, (isFav) => {
-  // Games and Favorites are separate views of the same grid, so nothing view-local may carry
-  // over: a selection made in one list means nothing in the other (and the batch actions would
-  // otherwise fire on ids the user cannot even see).
+watch(mode, (_newMode, leaveMode) => {
+  // Games, Favorites and Archive are separate views of the same grid, so nothing view-local may
+  // carry over: a selection made in one list means nothing in the other (and the batch actions
+  // would otherwise fire on ids the user cannot even see).
   exitSelectMode();
-  const leaveKey = isFav ? SCROLL_KEY : SCROLL_KEY_FAV;
   const scrollTop = virtualGrid.value?.getScrollTop() ?? 0;
-  sessionStorage.setItem(leaveKey, String(scrollTop));
-  const leaveFilterKey = isFav ? FILTER_KEY : FILTER_KEY_FAV;
+  sessionStorage.setItem(scrollKeyFor(leaveMode), String(scrollTop));
   localStorage.setItem(
-    leaveFilterKey,
+    filterKeyFor(leaveMode),
     JSON.stringify({
       keyword: keyword.value,
       filter: currentFilter.value,
