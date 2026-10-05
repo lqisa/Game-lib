@@ -906,9 +906,14 @@ const searchGames = () => {
 };
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let suppressNextKeywordWatch = false;
 
 watch(keyword, () => {
   if (restoringFilter.value) return;
+  if (suppressNextKeywordWatch) {
+    suppressNextKeywordWatch = false;
+    return;
+  }
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     saveFilterState();
@@ -917,6 +922,7 @@ watch(keyword, () => {
 });
 
 const onSearchClear = () => {
+  suppressNextKeywordWatch = true;
   if (searchTimer) clearTimeout(searchTimer);
   searchGames();
 };
