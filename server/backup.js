@@ -92,7 +92,9 @@ const runBackup = async (trigger) => {
   const coversDir = path.join(getDataDir(), 'covers');
 
   try {
-    fs.mkdirSync(backupDir, { recursive: true });
+    // Node's recursive mkdir throws EPERM when the target is a drive root ("F:\\") even though
+    // it exists - it walks up past the root. Only call it when the directory is missing.
+    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
     fs.mkdirSync(coversDir, { recursive: true });
     fs.mkdirSync(tmpDir, { recursive: true });
 

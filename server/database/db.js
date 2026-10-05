@@ -41,6 +41,10 @@ if (isTestEnv()) {
       afterCreate: (conn, done) => {
         conn.run('PRAGMA foreign_keys = ON');
         conn.run('PRAGMA journal_mode = WAL');
+        // Two pooled connections do write at the same time (backup bookkeeping while a user saves
+        // settings, scanner + scraper...). Without a busy timeout the loser fails instantly with
+        // SQLITE_BUSY; 5s of retrying turns that race into a queue.
+        conn.run('PRAGMA busy_timeout = 5000');
         conn.run('PRAGMA cache_size = -2000', done);
       },
     },

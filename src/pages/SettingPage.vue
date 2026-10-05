@@ -1125,7 +1125,9 @@ const startBackup = async () => {
   } catch (err) {
     const resp = (err as { response?: { status?: number; data?: { error?: string } } })?.response;
     if (resp?.status === 409) {
-      $q.notify({ type: 'warning', message: resp?.data?.error || 'A backup is already running' });
+      // Not a failure - the click just found the running backup. Blue info, not red/warning,
+      // so it cannot be mistaken for a backup that went wrong.
+      $q.notify({ type: 'info', message: resp?.data?.error || 'A backup is already running' });
     } else {
       $q.notify({ type: 'negative', message: resp?.data?.error || 'Could not start the backup' });
     }

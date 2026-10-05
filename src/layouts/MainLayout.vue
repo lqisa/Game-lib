@@ -131,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useGameListStore } from '../stores/gameListStore';
@@ -150,6 +150,37 @@ const gameListStore = useGameListStore();
 const taskStore = useTaskStore();
 const showTaskPanel = ref(false);
 const filteredCount = computed(() => gameListStore.filteredCount);
+
+// Backup results are announced wherever the user happens to be - the TaskPanel row alone was
+// too easy to miss, so a failed backup looked like nothing happened. Only tasks seen active
+// first are announced, so terminal tasks replayed by an SSE reconnect stay silent.
+const seenActiveBackups = new Set<string>();
+watch(
+  () =>
+    [...taskStore.tasks.values()]
+      .filter((t) => t.type === 'backup')
+      .map((t) => `${t.id}:${t.status}`)
+      .join('|'),
+  () => {
+    for (const task of taskStore.tasks.values()) {
+      if (task.type !== 'backup') continue;
+      if (task.status === 'pending' || task.status === 'running') {
+        seenActiveBackups.add(task.id);
+      } else if (seenActiveBackups.has(task.id)) {
+        seenActiveBackups.delete(task.id);
+        if (task.status === 'completed') {
+          $q.notify({ type: 'positive', message: task.detail || 'Backup completed' });
+        } else if (task.status === 'failed') {
+          $q.notify({
+            type: 'negative',
+            message: `Backup failed: ${(task.error || 'unknown error').slice(0, 160)}`,
+          });
+        }
+        // cancelled: the user cancelled it themselves, no announcement needed
+      }
+    }
+  },
+);
 
 // The count describes the game list, so it is only shown on the list route
 // (both the normal and the favorites view) - not on the detail or settings pages.
