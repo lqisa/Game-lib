@@ -4,7 +4,7 @@ import { useExpressUrl } from '../composables/useExpressUrl';
 
 export interface Task {
   id: string;
-  type: 'move' | 'extract' | 'similar-scan' | 'nsfw-scan';
+  type: 'move' | 'extract' | 'similar-scan' | 'nsfw-scan' | 'backup';
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   label: string;
   progress: number;

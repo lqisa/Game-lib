@@ -464,6 +464,67 @@
         </q-card-section>
       </q-card>
 
+      <q-card class="m3-card q-mb-md">
+        <q-card-section>
+          <div class="m3-label-large q-mb-sm">Backup</div>
+          <div class="m3-label-medium q-mb-sm">
+            Packs the database and the covers directory into a single rar archive (store mode) in
+            the backup directory.
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <q-input v-model="backupDir" label="Backup Directory" outlined class="m3-input q-mb-md">
+            <template v-slot:append>
+              <q-icon
+                v-if="hasElectronAPI"
+                name="folder_open"
+                class="cursor-pointer"
+                style="color: var(--m3-on-surface-variant)"
+                @click="browseBackupDirectory"
+              />
+            </template>
+          </q-input>
+          <div class="row q-gutter-md">
+            <q-select
+              v-model="backupSchedule"
+              :options="backupScheduleOptions"
+              emit-value
+              map-options
+              label="Auto Backup"
+              outlined
+              class="m3-input"
+              style="min-width: 160px"
+            />
+            <q-input
+              v-model="backupKeep"
+              type="number"
+              label="Keep Backups"
+              outlined
+              class="m3-input"
+              style="max-width: 130px"
+            />
+          </div>
+          <div class="m3-label-medium q-mt-xs">
+            Checked at startup and then hourly. Daily backs up every 24 hours, weekly every 7 days;
+            a manual backup resets the interval. Oldest backups beyond "Keep Backups" are deleted.
+          </div>
+          <div v-if="backupLastRun" class="m3-label-medium q-mt-xs">
+            Last backup: {{ new Date(backupLastRun).toLocaleString() }}
+          </div>
+          <div class="row q-gutter-sm q-mt-md">
+            <q-btn flat class="m3-btn--outlined" label="Save" @click="saveBackupSettings" />
+            <q-btn
+              unelevated
+              class="m3-btn--filled"
+              label="Backup Now"
+              icon="settings_backup_restore"
+              :disable="backupStarting"
+              @click="startBackup"
+            />
+          </div>
+        </q-card-section>
+      </q-card>
+
       <q-card v-if="hasElectronAPI" class="m3-card q-mb-md">
         <q-card-section>
           <div class="m3-label-large q-mb-sm">Application</div>
@@ -549,7 +610,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useQuasar } from 'quasar';
 import {
   SOURCE_TYPES,
@@ -557,6 +618,7 @@ import {
   DEFAULT_MATCH_THRESHOLD,
 } from '../../server/scraper/match.js';
 import api from '../composables/useApi';
+import { useTaskStore } from '../stores/taskStore';
 
 interface Library {
   id: number;
@@ -997,6 +1059,97 @@ const removeArchivedArchive = async (idx: number) => {
   await fetchArchivedArchives();
 };
 
+const taskStore = useTaskStore();
+
+const backupDir = ref('');
+const backupSchedule = ref('off');
+const backupKeep = ref(10);
+const backupLastRun = ref('');
+const backupStarting = ref(false);
+
+const backupScheduleOptions = [
+  { label: 'Off', value: 'off' },
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+];
+
+const fetchBackupSettings = async () => {
+  const get = async (key: string): Promise<string | null> => {
+    try {
+      const res = await api.get(`/settings/${key}`);
+      return res.data.value ?? null;
+    } catch {
+      return null;
+    }
+  };
+  backupDir.value = (await get('backup_dir')) ?? '';
+  backupSchedule.value = (await get('backup_schedule')) ?? 'off';
+  const keep = Number.parseInt((await get('backup_keep')) ?? '', 10);
+  backupKeep.value = Number.isNaN(keep) ? 10 : keep;
+  backupLastRun.value = (await get('backup_last_run')) ?? '';
+};
+
+const persistBackupSettings = async () => {
+  // Clamp here so a stray value on screen cannot end up as 0 (= delete everything but one) or
+  // garbage the scheduler would have to second-guess.
+  const keep = Math.max(1, Math.floor(Number(backupKeep.value) || 10));
+  backupKeep.value = keep;
+  await api.put('/settings/backup_dir', { value: backupDir.value });
+  await api.put('/settings/backup_schedule', { value: backupSchedule.value });
+  await api.put('/settings/backup_keep', { value: String(keep) });
+};
+
+const saveBackupSettings = async () => {
+  try {
+    await persistBackupSettings();
+    $q.notify({ type: 'positive', message: 'Backup settings saved' });
+  } catch {
+    $q.notify({ type: 'negative', message: 'Could not save backup settings' });
+  }
+};
+
+const browseBackupDirectory = async () => {
+  if (!window.electronAPI) return;
+  const dir = await window.electronAPI.openDirectory('Select Backup Directory');
+  if (dir) backupDir.value = dir;
+};
+
+const startBackup = async () => {
+  if (backupStarting.value) return;
+  backupStarting.value = true;
+  try {
+    // Persist first: "Backup Now" should use exactly what is on screen, saved or not.
+    await persistBackupSettings();
+    await api.post('/backup/run');
+    $q.notify({ type: 'positive', message: 'Backup started' });
+  } catch (err) {
+    const resp = (err as { response?: { status?: number; data?: { error?: string } } })?.response;
+    if (resp?.status === 409) {
+      $q.notify({ type: 'warning', message: resp?.data?.error || 'A backup is already running' });
+    } else {
+      $q.notify({ type: 'negative', message: resp?.data?.error || 'Could not start the backup' });
+    }
+  } finally {
+    backupStarting.value = false;
+  }
+};
+
+// "Last backup" is written by the server after every attempt, so refresh it whenever a backup
+// task settles (manual or scheduled) instead of leaving a stale timestamp on screen.
+watch(
+  () => {
+    for (const t of taskStore.tasks.values()) {
+      if (t.type === 'backup' && (t.status === 'completed' || t.status === 'failed')) {
+        return t.completedAt;
+      }
+    }
+    return null;
+  },
+  (settledAt) => {
+    if (settledAt) void fetchBackupSettings();
+  },
+);
+
 onMounted(() => {
   void fetchLibraries();
   void fetchToken();
@@ -1009,6 +1162,7 @@ onMounted(() => {
   void fetchArchivePasswords();
   void fetchExtractTools();
   void fetchArchivedArchives();
+  void fetchBackupSettings();
 });
 </script>
 

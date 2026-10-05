@@ -24,7 +24,9 @@ const createTask = (type, meta) => {
           ? 'Finding similar games'
           : type === 'nsfw-scan'
             ? 'Classifying covers'
-            : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
+            : type === 'backup'
+              ? 'Backing up data'
+              : `Extracting: ${meta.archivePath?.split('\\').pop() || ''}`,
     progress: 0,
     detail: 'Waiting...',
     error: null,

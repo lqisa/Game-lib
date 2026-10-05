@@ -26,7 +26,9 @@
                       ? 'content_copy'
                       : task.type === 'nsfw-scan'
                         ? 'visibility'
-                        : 'archive'
+                        : task.type === 'backup'
+                          ? 'settings_backup_restore'
+                          : 'archive'
                 "
                 :color="statusColor(task)"
                 size="sm"
@@ -51,7 +53,9 @@
             </q-item-section>
             <q-item-section side>
               <q-btn
-                v-if="task.status === 'running' && task.type === 'extract'"
+                v-if="
+                  task.status === 'running' && (task.type === 'extract' || task.type === 'backup')
+                "
                 flat
                 round
                 dense
