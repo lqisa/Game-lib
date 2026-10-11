@@ -14,6 +14,7 @@ import {
   onTaskChange,
   detectExtractTools,
   selectTool,
+  decodeConsoleText,
 } from '../tasks.js';
 
 const cleanup = () => {
@@ -346,5 +347,34 @@ describe('activeTaskForGame', () => {
     const task = createTask('extract', { archivePath: 'C.rar', gameId: 7 });
     updateTask(task.id, { status: 'failed' });
     assert.equal(activeTaskForGame(7), null);
+  });
+});
+
+describe('decodeConsoleText', () => {
+  it('passes ASCII through unchanged', () => {
+    assert.equal(decodeConsoleText(Buffer.from('exit code 11')), 'exit code 11');
+  });
+
+  it('passes real UTF-8 text through unchanged', () => {
+    const text = 'chrome_100_percent.pak 的密码不正确';
+    assert.equal(decodeConsoleText(Buffer.from(text, 'utf-8')), text);
+  });
+
+  it('decodes GBK console output from localized Windows tools', () => {
+    // unrar on a zh-CN install writes its messages in GBK, not UTF-8. These bytes are the
+    // real UnRAR 7.13 wrong-password line "chrome_100_percent.pak 的密码不正确", which used
+    // to arrive as mojibake through plain data.toString().
+    const gbk = Buffer.from([
+      0x63, 0x68, 0x72, 0x6f, 0x6d, 0x65, 0x5f, 0x31, 0x30, 0x30, 0x5f, 0x70, 0x65, 0x72, 0x63,
+      0x65, 0x6e, 0x74, 0x2e, 0x70, 0x61, 0x6b, 0x20, 0xb5, 0xc4, 0xc3, 0xdc, 0xc2, 0xeb, 0xb2,
+      0xbb, 0xd5, 0xfd, 0xc8, 0xb7,
+    ]);
+    assert.equal(decodeConsoleText(gbk), 'chrome_100_percent.pak 的密码不正确');
+  });
+
+  it('never throws on undecodable bytes', () => {
+    const out = decodeConsoleText(Buffer.from([0xff, 0xfe, 0x81, 0x40]));
+    assert.equal(typeof out, 'string');
+    assert.ok(out.length > 0);
   });
 });

@@ -837,7 +837,8 @@ router.put('/:id/relocate', async (req, res, next) => {
       return res.send({ operation: 'compress', taskId: task.id });
     }
 
-    // Archive source: extraction is mandatory when target is directory
+    // Archive source: an archive-path target moves the file itself, a directory target extracts
+    // into it
     const ext = path.extname(currentFullPath).toLowerCase();
     const isArchive = ARCHIVE_EXTENSIONS.has(ext);
 
@@ -854,6 +855,53 @@ router.put('/:id/relocate', async (req, res, next) => {
         await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
         const updated = await db.getGameDetail(Number(id));
         return res.send({ ...updated, operation: 'update_only', taskId: null });
+      }
+
+      // Archive → archive path (D:\Gal\game.rar → H:\Gal\game.rar) relocates the file instead of
+      // extracting: every target used to be treated as a directory, which both ignored the user's
+      // move intent and could mkdir a folder literally named *.rar. If the target already exists
+      // as a directory, disk state wins and the extract flow below applies.
+      const destStat = fs.existsSync(normalizedNew) ? fs.statSync(normalizedNew) : null;
+      const targetIsArchiveFile =
+        ARCHIVE_EXTENSIONS.has(path.extname(normalizedNew).toLowerCase()) &&
+        (!destStat || !destStat.isDirectory());
+
+      if (targetIsArchiveFile) {
+        if (destStat && !force) {
+          return res.status(409).send({ error: 'Target archive already exists', conflict: true });
+        }
+        fs.mkdirSync(path.dirname(normalizedNew), { recursive: true });
+
+        const sourceDrive = currentFullPath.substring(0, 1).toLowerCase();
+        const destDrive = normalizedNew.substring(0, 1).toLowerCase();
+        if (sourceDrive === destDrive) {
+          try {
+            await fs.promises.rename(currentFullPath, normalizedNew);
+          } catch (err) {
+            return res.status(500).send({ error: `Rename failed: ${err.message}` });
+          }
+          await db.updateGame(Number(id), { library_id: newLibraryId, sub_path: newSubPath });
+          const updated = await db.getGameDetail(Number(id));
+          return res.send({ ...updated, operation: 'move', taskId: null });
+        }
+
+        const task = createTask('move', {
+          source: currentFullPath,
+          dest: normalizedNew,
+          gameId: Number(id),
+          isFile: true,
+        });
+
+        void executeMoveTask(
+          task.id,
+          currentFullPath,
+          normalizedNew,
+          Number(id),
+          newLibraryId,
+          newSubPath,
+        );
+
+        return res.send({ operation: 'move', taskId: task.id });
       }
 
       const destExists = fs.existsSync(normalizedNew);

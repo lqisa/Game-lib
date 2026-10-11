@@ -28,7 +28,9 @@
                         ? 'visibility'
                         : task.type === 'backup'
                           ? 'settings_backup_restore'
-                          : 'archive'
+                          : task.type === 'compress'
+                            ? 'archive'
+                            : 'archive'
                 "
                 :color="statusColor(task)"
                 size="sm"
@@ -54,7 +56,8 @@
             <q-item-section side>
               <q-btn
                 v-if="
-                  task.status === 'running' && (task.type === 'extract' || task.type === 'backup')
+                  task.status === 'running' &&
+                  (task.type === 'extract' || task.type === 'compress' || task.type === 'backup')
                 "
                 flat
                 round

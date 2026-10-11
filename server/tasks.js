@@ -5,6 +5,22 @@ import path from 'node:path';
 import os from 'node:os';
 import { EXTRACT_TOOL_PATHS, FORMAT_TOOL_PRIORITY, COMPRESS_TOOL_PATHS } from './constants.js';
 
+// Windows console tools (unrar/rar) emit localized messages in the system codepage, not UTF-8:
+// on a zh-CN install that is GBK (CP936), so plain toString() turns every Chinese message into
+// mojibake ("chrome_100_percent.pak 的密码不正确" arrives as unreadable noise). Decode strictly
+// as UTF-8 first (pure ASCII and real UTF-8 pass through), fall back to GBK.
+const decodeConsoleText = (buf) => {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    try {
+      return new TextDecoder('gbk').decode(buf);
+    } catch {
+      return buf.toString('latin1');
+    }
+  }
+};
+
 const tasks = new Map();
 const listeners = new Set();
 
@@ -190,8 +206,13 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
 
   updateTask(taskId, { status: 'running', detail: 'Scanning files...', progress: 0 });
 
+  // A single-file move (archive relocate) cannot use directory robocopy flags: source and dest
+  // must be passed as directories plus the file name, and the non-empty check below does not
+  // apply - the route settles overwrite conflicts before creating this task.
+  const isFileMove = getTask(taskId)?.meta?.isFile === true;
+
   const destExists = fs.existsSync(dest);
-  if (destExists) {
+  if (destExists && !isFileMove) {
     const files = fs.readdirSync(dest);
     if (files.length > 0) {
       updateTask(taskId, {
@@ -204,7 +225,7 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
   }
 
   try {
-    const totalFiles = await countFilesWithRobocopy(source, dest);
+    const totalFiles = isFileMove ? 1 : await countFilesWithRobocopy(source, dest);
     updateTask(taskId, {
       meta: { ...getTask(taskId).meta, totalFiles },
       detail: `Found ${totalFiles} files`,
@@ -213,17 +234,21 @@ const executeMoveTask = async (taskId, source, dest, gameId, newLibraryId, newSu
     const logFile = path.join(os.tmpdir(), `robocopy-${taskId}.log`);
     if (fs.existsSync(logFile)) fs.unlinkSync(logFile);
 
-    const child = spawn('robocopy', [
-      source,
-      dest,
-      '/E',
-      '/COPY:DAT',
-      '/MT:8',
-      '/R:3',
-      '/W:5',
-      '/NP',
-      `/LOG+:${logFile}`,
-    ]);
+    const child = spawn(
+      'robocopy',
+      isFileMove
+        ? [
+            path.dirname(source),
+            path.dirname(dest),
+            path.basename(source),
+            '/COPY:DAT',
+            '/R:3',
+            '/W:5',
+            '/NP',
+            `/LOG+:${logFile}`,
+          ]
+        : [source, dest, '/E', '/COPY:DAT', '/MT:8', '/R:3', '/W:5', '/NP', `/LOG+:${logFile}`],
+    );
 
     attachChildProcess(taskId, child);
 
@@ -368,14 +393,14 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
           error: 'Extraction timeout',
           detail: 'Extraction timed out',
         });
-        resolve('error');
+        resolve({ status: 'error', stderrText: '' });
       },
       10 * 60 * 1000,
     );
 
     let lastProgress = 0;
     child.stdout.on('data', (data) => {
-      const text = data.toString();
+      const text = decodeConsoleText(data);
       const match = text.match(/(\d+)%/);
       if (match) {
         const p = parseInt(match[1], 10);
@@ -386,29 +411,33 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
       }
     });
 
-    let stderrText = '';
+    // stderr is kept as raw chunks and decoded once at close: splitting a GBK character across
+    // chunk boundaries would corrupt a per-chunk decode, and the text is only needed at the end.
+    const stderrChunks = [];
     child.stderr.on('data', (data) => {
-      const text = data.toString();
-      stderrText += text;
-      // Log stderr for debugging
-      console.log(`[extract:${taskId}] stderr: ${text.trim()}`);
+      stderrChunks.push(data);
+      console.log(`[extract:${taskId}] stderr: ${decodeConsoleText(data).trim()}`);
     });
 
     child.on('close', (code) => {
       clearTimeout(timeout);
+      const stderrText = decodeConsoleText(Buffer.concat(stderrChunks));
       console.log(`[extract:${taskId}] exit code: ${code}, stderr: ${stderrText.trim()}`);
       if (code === 0 || (tool.name === 'unrar' && code === 1)) {
-        resolve('success');
+        resolve({ status: 'success', stderrText });
       } else if (
-        (tool.name === 'unrar' && (code === 2 || code === 12)) ||
+        (tool.name === 'unrar' && (code === 3 || code === 11 || code === 12)) ||
         (tool.name !== 'unrar' && code === 2)
       ) {
-        // unrar: 2=wrong password/CRC, 12=password required (no password provided)
-        resolve('wrong_password');
+        // unrar exit codes: 11 = wrong password (RAR5), 3 = CRC error, which is how a wrong
+        // password surfaces on old RAR2/3 archives, 12 = password prompt aborted because stdin
+        // is closed. Exit 2 is a genuine fatal error (e.g. corrupt archive) and must surface
+        // as-is instead of burning the password list and ending as "All passwords failed".
+        resolve({ status: 'wrong_password', stderrText });
       } else {
         const task = getTask(taskId);
         if (task && task.status === 'cancelled') {
-          resolve('error');
+          resolve({ status: 'error', stderrText });
           return;
         }
         updateTask(taskId, {
@@ -416,7 +445,7 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
           error: `Exit code ${code}: ${stderrText}`,
           detail: 'Extraction failed',
         });
-        resolve('error');
+        resolve({ status: 'error', stderrText });
       }
     });
 
@@ -427,7 +456,7 @@ const tryExtract = (taskId, tool, archivePath, dest, password) => {
         error: err.message,
         detail: 'Failed to start extraction tool',
       });
-      resolve('error');
+      resolve({ status: 'error', stderrText: '' });
     });
   });
 };
@@ -491,14 +520,15 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
       }
     };
 
+    let lastPasswordStderr = '';
     for (const pwd of allPasswords) {
       const task = getTask(taskId);
       if (task?.status === 'cancelled') {
         await cleanupDest();
         return;
       }
-      const result = await tryExtract(taskId, tool, archivePath, dest, pwd);
-      if (result === 'success') {
+      const { status, stderrText } = await tryExtract(taskId, tool, archivePath, dest, pwd);
+      if (status === 'success') {
         const archiveSubPath = getTask(taskId).meta.archiveSubPath;
         if (archiveSubPath) {
           const archivedStr = await db.getSetting('archived_archives');
@@ -517,16 +547,24 @@ const executeExtractTask = async (taskId, archivePath, dest, gameId, newLibraryI
         });
         return;
       }
-      if (result === 'error') {
+      if (status === 'error') {
         await cleanupDest();
         return;
+      }
+      // 'wrong_password': remember what unrar actually said ("...的密码不正确") so that when
+      // every password has been tried the final failure carries the real reason, not just a
+      // generic message. Capped because one wrong-password run can emit a line per file.
+      if (stderrText && stderrText.trim()) {
+        lastPasswordStderr = stderrText.trim();
       }
     }
 
     await cleanupDest();
     updateTask(taskId, {
       status: 'failed',
-      error: 'All passwords failed',
+      error: lastPasswordStderr
+        ? `All passwords failed. Last attempt: ${lastPasswordStderr.slice(0, 400)}`
+        : 'All passwords failed',
       detail: 'No matching password found',
     });
   } catch (err) {
@@ -571,14 +609,14 @@ const selectCompressTool = (tools) => {
 
 const tryCompress = (taskId, tool, sourceDir, destArchive) => {
   return new Promise((resolve) => {
-    const args = ['a', '-r', '-ep1', '-idq', destArchive, `${sourceDir}\\*`];
+    const args = ['a', '-r', '-ep1', '-idq', '-m0', destArchive, `${sourceDir}\\*`];
 
     const child = spawn(tool.path, args);
     attachChildProcess(taskId, child);
 
-    let stderrText = '';
+    const stderrChunks = [];
     child.stderr.on('data', (data) => {
-      stderrText += data.toString();
+      stderrChunks.push(data);
     });
 
     child.on('close', (code) => {
@@ -592,7 +630,7 @@ const tryCompress = (taskId, tool, sourceDir, destArchive) => {
         }
         updateTask(taskId, {
           status: 'failed',
-          error: `Exit code ${code}: ${stderrText}`,
+          error: `Exit code ${code}: ${decodeConsoleText(Buffer.concat(stderrChunks))}`,
           detail: 'Compression failed',
         });
         resolve('error');
@@ -617,9 +655,9 @@ const tryTestArchive = (taskId, tool, archivePath) => {
     const child = spawn(tool.path, args);
     attachChildProcess(taskId, child);
 
-    let stderrText = '';
+    const stderrChunks = [];
     child.stderr.on('data', (data) => {
-      stderrText += data.toString();
+      stderrChunks.push(data);
     });
 
     child.on('close', (code) => {
@@ -628,7 +666,7 @@ const tryTestArchive = (taskId, tool, archivePath) => {
       } else {
         updateTask(taskId, {
           status: 'failed',
-          error: `Archive test failed (exit ${code}): ${stderrText}`,
+          error: `Archive test failed (exit ${code}): ${decodeConsoleText(Buffer.concat(stderrChunks))}`,
           detail: 'Archive integrity test failed',
         });
         resolve('error');
@@ -750,10 +788,12 @@ export {
   executeMoveTask,
   executeExtractTask,
   executeCompressTask,
+  tryExtract,
   detectExtractTools,
   getEffectiveTools,
   selectTool,
   detectCompressTools,
   getEffectiveCompressTools,
   selectCompressTool,
+  decodeConsoleText,
 };

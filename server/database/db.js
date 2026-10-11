@@ -107,6 +107,9 @@ const getGameDetail = async (id) => {
 
   const similarGames = await getSimilarGames(id);
 
+  // Same field name the games list attaches (see listGames' archivedSet) so callers read one name.
+  const archived = await db('archive').where({ game_id: id }).first();
+
   return {
     ...game,
     makers,
@@ -116,6 +119,7 @@ const getGameDetail = async (id) => {
     library,
     duplicateSources,
     similarGames,
+    is_archived: !!archived,
   };
 };
 

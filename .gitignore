@@ -6,6 +6,8 @@ node_modules
 .kilo/
 .workbuddy-ai/
 .trae/
+.zcode/
+.zcodeignore
 
 # .env files
 .env*

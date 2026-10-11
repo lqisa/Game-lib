@@ -84,6 +84,51 @@ const teardownGame = async (tmpDir, libId, gameId) => {
     .catch(() => {});
 };
 
+const waitFor = (fn, timeout = 30000, interval = 200) =>
+  new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      const result = fn();
+      if (result) return resolve(result);
+      if (Date.now() - start > timeout) return reject(new Error('waitFor timeout'));
+      setTimeout(check, interval);
+    };
+    check();
+  });
+
+const setupArchiveGame = async (libDir, libId, folder, fileName, content) => {
+  const archiveDir = path.join(libDir, folder);
+  fs.mkdirSync(archiveDir, { recursive: true });
+  const archivePath = path.join(archiveDir, fileName);
+  fs.writeFileSync(archivePath, content);
+
+  const [gid] = await db.knex('game').insert(
+    {
+      name: folder + '_' + Date.now(),
+      library_id: libId,
+      sub_path: `${folder}/${fileName}`,
+    },
+    ['id'],
+  );
+  return { gameId: gid.id || gid, archivePath };
+};
+
+const withRelocateServer = async (fn) => {
+  await initDatabase();
+  const app = express();
+  app.use(express.json());
+  app.use('/api/games', gameRouter);
+  const server = await new Promise((r) => {
+    const s = app.listen(0, '127.0.0.1', () => r(s));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    return await fn(base);
+  } finally {
+    server.close();
+  }
+};
+
 describe('Game Relocate Route', () => {
   it('should return 400 if newPath is missing', async () => {
     await initDatabase();
@@ -571,6 +616,186 @@ describe('Relocate is a per-game singleton', () => {
       assert.notEqual(res.status, 409);
 
       await teardownGame(tmpDir, libId, gameId);
+    });
+  });
+});
+
+describe('Archive → archive relocation', () => {
+  it('moves the archive file itself when the target is an archive path (same drive)', async () => {
+    // Relocating D:\Gal\game.rar to H:\Gal\game.rar used to extract the archive into a folder
+    // literally named game.rar. An archive target must move the file instead.
+    await withRelocateServer(async (base) => {
+      const { tmpDir, libDir, libId } = await setupGame(base);
+      const { gameId, archivePath } = await setupArchiveGame(
+        libDir,
+        libId,
+        'RarGame',
+        'game.rar',
+        'fake rar',
+      );
+
+      try {
+        const destArchive = path.join(tmpDir, 'RepoB', 'game.rar');
+        const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+          newPath: destArchive,
+          moveFiles: true,
+        });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.operation, 'move');
+        assert.equal(res.body.taskId, null, 'same drive renames inline without a task');
+        assert.ok(fs.existsSync(destArchive), 'the archive must be at the new path');
+        assert.ok(!fs.existsSync(archivePath), 'the source archive must be gone');
+
+        const row = await db.knex('game').where({ id: gameId }).first();
+        assert.equal(row.sub_path, destArchive, 'the record follows the moved file');
+        assert.equal(row.library_id, null, 'a target outside any library drops the library link');
+      } finally {
+        await db.knex('game').where({ id: gameId }).del();
+        await teardownGame(tmpDir, libId, 0);
+      }
+    });
+  });
+
+  it('returns 409 when the target archive already exists and force is not set', async () => {
+    await withRelocateServer(async (base) => {
+      const { tmpDir, libDir, libId } = await setupGame(base);
+      const { gameId, archivePath } = await setupArchiveGame(
+        libDir,
+        libId,
+        'RarGame',
+        'game.rar',
+        'source content',
+      );
+
+      try {
+        const destArchive = path.join(tmpDir, 'RepoB', 'game.rar');
+        fs.mkdirSync(path.dirname(destArchive), { recursive: true });
+        fs.writeFileSync(destArchive, 'existing content');
+
+        const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+          newPath: destArchive,
+          moveFiles: true,
+        });
+        assert.equal(res.status, 409);
+        assert.ok(res.body.conflict);
+        assert.equal(fs.readFileSync(destArchive, 'utf-8'), 'existing content');
+        assert.ok(fs.existsSync(archivePath), 'nothing moves without force');
+      } finally {
+        await db.knex('game').where({ id: gameId }).del();
+        await teardownGame(tmpDir, libId, 0);
+      }
+    });
+  });
+
+  it('overwrites the target archive with force', async () => {
+    await withRelocateServer(async (base) => {
+      const { tmpDir, libDir, libId } = await setupGame(base);
+      const { gameId, archivePath } = await setupArchiveGame(
+        libDir,
+        libId,
+        'RarGame',
+        'game.rar',
+        'new content',
+      );
+
+      try {
+        const destArchive = path.join(tmpDir, 'RepoB', 'game.rar');
+        fs.mkdirSync(path.dirname(destArchive), { recursive: true });
+        fs.writeFileSync(destArchive, 'old content');
+
+        const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+          newPath: destArchive,
+          moveFiles: true,
+          force: true,
+        });
+        assert.equal(res.status, 200);
+        assert.equal(res.body.operation, 'move');
+        assert.equal(fs.readFileSync(destArchive, 'utf-8'), 'new content');
+        assert.ok(!fs.existsSync(archivePath));
+      } finally {
+        await db.knex('game').where({ id: gameId }).del();
+        await teardownGame(tmpDir, libId, 0);
+      }
+    });
+  });
+
+  it('still extracts when an archive-named target already exists as a directory', async () => {
+    // Disk state wins over the extension: a folder named game.rar (e.g. left behind by the old
+    // buggy behavior) is an extraction destination, not a move target.
+    await withRelocateServer(async (base) => {
+      const { tmpDir, libDir, libId } = await setupGame(base);
+      const { gameId } = await setupArchiveGame(libDir, libId, 'RarGame', 'game.rar', 'fake rar');
+
+      try {
+        const destDir = path.join(tmpDir, 'RepoB', 'game.rar');
+        fs.mkdirSync(destDir, { recursive: true });
+
+        const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+          newPath: destDir,
+          moveFiles: true,
+        });
+        assert.equal(res.status, 200);
+        assert.equal(res.body.operation, 'extract');
+        assert.ok(res.body.taskId);
+        assert.equal(getTask(res.body.taskId)?.type, 'extract');
+      } finally {
+        await db.knex('game').where({ id: gameId }).del();
+        await teardownGame(tmpDir, libId, 0);
+      }
+    });
+  });
+
+  it('moves the file cross-drive via a robocopy file-mode task', async () => {
+    const drive = os.tmpdir().substring(0, 1);
+    const otherDrives = 'CDEFGH'.split('').filter((d) => d !== drive.toUpperCase());
+    if (otherDrives.length === 0) return;
+    const otherDrive = otherDrives[0] + ':';
+    try {
+      fs.accessSync(otherDrive);
+    } catch {
+      return;
+    }
+
+    await withRelocateServer(async (base) => {
+      const { tmpDir, libDir, libId } = await setupGame(base);
+      const { gameId, archivePath } = await setupArchiveGame(
+        libDir,
+        libId,
+        'CrossGame',
+        'big-game.7z',
+        Buffer.alloc(64 * 1024, 7),
+      );
+
+      const destArchive = path.join(otherDrive, 'gamelib-test-dest', 'big-game.7z');
+      try {
+        const res = await request('PUT', `${base}/api/games/${gameId}/relocate`, {
+          newPath: destArchive,
+          moveFiles: true,
+        });
+        assert.equal(res.status, 200);
+        assert.equal(res.body.operation, 'move');
+        assert.ok(res.body.taskId);
+
+        const finalTask = await waitFor(() => {
+          const t = getTask(res.body.taskId);
+          return t && (t.status === 'completed' || t.status === 'failed') ? t : null;
+        });
+        assert.equal(finalTask.status, 'completed', `Task failed: ${finalTask.error}`);
+        assert.ok(fs.existsSync(destArchive), 'the archive must be at the new path');
+        assert.ok(!fs.existsSync(archivePath), 'the source archive must be deleted after copy');
+
+        const row = await db.knex('game').where({ id: gameId }).first();
+        assert.equal(row.sub_path, destArchive);
+      } finally {
+        try {
+          fs.rmSync(path.join(otherDrive, 'gamelib-test-dest'), { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
+        await db.knex('game').where({ id: gameId }).del();
+        await teardownGame(tmpDir, libId, 0);
+      }
     });
   });
 });

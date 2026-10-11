@@ -23,6 +23,16 @@
         <q-btn
           flat
           round
+          :icon="game.is_archived ? 'unarchive' : 'archive'"
+          style="color: var(--m3-on-surface-variant)"
+          class="q-mb-md"
+          @click="toggleArchive"
+        >
+          <q-tooltip>{{ game.is_archived ? 'Unarchive' : 'Archive' }}</q-tooltip>
+        </q-btn>
+        <q-btn
+          flat
+          round
           icon="delete"
           style="color: var(--m3-error)"
           class="q-mb-md"
@@ -386,6 +396,26 @@
             Will compress folder to .rar and move archive to new location
           </q-banner>
           <q-banner
+            v-else-if="relocateInfo?.sourceIsArchive && relocateInfo?.targetIsArchive"
+            dense
+            class="bg-blue-1 text-blue-9 rounded-borders q-mt-sm"
+          >
+            <template v-slot:avatar>
+              <q-icon name="drive_file_move" color="blue" />
+            </template>
+            Will move the archive file to the new location (no extraction)
+          </q-banner>
+          <q-banner
+            v-else-if="relocateInfo?.sourceIsArchive"
+            dense
+            class="bg-orange-1 text-orange-9 rounded-borders q-mt-sm"
+          >
+            <template v-slot:avatar>
+              <q-icon name="archive" color="orange" />
+            </template>
+            Will extract the archive into a folder at the new location
+          </q-banner>
+          <q-banner
             v-else-if="relocateMoveFiles"
             dense
             class="bg-blue-1 text-blue-9 rounded-borders q-mt-sm"
@@ -445,6 +475,7 @@ interface GameDetail {
   r18_source: string | null;
   description: string | null;
   sub_path: string;
+  is_archived: boolean;
   makers: { id: number; name: string }[];
   genres: { id: number; name: string }[];
   tags: { id: number; name: string }[];
@@ -587,6 +618,8 @@ const relocateInfo = ref<{
   target: string;
   moveDisabled: boolean;
   compressDisabled: boolean;
+  sourceIsArchive: boolean;
+  targetIsArchive: boolean;
 } | null>(null);
 
 const taskStore = useTaskStore();
@@ -698,40 +731,48 @@ const cancelEditPath = () => {
   editPathValue.value = '';
 };
 
+// Shared by every path-shape check below: an archive game is backed by one of these files, and
+// its base name is the file name without the extension.
+const ARCHIVE_EXTS = [
+  'zip',
+  '7z',
+  'rar',
+  '001',
+  '002',
+  '003',
+  '004',
+  '005',
+  '006',
+  '007',
+  '008',
+  '009',
+];
+const fileExtension = (p: string) => (p.split('.').pop() || '').toLowerCase();
+const isArchiveFilePath = (p: string) => ARCHIVE_EXTS.includes(fileExtension(p));
+const stripArchiveExtension = (p: string) =>
+  isArchiveFilePath(p) ? p.slice(0, p.lastIndexOf('.')) : p;
+
 const getGameBaseName = () => {
   const fullPath = currentFullPath.value;
   const lastPart = fullPath.split('\\').pop() || '';
-  const archiveExts = [
-    'zip',
-    '7z',
-    'rar',
-    '001',
-    '002',
-    '003',
-    '004',
-    '005',
-    '006',
-    '007',
-    '008',
-    '009',
-  ];
-  const ext = lastPart.split('.').pop()?.toLowerCase() || '';
-  if (archiveExts.includes(ext)) {
-    return lastPart.substring(0, lastPart.lastIndexOf('.'));
-  }
-  return lastPart;
+  return stripArchiveExtension(lastPart);
 };
 
 const browseForRelocate = async () => {
   if (!window.electronAPI?.openPathForRelocate) return;
   const selected = await window.electronAPI.openPathForRelocate();
-  if (selected) {
-    const baseName = getGameBaseName();
-    if (baseName && !selected.endsWith(baseName)) {
-      editPathValue.value = selected + '\\' + baseName;
-    } else {
-      editPathValue.value = selected;
-    }
+  if (!selected) return;
+  // Picking an archive file targets a file move and is used as-is; picking a folder targets
+  // extraction, and the game-named subfolder is appended unless the selection already ends with it.
+  if (isArchiveFilePath(selected)) {
+    editPathValue.value = selected;
+    return;
+  }
+  const baseName = getGameBaseName();
+  if (baseName && !selected.endsWith(baseName)) {
+    editPathValue.value = selected + '\\' + baseName;
+  } else {
+    editPathValue.value = selected;
   }
 };
 
@@ -743,7 +784,11 @@ const submitEditPath = () => {
   }
 
   const baseName = getGameBaseName();
-  if (baseName && !newPath.endsWith(baseName)) {
+  // An archive game's base name carries no extension, so a target like H:\Gal\name.rar only
+  // "contains the game name" once its archive extension is ignored - comparing the raw path
+  // warned on every archive → archive relocation.
+  const comparablePath = stripArchiveExtension(newPath);
+  if (baseName && !comparablePath.endsWith(baseName)) {
     $q.dialog({
       title: 'Path Warning',
       message: `The new path does not contain the game name "${baseName}". Apply anyway?`,
@@ -759,33 +804,23 @@ const submitEditPath = () => {
 };
 
 const showRelocateConfirm = (newPath: string) => {
-  const ext = currentFullPath.value.split('.').pop()?.toLowerCase() || '';
-  const archiveExts = [
-    'zip',
-    '7z',
-    'rar',
-    '001',
-    '002',
-    '003',
-    '004',
-    '005',
-    '006',
-    '007',
-    '008',
-    '009',
-  ];
-  const isArchive = archiveExts.includes(ext);
-  const moveDisabled = isArchive;
+  const isArchive = isArchiveFilePath(currentFullPath.value);
+  // An archive relocated onto an archive path moves the file itself (the server decides by the
+  // target's extension); any other target is a folder the archive is extracted into.
+  const targetIsArchive = isArchive && isArchiveFilePath(newPath);
+  const moveDisabled = isArchive && !targetIsArchive;
   // Compress is only available for directories (not archives) and when moveFiles is enabled
   const compressDisabled = isArchive;
 
-  relocateMoveFiles.value = !isArchive;
+  relocateMoveFiles.value = !moveDisabled;
   relocateCompressFiles.value = !isArchive;
   relocateInfo.value = {
     source: currentFullPath.value,
     target: newPath,
     moveDisabled,
     compressDisabled,
+    sourceIsArchive: isArchive,
+    targetIsArchive,
   };
   confirmRelocate.value = true;
 };
@@ -962,6 +997,18 @@ const doDelete = async () => {
   } finally {
     deleting.value = false;
   }
+};
+
+// Same endpoints the lib page's right-click menu uses; the row only flips local state, since
+// archiving never removes the detail page from anywhere - the game is already being viewed here.
+const toggleArchive = async () => {
+  if (!game.value) return;
+  if (game.value.is_archived) {
+    await api.delete(`/games/${game.value.id}/archive`);
+  } else {
+    await api.post(`/games/${game.value.id}/archive`);
+  }
+  game.value.is_archived = !game.value.is_archived;
 };
 
 onMounted(() => {
