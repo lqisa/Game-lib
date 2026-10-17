@@ -1,2 +1,22 @@
 # This file exists to force pnpm install deps here, regardless of upper workspaces
 # https://pnpm.io/settings
+#
+# @quasar/app-vite also copies this file into dist/electron/UnPackaged before it
+# runs "pnpm install --prod" there, so the settings below apply to the packaged
+# app as well.
+
+# The packaged app's backend runs from resources/server and needs real files on
+# disk (quasar.config.ts copies UnPackaged/node_modules into
+# resources/server/node_modules). pnpm's default isolated layout links every
+# top-level package to node_modules/.pnpm with symlinks, which breaks as soon as
+# the build output is copied/zipped to another folder, so use npm-style flat
+# node_modules here.
+nodeLinker: hoisted
+
+# sharp and sqlite3 ship prebuilt native binaries that are downloaded/verified
+# by their install scripts. pnpm blocks install scripts unless allowed, and
+# (since pnpm 12) fails the install when it finds a blocked one.
+allowBuilds:
+  core-js: true # transitive dep of @tensorflow/tfjs
+  sharp: true
+  sqlite3: true
