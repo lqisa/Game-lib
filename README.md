@@ -1,6 +1,8 @@
 # Game Lib
 
-A desktop application for managing your local game library. Built with Quasar (Vue 3) + Electron, backed by an Express + SQLite server.
+A desktop + multi-device application for managing your local game library. The UI is a
+Vue 3 SPA built with shadcn-vue + Tailwind CSS, the backend is an Express + SQLite server
+that runs in-process in the Electron app or standalone on any machine.
 
 ## Features
 
@@ -11,37 +13,43 @@ A desktop application for managing your local game library. Built with Quasar (V
   - [VNDB](https://vndb.org/)
   - [Steam](https://store.steampowered.com/)
 - **Search & Filter** — Keyword search, filter by genre/tag/maker, sort by various fields
-- **Batch Operations** — Multi-select games for batch deletion
+- **Batch Operations** — Multi-select games for batch deletion / archive / favorites
 - **Virtual Grid** — Efficient virtual scrolling for large game collections
 - **Cover Cache** — Downloaded covers cached locally for fast loading
+- **Multi-device** — The same build runs as a desktop app, in dev, or as a
+  standalone LAN server you open from any browser
 
 ## Tech Stack
 
-| Layer    | Technology                         |
-| -------- | ---------------------------------- |
-| Frontend | Vue 3, Quasar 2, Pinia, Vue Router |
-| Desktop  | Electron                           |
-| Backend  | Express 5, Knex.js, SQLite3        |
-| Build    | Vite (via Quasar CLI)              |
+| Layer    | Technology                                         |
+| -------- | -------------------------------------------------- |
+| Frontend | Vue 3, shadcn-vue (Reka UI), Tailwind CSS 4, Pinia |
+| Desktop  | Electron                                           |
+| Backend  | Express 5, Knex.js, SQLite3                        |
+| Build    | electron-vite + electron-builder                   |
 
 ## Project Structure
 
 ```
-src/                  # Quasar frontend
-  pages/              # Route pages (GameLib, GameDetail, Setting)
-  components/         # Vue components (ScrapeDialog, ScannerDialog, GameCard, …)
-  composables/        # Composables (useApi, useSplitKeyword, …)
-  layouts/            # App layout
+src/                  # SPA frontend
+  pages/              # Route pages (GameLib, GameDetail, Setting, Recently)
+  components/         # Vue components
+    ui/               # vendored shadcn-vue primitives (CLI-managed, not hand-edited)
+  composables/        # useApi, useTheme, useConfirm, …
+  layouts/            # App shell
   stores/             # Pinia stores
-  boot/               # Quasar boot files
+  css/app.css         # Tailwind v4 entry + design tokens
 src-electron/         # Electron main & preload scripts
-server/               # Express backend (bundled into Electron)
+server/               # Express backend (bundled into Electron, also standalone)
   routes/             # API routes (games, libraries, scraper, settings, cover, cache)
   scraper/            # Scraper modules (bangumi, steam, vndb, dlsite)
   database/           # Knex schema & initialization (SQLite)
   scanner.js          # Directory scanner
   config.js           # Data directory configuration
   app.js              # Express app factory
+  standalone.js       # Standalone server entry (no Electron)
+config/               # Shared renderer Vite config (dev proxy + aliases)
+scripts/              # Packaging helpers (server payload for electron-builder)
 ```
 
 ## Getting Started
@@ -49,7 +57,7 @@ server/               # Express backend (bundled into Electron)
 ### Prerequisites
 
 - Node.js >= 22.12
-- pnpm (recommended)
+- pnpm >= 12
 
 ### Install dependencies
 
@@ -59,7 +67,7 @@ pnpm install
 
 ### Development
 
-Run the full Electron app (frontend + backend):
+Run the full Electron app (frontend + backend in one process tree):
 
 ```bash
 pnpm dev
@@ -68,9 +76,20 @@ pnpm dev
 Or run frontend and backend separately:
 
 ```bash
-pnpm dev:frontend    # Quasar dev server only
+pnpm dev:frontend    # Vite dev server only (proxies /api + /covers to the backend)
 pnpm dev:server      # Express backend only (with --watch)
 ```
+
+### Standalone server (multi-device)
+
+```bash
+pnpm standalone      # or: node server/standalone.js
+```
+
+Listens on `0.0.0.0:19770` by default and serves both the API and the built SPA
+(`out/renderer`), so any device on the LAN can open it in a browser. Override with
+`GAME_LIB_HOST` / `GAME_LIB_PORT` / `GAME_LIB_DATA_DIR`. There is no authentication:
+trusted networks only.
 
 ### Build for production
 
@@ -78,7 +97,8 @@ pnpm dev:server      # Express backend only (with --watch)
 pnpm build
 ```
 
-This produces a packaged Electron app in `dist/electron/Packaged/`.
+Runs the renderer/main/preload builds, prepares the backend payload
+(`.packaging/server`) and packages with electron-builder into `release/`.
 
 ### Lint & Format
 
@@ -107,6 +127,9 @@ pnpm typecheck
 
 ## Configuration
 
-See [quasar.config.ts](quasar.config.ts) for full build/dev/electron configuration.
+Build/dev configuration lives in `electron.vite.config.ts` (Electron) and
+`vite.config.ts` + `config/vite.renderer.ts` (frontend-only dev), packaging in
+`electron-builder.yml`.
 
-Data is stored in the `data/` directory by default.
+Data storage: `test-data/` in development, `%APPDATA%/Game Lib/` (Windows) or
+`~/.game-lib` in production, or `GAME_LIB_DATA_DIR` when set.

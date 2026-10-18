@@ -38,8 +38,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -55,7 +53,7 @@ jobs:
       - name: Package artifact (Windows)
         if: matrix.platform == 'win32'
         run: |
-          Compress-Archive -Path "dist/electron/Packaged/Game Lib-*" -DestinationPath "Game-Lib-${{ inputs.tag || github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip"
+          Compress-Archive -Path "release/win-unpacked" -DestinationPath "Game-Lib-${{ inputs.tag || github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.zip"
 
       # - name: Package artifact (macOS)
       #   if: matrix.platform == 'darwin'

@@ -1,617 +1,643 @@
 <template>
-  <q-page>
-    <div class="q-pa-md" style="max-width: 800px; margin: 0 auto">
-      <div class="m3-title q-mb-lg">Settings</div>
+  <div class="h-full overflow-y-auto">
+    <div class="mx-auto max-w-3xl space-y-8 p-6">
+      <h1 class="text-lg font-semibold">Settings</h1>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Game Libraries</div>
-        </q-card-section>
-        <q-card-section>
-          <q-list separator>
-            <q-item v-for="lib in libraries" :key="lib.id">
-              <q-item-section>
-                <q-item-label>{{ lib.name }}</q-item-label>
-                <q-item-label caption>{{ lib.path }}</q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <div class="row q-gutter-xs">
-                  <q-btn
-                    flat
-                    round
-                    icon="edit"
-                    style="color: var(--m3-primary)"
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Game Libraries</CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <div class="divide-y">
+            <div v-for="lib in libraries" :key="lib.id" class="flex items-center gap-1 py-2">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm">{{ lib.name }}</div>
+                <div class="text-muted-foreground truncate text-xs">{{ lib.path }}</div>
+              </div>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    class="text-primary"
                     @click="openEditDialog(lib)"
                   >
-                    <q-tooltip>Edit</q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    flat
-                    round
-                    icon="delete"
-                    style="color: var(--m3-error)"
-                    @click="deleteLibrary(lib.id)"
-                  />
-                </div>
-              </q-item-section>
-            </q-item>
-          </q-list>
-        </q-card-section>
-        <q-card-section>
-          <q-btn
-            unelevated
-            class="m3-btn--tonal"
-            icon="add"
-            label="Add Library"
-            @click="showAddDialog = true"
-          />
-        </q-card-section>
-      </q-card>
+                    <Pencil class="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit</TooltipContent>
+              </Tooltip>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="text-destructive"
+                @click="deleteLibrary(lib.id)"
+              >
+                <Trash2 class="size-4" />
+              </Button>
+            </div>
+          </div>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Bangumi Token</div>
-        </q-card-section>
-        <q-card-section>
-          <q-input v-model="token" label="Token" type="password" outlined class="m3-input" />
-        </q-card-section>
-        <q-card-section>
-          <q-btn unelevated class="m3-btn--filled" label="Save Token" @click="saveToken" />
-        </q-card-section>
-      </q-card>
+          <div>
+            <Button variant="secondary" size="sm" @click="showAddDialog = true">
+              <Plus class="size-4" />
+              Add Library
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Scrape Concurrency</div>
-        </q-card-section>
-        <q-card-section>
-          <q-input
-            v-model.number="concurrency"
-            label="Max concurrent scrapes"
-            type="number"
-            outlined
-            class="m3-input"
-            :min="1"
-            :max="10"
-            style="max-width: 200px"
-          />
-        </q-card-section>
-        <q-card-section>
-          <q-btn unelevated class="m3-btn--filled" label="Save" @click="saveConcurrency" />
-        </q-card-section>
-      </q-card>
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Bangumi Token</CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <div class="flex flex-col gap-1.5">
+            <Label for="bangumi-token" class="text-xs">Token</Label>
+            <Input id="bangumi-token" v-model="token" type="password" class="h-8 text-[13px]" />
+          </div>
+          <div>
+            <Button size="sm" @click="saveToken">Save Token</Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Scrape Match Priority</div>
-          <div class="m3-label-medium q-mb-sm">
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Scrape Concurrency</CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <div class="flex flex-col gap-1.5">
+            <Label for="scrape-concurrency" class="text-xs">Max concurrent scrapes</Label>
+            <Input
+              id="scrape-concurrency"
+              :model-value="concurrency"
+              type="number"
+              :min="1"
+              :max="10"
+              class="h-8 w-[200px] text-[13px]"
+              @update:model-value="concurrency = toNumber($event)"
+            />
+          </div>
+          <div>
+            <Button size="sm" @click="saveConcurrency">Save</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Scrape Match Priority</CardTitle>
+          <CardDescription class="text-xs">
             Sources are tried in this order for each game until one matches. A result matches when
             its name is the same, nearly the same, or contains your game name at the start or end.
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <div v-for="lang in MATCH_LANGS" :key="lang.key" class="q-mb-md">
-            <div class="text-body2 q-mb-xs" style="color: var(--m3-on-surface)">
-              {{ lang.label }}
-            </div>
-            <div class="row items-center q-gutter-xs">
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <div v-for="lang in MATCH_LANGS" :key="lang.key" class="flex flex-col gap-1.5">
+            <div class="text-sm">{{ lang.label }}</div>
+            <div class="flex flex-wrap items-center gap-1.5">
               <div
                 v-for="(source, idx) in matchPriority[lang.key]"
                 :key="source"
-                class="row items-center q-px-sm q-py-xs"
-                style="border: 1px solid var(--m3-outline-variant); border-radius: 8px"
+                class="flex items-center gap-0.5 rounded-lg border px-2 py-0.5"
               >
-                <span
-                  class="text-caption q-mr-sm"
-                  style="min-width: 14px; color: var(--m3-on-surface-variant)"
-                  >{{ idx + 1 }}</span
-                >
-                <span class="text-body2 q-mr-xs" style="color: var(--m3-on-surface)">{{
-                  source
-                }}</span>
-                <q-btn
-                  flat
-                  dense
-                  round
-                  size="xs"
-                  icon="arrow_upward"
-                  :disable="idx === 0"
+                <span class="text-muted-foreground mr-1.5 w-3.5 text-xs">{{ idx + 1 }}</span>
+                <span class="mr-1 text-sm">{{ source }}</span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  :disabled="idx === 0"
                   @click="moveSource(lang.key, idx, -1)"
-                />
-                <q-btn
-                  flat
-                  dense
-                  round
-                  size="xs"
-                  icon="arrow_downward"
-                  :disable="idx === matchPriority[lang.key].length - 1"
+                >
+                  <ArrowUp class="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  :disabled="idx === matchPriority[lang.key].length - 1"
                   @click="moveSource(lang.key, idx, 1)"
-                />
+                >
+                  <ArrowDown class="size-3.5" />
+                </Button>
               </div>
             </div>
           </div>
 
-          <q-input
-            v-model.number="matchThreshold"
-            label="Match threshold (0.5 - 1.0)"
-            type="number"
-            outlined
-            class="m3-input"
-            :min="0.5"
-            :max="1"
-            :step="0.05"
-            style="max-width: 240px"
-          />
-        </q-card-section>
-        <q-card-section>
-          <q-btn unelevated class="m3-btn--filled" label="Save" @click="saveMatchSettings" />
-          <q-btn flat class="m3-btn--text q-ml-sm" label="Reset" @click="resetMatchSettings" />
-        </q-card-section>
-      </q-card>
-
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Proxy</div>
-          <div class="m3-label-medium q-mb-sm">
-            HTTP proxy for scraper (e.g. Clash, v2ray). Restart required after change.
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <div class="row q-gutter-md items-center">
-            <q-toggle v-model="proxyEnabled" label="Enable" color="primary" />
-            <q-input
-              v-model="proxyHost"
-              label="Host"
-              outlined
-              dense
-              class="m3-input"
-              style="max-width: 180px"
-            />
-            <q-input
-              v-model.number="proxyPort"
-              label="Port"
+          <div class="flex flex-col gap-1.5">
+            <Label for="match-threshold" class="text-xs">Match threshold (0.5 - 1.0)</Label>
+            <Input
+              id="match-threshold"
+              :model-value="matchThreshold"
               type="number"
-              outlined
-              dense
-              class="m3-input"
-              style="max-width: 120px"
-              :min="1"
-              :max="65535"
-            />
-            <q-btn unelevated class="m3-btn--filled" label="Save" @click="saveProxy" />
-            <q-btn
-              flat
-              class="m3-btn--outlined"
-              label="Check Exit"
-              :loading="checkingExit"
-              @click="checkRegion"
+              :min="0.5"
+              :max="1"
+              :step="0.05"
+              class="h-8 w-[240px] text-[13px]"
+              @update:model-value="matchThreshold = toNumber($event)"
             />
           </div>
+          <div class="flex gap-2">
+            <Button size="sm" @click="saveMatchSettings">Save</Button>
+            <Button variant="ghost" size="sm" @click="resetMatchSettings">Reset</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Proxy</CardTitle>
+          <CardDescription class="text-xs">
+            HTTP proxy for scraper (e.g. Clash, v2ray). Restart required after change.
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <div class="flex flex-wrap items-end gap-3">
+            <div class="flex h-8 items-center gap-2">
+              <Switch id="proxy-enabled" v-model="proxyEnabled" />
+              <Label for="proxy-enabled" class="text-xs">Enable</Label>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <Label for="proxy-host" class="text-xs">Host</Label>
+              <Input id="proxy-host" v-model="proxyHost" class="h-8 w-[180px] text-[13px]" />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <Label for="proxy-port" class="text-xs">Port</Label>
+              <Input
+                id="proxy-port"
+                :model-value="proxyPort"
+                type="number"
+                :min="1"
+                :max="65535"
+                class="h-8 w-[120px] text-[13px]"
+                @update:model-value="proxyPort = toNumber($event)"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <Button size="sm" @click="saveProxy">Save</Button>
+              <Button variant="outline" size="sm" :disabled="checkingExit" @click="checkRegion">
+                <Loader2 v-if="checkingExit" class="size-4 animate-spin" />
+                Check Exit
+              </Button>
+            </div>
+          </div>
+
           <!-- DLsite/DMM filter some works by IP and never say so, so the exit country is
                the difference between "no results" and "results you cannot see". -->
-          <div v-if="regionResult" class="q-mt-md">
-            <q-banner
-              dense
-              rounded
-              :class="
-                regionResult.isJapan ? 'bg-green-1 text-green-9' : 'bg-orange-1 text-orange-9'
-              "
+          <Alert
+            v-if="regionResult"
+            :class="
+              regionResult.isJapan
+                ? 'border-success/30 bg-success/15 text-success'
+                : 'border-warning/30 bg-warning/15 text-warning'
+            "
+          >
+            <CheckCircle2 v-if="regionResult.isJapan" />
+            <TriangleAlert v-else />
+            <AlertDescription
+              class="text-xs"
+              :class="regionResult.isJapan ? 'text-success' : 'text-warning'"
             >
-              <template v-slot:avatar>
-                <q-icon :name="regionResult.isJapan ? 'check_circle' : 'warning'" />
+              <template v-if="regionResult.isJapan">
+                Exit is Japan{{ regionResult.country ? ' (' + regionResult.country + ')' : '' }} —
+                DLsite/DMM content is fully visible.
               </template>
-              <div class="text-caption">
-                <template v-if="regionResult.isJapan">
-                  Exit is Japan{{ regionResult.country ? ' (' + regionResult.country + ')' : '' }} —
-                  DLsite/DMM content is fully visible.
-                </template>
-                <template v-else>
-                  {{
-                    regionResult.region?.message ||
-                    'Exit is not Japan — some DLsite/DMM works will be missing from search results.'
-                  }}
-                </template>
-              </div>
-            </q-banner>
-          </div>
-        </q-card-section>
-      </q-card>
+              <template v-else>
+                {{
+                  regionResult.region?.message ||
+                  'Exit is not Japan — some DLsite/DMM works will be missing from search results.'
+                }}
+              </template>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Blacklist</div>
-          <div class="m3-label-medium q-mb-sm">
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Blacklist</CardTitle>
+          <CardDescription class="text-xs">
             Directories in this list will be excluded from scan results, game list, and cache.
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <q-markup-table flat bordered dense>
-            <thead>
-              <tr>
-                <th class="text-left">Directory Name</th>
-                <th class="text-right" style="width: 80px">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, idx) in blacklist" :key="idx">
-                <td>{{ item }}</td>
-                <td class="text-right">
-                  <q-btn
-                    flat
-                    round
-                    size="sm"
-                    icon="delete"
-                    style="color: var(--m3-error)"
-                    @click="removeBlacklist(idx)"
-                  />
-                </td>
-              </tr>
-              <tr v-if="blacklist.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant)">
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead class="h-8 text-xs">Directory Name</TableHead>
+                <TableHead class="h-8 w-20 text-right text-xs">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="(item, idx) in blacklist" :key="idx">
+                <TableCell>{{ item }}</TableCell>
+                <TableCell>
+                  <div class="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="text-destructive"
+                      @click="removeBlacklist(idx)"
+                    >
+                      <Trash2 class="size-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+              <TableRow v-if="blacklist.length === 0">
+                <TableCell :colspan="2" class="text-muted-foreground py-4 text-center text-xs">
                   No entries
-                </td>
-              </tr>
-            </tbody>
-          </q-markup-table>
-        </q-card-section>
-        <q-card-section>
-          <div class="row q-gutter-sm items-center">
-            <q-input
-              v-model="newBlacklistItem"
-              label="Directory name"
-              outlined
-              dense
-              class="m3-input"
-              style="max-width: 300px"
-              @keyup.enter="addBlacklist"
-            />
-            <q-btn unelevated class="m3-btn--tonal" label="Add" dense @click="addBlacklist" />
-          </div>
-        </q-card-section>
-      </q-card>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Archive Passwords</div>
-          <div class="m3-label-medium q-mb-sm">
+          <div class="flex items-end gap-2">
+            <div class="flex flex-col gap-1.5">
+              <Label for="new-blacklist-item" class="text-xs">Directory name</Label>
+              <Input
+                id="new-blacklist-item"
+                v-model="newBlacklistItem"
+                class="h-8 w-[300px] text-[13px]"
+                @keyup.enter="addBlacklist"
+              />
+            </div>
+            <Button variant="secondary" size="sm" @click="addBlacklist">Add</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Archive Passwords</CardTitle>
+          <CardDescription class="text-xs">
             Passwords to try when extracting encrypted archives. Tried in order, no password first.
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <q-markup-table flat bordered dense>
-            <thead>
-              <tr>
-                <th class="text-left">Password</th>
-                <th class="text-right" style="width: 80px">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(pwd, idx) in archivePasswords" :key="idx">
-                <td>
-                  <span v-if="!passwordVisible[idx]">••••••••</span>
-                  <span v-else>{{ pwd }}</span>
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    size="xs"
-                    :icon="passwordVisible[idx] ? 'visibility_off' : 'visibility'"
-                    color="grey-7"
-                    class="q-ml-xs"
-                    @click="passwordVisible[idx] = !passwordVisible[idx]"
-                  />
-                </td>
-                <td class="text-right">
-                  <q-btn
-                    flat
-                    round
-                    size="sm"
-                    icon="delete"
-                    style="color: var(--m3-error)"
-                    @click="removePassword(idx)"
-                  />
-                </td>
-              </tr>
-              <tr v-if="archivePasswords.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant)">
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead class="h-8 text-xs">Password</TableHead>
+                <TableHead class="h-8 w-20 text-right text-xs">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="(pwd, idx) in archivePasswords" :key="idx">
+                <TableCell>
+                  <div class="flex items-center gap-1">
+                    <span v-if="!passwordVisible[idx]">••••••••</span>
+                    <span v-else>{{ pwd }}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      class="text-muted-foreground"
+                      @click="passwordVisible[idx] = !passwordVisible[idx]"
+                    >
+                      <EyeOff v-if="passwordVisible[idx]" class="size-3.5" />
+                      <Eye v-else class="size-3.5" />
+                    </Button>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div class="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="text-destructive"
+                      @click="removePassword(idx)"
+                    >
+                      <Trash2 class="size-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+              <TableRow v-if="archivePasswords.length === 0">
+                <TableCell :colspan="2" class="text-muted-foreground py-4 text-center text-xs">
                   No passwords
-                </td>
-              </tr>
-            </tbody>
-          </q-markup-table>
-        </q-card-section>
-        <q-card-section>
-          <div class="row q-gutter-sm items-center">
-            <q-input
-              v-model="newPassword"
-              label="Password"
-              type="password"
-              outlined
-              dense
-              class="m3-input"
-              style="max-width: 300px"
-              @keyup.enter="addPassword"
-            />
-            <q-btn unelevated class="m3-btn--tonal" label="Add" dense @click="addPassword" />
-          </div>
-        </q-card-section>
-      </q-card>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Extraction Tools</div>
-          <div class="m3-label-medium q-mb-sm">
+          <div class="flex items-end gap-2">
+            <div class="flex flex-col gap-1.5">
+              <Label for="new-archive-password" class="text-xs">Password</Label>
+              <Input
+                id="new-archive-password"
+                v-model="newPassword"
+                type="password"
+                class="h-8 w-[300px] text-[13px]"
+                @keyup.enter="addPassword"
+              />
+            </div>
+            <Button variant="secondary" size="sm" @click="addPassword">Add</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Extraction Tools</CardTitle>
+          <CardDescription class="text-xs">
             Auto-detected paths. Override manually if needed.
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <div class="flex items-center gap-2">
+            <div class="w-[100px] shrink-0 text-sm">UnRAR.exe</div>
+            <Input v-model="extractTools.unrar" class="h-8 flex-1 text-[13px]" />
+            <CheckCircle2 v-if="extractTools.unrar" class="size-4 shrink-0 text-success" />
+            <XCircle v-else class="size-4 shrink-0 text-destructive" />
           </div>
-        </q-card-section>
-        <q-card-section>
-          <div class="q-gutter-sm">
-            <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface)">
-                UnRAR.exe
-              </div>
-              <q-input
-                v-model="extractTools.unrar"
-                outlined
-                dense
-                class="m3-input"
-                style="flex: 1"
-              />
-              <q-icon
-                :name="extractTools.unrar ? 'check_circle' : 'cancel'"
-                :color="extractTools.unrar ? 'positive' : 'negative'"
-                size="sm"
-              />
-            </div>
-            <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface)">
-                7z.exe
-              </div>
-              <q-input
-                v-model="extractTools.sevenzip"
-                outlined
-                dense
-                class="m3-input"
-                style="flex: 1"
-              />
-              <q-icon
-                :name="extractTools.sevenzip ? 'check_circle' : 'cancel'"
-                :color="extractTools.sevenzip ? 'positive' : 'negative'"
-                size="sm"
-              />
-            </div>
-            <div class="row items-center q-gutter-sm">
-              <div class="text-body2" style="min-width: 100px; color: var(--m3-on-surface)">
-                7z-zstd
-              </div>
-              <q-input
-                v-model="extractTools.sevenzipZstd"
-                outlined
-                dense
-                class="m3-input"
-                style="flex: 1"
-              />
-              <q-icon
-                :name="extractTools.sevenzipZstd ? 'check_circle' : 'cancel'"
-                :color="extractTools.sevenzipZstd ? 'positive' : 'negative'"
-                size="sm"
-              />
-            </div>
+          <div class="flex items-center gap-2">
+            <div class="w-[100px] shrink-0 text-sm">7z.exe</div>
+            <Input v-model="extractTools.sevenzip" class="h-8 flex-1 text-[13px]" />
+            <CheckCircle2 v-if="extractTools.sevenzip" class="size-4 shrink-0 text-success" />
+            <XCircle v-else class="size-4 shrink-0 text-destructive" />
           </div>
-        </q-card-section>
-        <q-card-section>
-          <q-btn unelevated class="m3-btn--filled" label="Save Tools" @click="saveExtractTools" />
-          <q-btn flat class="m3-btn--text q-ml-sm" label="Re-detect" @click="redetectTools" />
-        </q-card-section>
-      </q-card>
+          <div class="flex items-center gap-2">
+            <div class="w-[100px] shrink-0 text-sm">7z-zstd</div>
+            <Input v-model="extractTools.sevenzipZstd" class="h-8 flex-1 text-[13px]" />
+            <CheckCircle2 v-if="extractTools.sevenzipZstd" class="size-4 shrink-0 text-success" />
+            <XCircle v-else class="size-4 shrink-0 text-destructive" />
+          </div>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Archived Archives</div>
-          <div class="m3-label-medium q-mb-sm">
+          <div class="flex gap-2">
+            <Button size="sm" @click="saveExtractTools">Save Tools</Button>
+            <Button variant="ghost" size="sm" :disabled="redetectingTools" @click="redetectTools">
+              <Loader2 v-if="redetectingTools" class="size-4 animate-spin" />
+              Re-detect
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Archived Archives</CardTitle>
+          <CardDescription class="text-xs">
             Archives that have been extracted. Excluded from scans. Copy path to manually delete the
             archive file.
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <q-markup-table flat bordered dense>
-            <thead>
-              <tr>
-                <th class="text-left">Archive Path</th>
-                <th class="text-right" style="width: 120px">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, idx) in archivedArchives" :key="idx">
-                <td
-                  style="
-                    max-width: 500px;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                  "
-                >
-                  {{ item }}
-                </td>
-                <td class="text-right">
-                  <q-btn
-                    flat
-                    round
-                    size="sm"
-                    icon="content_copy"
-                    style="color: var(--m3-primary)"
-                    @click="copyPath(item)"
-                  >
-                    <q-tooltip>Copy Path</q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    flat
-                    round
-                    size="sm"
-                    icon="delete"
-                    style="color: var(--m3-error)"
-                    @click="removeArchivedArchive(idx)"
-                  />
-                </td>
-              </tr>
-              <tr v-if="archivedArchives.length === 0">
-                <td colspan="2" class="text-center" style="color: var(--m3-on-surface-variant)">
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead class="h-8 text-xs">Archive Path</TableHead>
+                <TableHead class="h-8 w-[120px] text-right text-xs">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="(item, idx) in archivedArchives" :key="idx">
+                <TableCell>
+                  <div class="max-w-[500px] truncate">{{ item }}</div>
+                </TableCell>
+                <TableCell>
+                  <div class="flex items-center justify-end gap-1">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          class="text-primary"
+                          @click="copyPath(item)"
+                        >
+                          <Copy class="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Copy Path</TooltipContent>
+                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="text-destructive"
+                      @click="removeArchivedArchive(idx)"
+                    >
+                      <Trash2 class="size-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+              <TableRow v-if="archivedArchives.length === 0">
+                <TableCell :colspan="2" class="text-muted-foreground py-4 text-center text-xs">
                   No archived archives
-                </td>
-              </tr>
-            </tbody>
-          </q-markup-table>
-        </q-card-section>
-      </q-card>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-      <q-card class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Backup</div>
-          <div class="m3-label-medium q-mb-sm">
+      <Card class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Backup</CardTitle>
+          <CardDescription class="text-xs">
             Packs the database and the covers directory into a single rar archive (store mode) in
             the backup directory.
-          </div>
-        </q-card-section>
-        <q-card-section>
-          <q-input v-model="backupDir" label="Backup Directory" outlined class="m3-input q-mb-md">
-            <template v-slot:append>
-              <q-icon
+          </CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-3 px-4 py-3">
+          <div class="flex flex-col gap-1.5">
+            <Label for="backup-dir" class="text-xs">Backup Directory</Label>
+            <div class="relative">
+              <Input id="backup-dir" v-model="backupDir" class="h-8 pr-8 text-[13px]" />
+              <Button
                 v-if="hasElectronAPI"
-                name="folder_open"
-                class="cursor-pointer"
-                style="color: var(--m3-on-surface-variant)"
+                variant="ghost"
+                size="icon-xs"
+                class="text-muted-foreground absolute top-1/2 right-1 -translate-y-1/2"
                 @click="browseBackupDirectory"
-              />
-            </template>
-          </q-input>
-          <div class="row q-gutter-md">
-            <q-select
-              v-model="backupSchedule"
-              :options="backupScheduleOptions"
-              emit-value
-              map-options
-              label="Auto Backup"
-              outlined
-              class="m3-input"
-              style="min-width: 160px"
-            />
-            <q-input
-              v-model="backupKeep"
-              type="number"
-              label="Keep Backups"
-              outlined
-              class="m3-input"
-              style="max-width: 130px"
-            />
+              >
+                <FolderOpen class="size-3.5" />
+              </Button>
+            </div>
           </div>
-          <div class="m3-label-medium q-mt-xs">
+
+          <div class="flex flex-wrap items-end gap-3">
+            <div class="flex flex-col gap-1.5">
+              <Label class="text-xs">Auto Backup</Label>
+              <Select v-model="backupSchedule">
+                <SelectTrigger class="h-8 w-[160px] text-[13px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="opt in backupScheduleOptions"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <Label for="backup-keep" class="text-xs">Keep Backups</Label>
+              <Input
+                id="backup-keep"
+                :model-value="backupKeep"
+                type="number"
+                class="h-8 w-[130px] text-[13px]"
+                @update:model-value="backupKeep = toNumber($event)"
+              />
+            </div>
+          </div>
+
+          <div class="text-muted-foreground text-xs">
             Checked at startup and then hourly. Daily backs up every 24 hours, weekly every 7 days;
             a manual backup resets the interval. Oldest backups beyond "Keep Backups" are deleted.
           </div>
-          <div v-if="backupLastRun" class="m3-label-medium q-mt-xs">
+          <div v-if="backupLastRun" class="text-muted-foreground text-xs">
             Last backup: {{ new Date(backupLastRun).toLocaleString() }}
           </div>
-          <div class="row q-gutter-sm q-mt-md">
-            <q-btn flat class="m3-btn--outlined" label="Save" @click="saveBackupSettings" />
-            <q-btn
-              unelevated
-              class="m3-btn--filled"
-              label="Backup Now"
-              icon="settings_backup_restore"
-              :disable="backupStarting"
-              @click="startBackup"
-            />
-          </div>
-        </q-card-section>
-      </q-card>
 
-      <q-card v-if="hasElectronAPI" class="m3-card q-mb-md">
-        <q-card-section>
-          <div class="m3-label-large q-mb-sm">Application</div>
-        </q-card-section>
-        <q-card-section>
-          <q-toggle
-            v-model="closeToTray"
-            label="Close to tray"
-            color="primary"
-            @update:model-value="saveCloseToTray"
-          />
-          <div class="m3-label-medium q-ml-sm q-mt-xs">
-            When closing the window, minimize to tray instead of quitting. The server keeps running
-            in the background.
+          <div class="flex gap-2">
+            <Button variant="outline" size="sm" @click="saveBackupSettings">Save</Button>
+            <Button size="sm" :disabled="backupStarting" @click="startBackup">
+              <Loader2 v-if="backupStarting" class="size-4 animate-spin" />
+              <DatabaseBackup v-else class="size-4" />
+              Backup Now
+            </Button>
           </div>
-        </q-card-section>
-        <q-card-section>
-          <q-toggle
-            v-model="autoStart"
-            label="Launch at startup"
-            color="primary"
-            @update:model-value="saveAutoStart"
-          />
-          <div class="m3-label-medium q-ml-sm q-mt-xs">
-            Automatically start Game Lib when the system boots. Starts minimized to tray.
+        </CardContent>
+      </Card>
+
+      <Card v-if="hasElectronAPI" class="gap-0 py-0">
+        <CardHeader class="px-4 py-3">
+          <CardTitle class="text-sm font-semibold">Application</CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent class="flex flex-col gap-4 px-4 py-3">
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center gap-2">
+              <Switch
+                id="close-to-tray"
+                v-model="closeToTray"
+                @update:model-value="saveCloseToTray"
+              />
+              <Label for="close-to-tray" class="text-xs">Close to tray</Label>
+            </div>
+            <div class="text-muted-foreground ml-10 text-xs">
+              When closing the window, minimize to tray instead of quitting. The server keeps
+              running in the background.
+            </div>
           </div>
-        </q-card-section>
-      </q-card>
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center gap-2">
+              <Switch id="auto-start" v-model="autoStart" @update:model-value="saveAutoStart" />
+              <Label for="auto-start" class="text-xs">Launch at startup</Label>
+            </div>
+            <div class="text-muted-foreground ml-10 text-xs">
+              Automatically start Game Lib when the system boots. Starts minimized to tray.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
 
-    <q-dialog v-model="showAddDialog">
-      <q-card style="min-width: 400px">
-        <q-card-section>
-          <div class="m3-title">Add Library</div>
-        </q-card-section>
-        <q-card-section>
-          <q-input v-model="newLibName" label="Library Name" outlined class="m3-input q-mb-md" />
-          <q-input v-model="newLibPath" label="Library Path" outlined class="m3-input">
-            <template v-slot:append>
-              <q-icon
+    <Dialog :open="showAddDialog" @update:open="showAddDialog = $event">
+      <DialogContent class="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle class="text-base font-semibold">Add Library</DialogTitle>
+          <DialogDescription class="sr-only">Register a game library folder.</DialogDescription>
+        </DialogHeader>
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-1.5">
+            <Label for="new-lib-name" class="text-xs">Library Name</Label>
+            <Input id="new-lib-name" v-model="newLibName" class="h-8 text-[13px]" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <Label for="new-lib-path" class="text-xs">Library Path</Label>
+            <div class="relative">
+              <Input id="new-lib-path" v-model="newLibPath" class="h-8 pr-8 text-[13px]" />
+              <Button
                 v-if="hasElectronAPI"
-                name="folder_open"
-                class="cursor-pointer"
-                style="color: var(--m3-on-surface-variant)"
+                variant="ghost"
+                size="icon-xs"
+                class="text-muted-foreground absolute top-1/2 right-1 -translate-y-1/2"
                 @click="browseDirectory('add')"
-              />
-            </template>
-          </q-input>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn unelevated class="m3-btn--filled" label="Add" @click="addLibrary" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
+              >
+                <FolderOpen class="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" @click="showAddDialog = false">Cancel</Button>
+          <Button size="sm" @click="addLibrary">Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-    <q-dialog v-model="showEditDialog">
-      <q-card style="min-width: 400px">
-        <q-card-section>
-          <div class="m3-title">Edit Library</div>
-        </q-card-section>
-        <q-card-section>
-          <q-input v-model="editLibName" label="Library Name" outlined class="m3-input q-mb-md" />
-          <q-input v-model="editLibPath" label="Library Path" outlined class="m3-input">
-            <template v-slot:append>
-              <q-icon
+    <Dialog :open="showEditDialog" @update:open="showEditDialog = $event">
+      <DialogContent class="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle class="text-base font-semibold">Edit Library</DialogTitle>
+          <DialogDescription class="sr-only">
+            Change the name or folder of a library.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-1.5">
+            <Label for="edit-lib-name" class="text-xs">Library Name</Label>
+            <Input id="edit-lib-name" v-model="editLibName" class="h-8 text-[13px]" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <Label for="edit-lib-path" class="text-xs">Library Path</Label>
+            <div class="relative">
+              <Input id="edit-lib-path" v-model="editLibPath" class="h-8 pr-8 text-[13px]" />
+              <Button
                 v-if="hasElectronAPI"
-                name="folder_open"
-                class="cursor-pointer"
-                style="color: var(--m3-on-surface-variant)"
+                variant="ghost"
+                size="icon-xs"
+                class="text-muted-foreground absolute top-1/2 right-1 -translate-y-1/2"
                 @click="browseDirectory('edit')"
-              />
-            </template>
-          </q-input>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn unelevated class="m3-btn--filled" label="Save" @click="saveEditLibrary" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-  </q-page>
+              >
+                <FolderOpen class="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" @click="showEditDialog = false">Cancel</Button>
+          <Button size="sm" @click="saveEditLibrary">Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useQuasar } from 'quasar';
+import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  Copy,
+  DatabaseBackup,
+  Eye,
+  EyeOff,
+  FolderOpen,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  XCircle,
+} from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import {
   SOURCE_TYPES,
   DEFAULT_MATCH_PRIORITY,
@@ -619,6 +645,37 @@ import {
 } from '../../server/scraper/match.js';
 import api from '../composables/useApi';
 import { useTaskStore } from '../stores/taskStore';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Library {
   id: number;
@@ -660,7 +717,7 @@ const checkRegion = async () => {
     regionResult.value = res.data;
   } catch {
     regionResult.value = null;
-    $q.notify({ type: 'negative', message: 'Could not check the network exit' });
+    toast.error('Could not check the network exit');
   } finally {
     checkingExit.value = false;
   }
@@ -686,7 +743,13 @@ const closeToTray = ref(false);
 
 const hasElectronAPI = computed(() => !!window.electronAPI);
 
-const $q = useQuasar();
+// The shadcn Input has no `v-model.number` modifier handling, so numeric fields coerce
+// where the value enters the ref. An empty field becomes 0, which every save path below
+// already clamps back to its own default.
+const toNumber = (value: string | number) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const normalizePath = (p: string) => p.replace(/\//g, '\\').toLowerCase().replace(/\\+$/, '');
 
@@ -726,13 +789,11 @@ const addLibrary = async () => {
   if (!newLibName.value || !newLibPath.value) return;
   const nested = checkNestedLibrary(newLibPath.value);
   if (nested) {
-    $q.notify({
-      type: 'negative',
-      message:
-        nested.conflict === 'child'
-          ? `Path is a subdirectory of library "${nested.lib.name}"`
-          : `Path contains existing library "${nested.lib.name}"`,
-    });
+    toast.error(
+      nested.conflict === 'child'
+        ? `Path is a subdirectory of library "${nested.lib.name}"`
+        : `Path contains existing library "${nested.lib.name}"`,
+    );
     return;
   }
   await api.post('/libraries', { name: newLibName.value, path: newLibPath.value });
@@ -753,13 +814,11 @@ const saveEditLibrary = async () => {
   if (!editLibName.value || !editLibPath.value) return;
   const nested = checkNestedLibrary(editLibPath.value, editLibId.value);
   if (nested) {
-    $q.notify({
-      type: 'negative',
-      message:
-        nested.conflict === 'child'
-          ? `Path is a subdirectory of library "${nested.lib.name}"`
-          : `Path contains existing library "${nested.lib.name}"`,
-    });
+    toast.error(
+      nested.conflict === 'child'
+        ? `Path is a subdirectory of library "${nested.lib.name}"`
+        : `Path contains existing library "${nested.lib.name}"`,
+    );
     return;
   }
   await api.put(`/libraries/${editLibId.value}`, {
@@ -874,7 +933,7 @@ const saveMatchSettings = async () => {
     api.put('/settings/match_priority_zh', { value: JSON.stringify(matchPriority.value.zh) }),
     api.put('/settings/match_threshold', { value: String(val) }),
   ]);
-  $q.notify({ type: 'positive', message: 'Match settings saved' });
+  toast.success('Match settings saved');
 };
 
 const resetMatchSettings = async () => {
@@ -947,10 +1006,7 @@ const saveAutoStart = async (val: boolean) => {
     // Dev builds cannot register a working auto-start entry, so put the toggle back
     // instead of showing a state the app cannot honour.
     autoStart.value = false;
-    $q.notify({
-      type: 'info',
-      message: 'Launch at startup is only available in the installed build.',
-    });
+    toast.info('Launch at startup is only available in the installed build.');
   }
 };
 
@@ -1018,10 +1074,15 @@ const fetchExtractTools = async () => {
 
 const saveExtractTools = async () => {
   await api.put('/settings/extract-tools/save', { tools: extractTools.value });
-  $q.notify({ type: 'positive', message: 'Tools saved' });
+  toast.success('Tools saved');
 };
 
+// Detection talks to the filesystem (which can be slow on a cold cache), so the button
+// reports that it is working instead of looking dead.
+const redetectingTools = ref(false);
+
 const redetectTools = async () => {
+  redetectingTools.value = true;
   try {
     const res = await api.get('/settings/detect-tools');
     extractTools.value = {
@@ -1030,9 +1091,11 @@ const redetectTools = async () => {
       sevenzipZstd: res.data.sevenzipZstd || '',
     };
     await api.put('/settings/extract-tools/save', { tools: extractTools.value });
-    $q.notify({ type: 'positive', message: 'Tools re-detected' });
+    toast.success('Tools re-detected');
   } catch {
-    $q.notify({ type: 'negative', message: 'Detection failed' });
+    toast.error('Detection failed');
+  } finally {
+    redetectingTools.value = false;
   }
 };
 
@@ -1048,7 +1111,7 @@ const fetchArchivedArchives = async () => {
 const copyPath = async (item: string) => {
   try {
     await navigator.clipboard.writeText(item);
-    $q.notify({ type: 'positive', message: 'Path copied' });
+    toast.success('Path copied');
   } catch {
     /* clipboard may not be available */
   }
@@ -1102,9 +1165,9 @@ const persistBackupSettings = async () => {
 const saveBackupSettings = async () => {
   try {
     await persistBackupSettings();
-    $q.notify({ type: 'positive', message: 'Backup settings saved' });
+    toast.success('Backup settings saved');
   } catch {
-    $q.notify({ type: 'negative', message: 'Could not save backup settings' });
+    toast.error('Could not save backup settings');
   }
 };
 
@@ -1121,15 +1184,15 @@ const startBackup = async () => {
     // Persist first: "Backup Now" should use exactly what is on screen, saved or not.
     await persistBackupSettings();
     await api.post('/backup/run');
-    $q.notify({ type: 'positive', message: 'Backup started' });
+    toast.success('Backup started');
   } catch (err) {
     const resp = (err as { response?: { status?: number; data?: { error?: string } } })?.response;
     if (resp?.status === 409) {
       // Not a failure - the click just found the running backup. Blue info, not red/warning,
       // so it cannot be mistaken for a backup that went wrong.
-      $q.notify({ type: 'info', message: resp?.data?.error || 'A backup is already running' });
+      toast.info(resp?.data?.error || 'A backup is already running');
     } else {
-      $q.notify({ type: 'negative', message: resp?.data?.error || 'Could not start the backup' });
+      toast.error(resp?.data?.error || 'Could not start the backup');
     }
   } finally {
     backupStarting.value = false;
@@ -1167,12 +1230,3 @@ onMounted(() => {
   void fetchBackupSettings();
 });
 </script>
-
-<style>
-.m3-card {
-  background: var(--m3-surface-container-low) !important;
-  border: 1px solid var(--m3-outline-variant) !important;
-  border-radius: var(--m3-shape-corner-md) !important;
-  box-shadow: none !important;
-}
-</style>

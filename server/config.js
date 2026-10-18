@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { API_PORTS } from './ports.js';
 
@@ -29,7 +30,13 @@ const getDataDir = () => {
     return process.env.GAME_LIB_DATA_DIR;
   }
   if (process.env.GAME_LIB_PROD) {
-    return path.join(process.env.APPDATA, 'Game Lib');
+    // %APPDATA% only exists on Windows. Self-hosted deployments (NAS, Linux boxes)
+    // where a standalone prod server runs without the Electron shell fall back to
+    // a dot-folder in the home directory - GAME_LIB_DATA_DIR still wins over both.
+    if (process.env.APPDATA) {
+      return path.join(process.env.APPDATA, 'Game Lib');
+    }
+    return path.join(os.homedir(), '.game-lib');
   }
   return path.join(getProjectRoot(), 'test-data');
 };
@@ -55,16 +62,16 @@ const isTestEnv = () => {
 };
 
 export const getSseToken = () => {
-  if (process.env.SSE_TOKEN) return process.env.SSE_TOKEN;
-  try {
-    const tokenFile = path.join(getDataDir(), '.sse-token');
-    if (fs.existsSync(tokenFile)) {
-      return fs.readFileSync(tokenFile, 'utf-8').trim();
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
+  // The Electron shell generates the token and passes it through the
+  // environment when it hosts this server in-process; the renderer receives it
+  // through preload and appends it to the SSE url.
+  //
+  // The old `.sse-token` file fallback was removed: only non-Electron processes
+  // (dev:server, standalone) could end up reading it, and those are exactly the
+  // servers whose clients are plain browsers - which have no way to obtain the
+  // token. It protected nothing and silently blocked the task stream in every
+  // browser-based dev/deployment flow.
+  return process.env.SSE_TOKEN || null;
 };
 
 export { getDataDir, ensureDir, isTestEnv };

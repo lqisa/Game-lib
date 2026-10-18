@@ -15,10 +15,32 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import type http from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { registerQuasarRuntime, resolveElectronAssetsPath } from '#q-app/electron/main';
 import { API_PORTS } from '../server/ports.js';
-import { getDataDir, ensureDir } from '../server/config.js';
 import { decideListenRetry, portInUseMessage } from '../server/port-policy.js';
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const platform = process.platform || os.platform();
+
+// electron-vite dev runs unpackaged; the `electron-builder --dir` output is
+// packaged. app.isPackaged is the same switch the auto-start logic below uses.
+const isDev = !app.isPackaged;
+
+// Dev-only CDP endpoint (http://127.0.0.1:5858) so tooling can inspect the
+// renderer, matching the documented "Electron debug" port in AGENTS.md.
+if (isDev) {
+  app.commandLine.appendSwitch('remote-debugging-port', '5858');
+}
+
+// out/main/.. -> repo root when running from source (electron-vite dev).
+const repoRoot = path.resolve(moduleDir, '..', '..');
+
+// In dev this file is bundled from src-electron/, so the bundled copy of
+// server/config.js can no longer infer the repo root from its own location.
+// Pinning GAME_LIB_DATA_DIR keeps dev on the repo's test-data/ directory
+// (config.js consults this env var first).
+if (isDev) {
+  process.env.GAME_LIB_DATA_DIR ??= path.join(repoRoot, 'test-data');
+}
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -36,10 +58,7 @@ app.on('second-instance', () => {
   }
 });
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const platform = process.platform || os.platform();
-
-const EXPRESS_PORT = import.meta.env.QUASAR_DEV ? API_PORTS.dev : API_PORTS.prod;
+const EXPRESS_PORT = isDev ? API_PORTS.dev : API_PORTS.prod;
 // The port the Express server actually bound to. In production it can differ from
 // EXPRESS_PORT (see the EADDRINUSE retry in startServer), so the window must always be
 // loaded from this value rather than the constant.
@@ -69,10 +88,21 @@ let saveBoundsTimer: ReturnType<typeof setTimeout> | null = null;
 let dbSetSetting: ((key: string, value: string) => Promise<void>) | null = null;
 
 function getServerDir(): string {
-  if (import.meta.env.QUASAR_DEV) {
-    return path.resolve(__dirname, '..', '..', '..', 'server');
+  if (isDev) {
+    return path.resolve(repoRoot, 'server');
   }
   return path.join(process.resourcesPath, 'server');
+}
+
+/**
+ * Runtime assets (tray/window icons) live in src-electron/electron-assets.
+ * In the package electron-builder.yml maps that folder to <asar>/electron-assets.
+ */
+function resolveAssetPath(relativePath: string): string {
+  if (isDev) {
+    return path.resolve(repoRoot, 'src-electron', 'electron-assets', relativePath);
+  }
+  return path.join(app.getAppPath(), 'electron-assets', relativePath);
 }
 
 async function startServer(): Promise<number> {
@@ -98,7 +128,9 @@ async function startServer(): Promise<number> {
     startBackgroundWorkersFn?.();
   }, 15000);
 
-  const frontendDir = path.resolve(__dirname);
+  // In dev the renderer is served by the Vite dev server; in production the
+  // built SPA ships inside the asar at out/renderer and this server hosts it.
+  const frontendDir = isDev ? null : path.join(app.getAppPath(), 'out', 'renderer');
   const expressApp = createApp(frontendDir);
 
   return new Promise((resolve, reject) => {
@@ -114,15 +146,15 @@ async function startServer(): Promise<number> {
           errorCode: err.code,
           port,
           startPort: EXPRESS_PORT,
-          isDev: Boolean(import.meta.env.QUASAR_DEV),
+          isDev,
         });
         if (decision.action === 'retry') {
           console.log(` * Port ${port} in use, trying ${decision.port}...`);
           tryListen(decision.port);
           return;
         }
-        // Dev cannot move ports (the renderer's API base url is baked from
-        // VITE_API_PORT), so surface an actionable error instead of a bind failure.
+        // Dev cannot move ports (the Vite dev server's /api proxy target is
+        // fixed), so surface an actionable error instead of a bind failure.
         if (decision.reason === 'dev-port-fixed') {
           reject(new Error(portInUseMessage(port)));
           return;
@@ -136,8 +168,15 @@ async function startServer(): Promise<number> {
 
 async function restartServer(): Promise<void> {
   if (currentServer) {
-    await new Promise<void>((resolve) => currentServer!.close(() => resolve()));
+    const server = currentServer;
     currentServer = null;
+    // close() only stops accepting new connections; it waits for established sockets
+    // to end. The renderer holds an SSE stream open indefinitely, so without a forced
+    // close the callback would never fire and the server would stay down forever.
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeAllConnections();
+    });
   }
   await startServer();
   console.log(' * Server restarted');
@@ -166,7 +205,7 @@ function destroyWindow() {
 }
 
 function createTray() {
-  const iconPath = resolveElectronAssetsPath('icons/icon.png');
+  const iconPath = resolveAssetPath('icons/icon.png');
   const icon = nativeImage.createFromPath(iconPath);
   const trayIcon = icon.resize({ width: 16, height: 16 });
 
@@ -205,10 +244,10 @@ async function createWindow() {
     return;
   }
 
-  const preloadPath = path.join(__dirname, 'electron-preload.cjs');
+  const preloadPath = path.join(moduleDir, '..', 'preload', 'electron-preload.cjs');
 
   mainWindow = new BrowserWindow({
-    icon: resolveElectronAssetsPath('icons/icon.png'),
+    icon: resolveAssetPath('icons/icon.png'),
     width: savedBounds?.width ?? 1200,
     height: savedBounds?.height ?? 800,
     ...(savedBounds?.x != null && { x: savedBounds.x }),
@@ -248,11 +287,14 @@ async function createWindow() {
     }
   });
 
-  const targetUrl = import.meta.env.QUASAR_DEV
-    ? import.meta.env.QUASAR_APP_URL
-    : `http://127.0.0.1:${expressPort}`;
+  const targetUrl = isDev ? process.env.ELECTRON_RENDERER_URL : `http://127.0.0.1:${expressPort}`;
+  if (!targetUrl) {
+    throw new Error(
+      'ELECTRON_RENDERER_URL is not set - in dev the window loads the Vite dev server URL, so start through `pnpm dev` (electron-vite).',
+    );
+  }
 
-  const maxRetries = import.meta.env.QUASAR_DEV ? 10 : 3;
+  const maxRetries = isDev ? 10 : 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       await mainWindow.loadURL(targetUrl);
@@ -268,7 +310,7 @@ async function createWindow() {
     }
   }
 
-  if (import.meta.env.QUASAR_DEBUG) {
+  if (isDev && process.env.GAME_LIB_DEVTOOLS === '1') {
     mainWindow.webContents.openDevTools();
   }
 
@@ -278,9 +320,7 @@ async function createWindow() {
 }
 
 void app.whenReady().then(async () => {
-  await registerQuasarRuntime();
-
-  if (!import.meta.env.QUASAR_DEV) {
+  if (!isDev) {
     process.env.GAME_LIB_PROD = '1';
   } else {
     // A dev run can leave an auto-start entry pointing at the shared electron.exe, which
@@ -413,15 +453,6 @@ void app.whenReady().then(async () => {
     startBackgroundWorkersFn?.();
   });
 
-  // Also write token to file for dev mode (separate Node process)
-  try {
-    const dataDir = getDataDir();
-    ensureDir(dataDir);
-    fs.writeFileSync(path.join(dataDir, '.sse-token'), sseToken);
-  } catch {
-    /* ignore */
-  }
-
   await startServer();
 
   // Cache task functions for synchronous shutdown checks
@@ -454,7 +485,7 @@ void app.whenReady().then(async () => {
     closeToTray = false;
   }
 
-  if (import.meta.env.QUASAR_DEV) {
+  if (isDev) {
     const serverDir = getServerDir();
     let restartTimer: ReturnType<typeof setTimeout> | null = null;
     fs.watch(serverDir, { recursive: true }, (_event, filename) => {
@@ -462,7 +493,10 @@ void app.whenReady().then(async () => {
       if (!filename.endsWith('.js') && !filename.endsWith('.ts')) return;
       if (restartTimer) clearTimeout(restartTimer);
       restartTimer = setTimeout(() => {
-        void restartServer();
+        console.log(` * server/ change detected (${filename}), restarting server...`);
+        void restartServer().catch((err: unknown) => {
+          console.error(' * Server restart failed:', err);
+        });
       }, 500);
     });
   }

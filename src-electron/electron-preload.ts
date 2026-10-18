@@ -1,37 +1,18 @@
 /**
- * This file is used specifically for security reasons.
- * Here you can access Nodejs stuff and inject functionality into
- * the renderer thread (accessible there through the "window" object)
+ * Preload bridge: the only place the renderer gets access to desktop-only
+ * features (native file dialogs, shell integration, window/tray state).
  *
- * WARNING!
- * If you import anything from node_modules, then make sure that the package is specified
- * in /src-electron/package.json > dependencies and NOT in devDependencies
+ * Everything is exposed through contextBridge on `window.electronAPI`; the
+ * renderer treats it as optional (`window.electronAPI?.`), because the same
+ * SPA also runs in a plain browser against a standalone server, where these
+ * desktop integrations do not exist.
  *
- * Example (injects window.myAPI.doAThing() into renderer thread):
+ * Built to .cjs on purpose: sandboxed preload scripts must not be ESM.
  *
- *   import { contextBridge } from 'electron'
- *
- *   contextBridge.exposeInMainWorld('myAPI', {
- *     doAThing: () => {}
- *   })
- *
- * WARNING!
- * If accessing Node functionality (like importing @electron/remote) then in your
- * electron-main.ts you will need to set the following when you instantiate BrowserWindow:
- *
- * mainWindow = new BrowserWindow({
- *   // ...
- *   webPreferences: {
- *     // ...
- *     sandbox: false // <-- to be able to import @electron/remote in preload script
- *   }
- * }
+ * If you extend this file, keep to electron's exposed preload APIs
+ * (ipcRenderer, contextBridge, webUtils, ...) - the preload runs sandboxed.
  */
-
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { quasarRuntime } from '#q-app/electron/preload';
-
-contextBridge.exposeInMainWorld('quasarRuntime', quasarRuntime);
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: (title: string): Promise<string | null> =>

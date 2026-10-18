@@ -1,350 +1,394 @@
 <template>
-  <q-dialog v-model="modelValue" maximized transition-show="fade" transition-hide="fade">
-    <q-card class="column no-shadow full-height scanner-card">
-      <div class="scanner-titlebar row items-center q-px-md" style="height: 56px">
+  <Dialog :open="modelValue ?? false" @update:open="modelValue = $event">
+    <DialogContent
+      class="top-0 left-0 flex h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-none"
+      @pointer-down-outside.prevent
+    >
+      <DialogHeader class="h-14 shrink-0 flex-row items-center gap-3 space-y-0 border-b px-4">
+        <div class="bg-primary/15 flex size-9 shrink-0 items-center justify-center rounded-xl">
+          <Search class="text-primary size-5" />
+        </div>
+        <DialogTitle class="text-sm font-semibold">Scan & Scrape</DialogTitle>
+        <DialogDescription class="sr-only">
+          Scan a library for unscraped games, search metadata sources in bulk and submit the adopted
+          matches.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden px-4 pt-4">
         <div
-          class="scanner-titlebar-icon row flex-center q-mr-sm"
-          style="
-            width: 36px;
-            height: 36px;
-            border-radius: 12px;
-            background: var(--m3-primary-container);
+          v-if="scanning"
+          class="bg-background/60 absolute inset-0 z-20 flex flex-col items-center justify-center gap-2"
+        >
+          <Loader2 class="text-primary size-6 animate-spin" />
+          <span class="text-muted-foreground text-sm">Scanning...</span>
+        </div>
+
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+          <Select v-model="selectedLibrary" @update:model-value="onLibraryChange">
+            <SelectTrigger size="sm" class="min-w-[200px] text-[13px]">
+              <SelectValue placeholder="Select Library" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="lib in libraries" :key="lib.id" :value="lib.id">
+                {{ lib.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Button class="h-8" :disabled="!selectedLibrary || scanning" @click="scanDir">
+            <Loader2 v-if="scanning" class="size-4 animate-spin" />
+            <FolderOpen v-else class="size-4" />
+            Scan
+          </Button>
+          <Button
+            v-if="!scraping"
+            variant="secondary"
+            class="h-8"
+            :disabled="!hasPending"
+            @click="startBatchScrape"
+          >
+            <Wand2 class="size-4" />
+            Scrape All
+          </Button>
+          <Tooltip v-else>
+            <TooltipTrigger as-child>
+              <Button variant="secondary" class="h-8" @click="togglePause">
+                <Play v-if="scrapePaused" class="size-4" />
+                <Pause v-else class="size-4" />
+                {{ scrapeDone }} / {{ scrapeTotal }}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{{
+              scrapePaused ? 'Click to resume' : 'Click to pause'
+            }}</TooltipContent>
+          </Tooltip>
+          <Button variant="outline" class="h-8" :disabled="totalCount === 0" @click="forceRefresh">
+            <RefreshCw class="size-4" />
+            Force Refresh
+          </Button>
+          <Button
+            class="h-8"
+            :disabled="submitting || (adoptedCount === 0 && staleCount === 0)"
+            @click="submitAdopted"
+          >
+            <Loader2 v-if="submitting" class="size-4 animate-spin" />
+            <Check v-else class="size-4" />
+            Submit
+            <span
+              v-if="adoptedCount > 0"
+              class="bg-background text-success rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+            >
+              {{ adoptedCount }}
+            </span>
+          </Button>
+          <span
+            v-if="staleCount > 0"
+            class="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-xs font-medium"
+          >
+            {{ staleCount }} to delete
+          </span>
+          <span
+            v-else-if="totalCount > 0"
+            class="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium"
+          >
+            {{ totalCount }} unscraped
+          </span>
+          <div class="flex-1" />
+          <div class="relative w-[180px]">
+            <Search class="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2" />
+            <Input
+              v-model="searchKeyword"
+              placeholder="Search..."
+              class="h-8 pr-7 pl-8 text-[13px]"
+            />
+            <button
+              v-if="searchKeyword"
+              type="button"
+              aria-label="Clear search"
+              class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+              @click="searchKeyword = ''"
+            >
+              <X class="size-3.5" />
+            </button>
+          </div>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                :class="compact ? 'text-muted-foreground' : 'text-primary'"
+                @click="compact = !compact"
+              >
+                <Rows3 v-if="compact" class="size-4" />
+                <LayoutList v-else class="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{{
+              compact ? 'Compact view (48px)' : 'Large view (260px)'
+            }}</TooltipContent>
+          </Tooltip>
+        </div>
+
+        <div
+          class="grid h-9 shrink-0 items-center border-b bg-muted/40 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+          :class="
+            compact
+              ? 'grid-cols-[40px_1fr_60px_180px] gap-x-2'
+              : 'grid-cols-[180px_1fr_70px_200px] gap-x-3'
           "
         >
-          <q-icon name="search" size="20px" color="primary" />
-        </div>
-        <div class="text-subtitle1" style="color: var(--m3-on-surface); font-weight: 600">
-          Scan & Scrape
-        </div>
-        <q-space />
-        <q-btn
-          dense
-          flat
-          round
-          icon="close"
-          v-close-popup
-          style="color: var(--m3-on-surface-variant)"
-        />
-      </div>
-
-      <q-card-section class="q-pa-md col" style="position: relative; overflow: hidden">
-        <q-inner-loading :showing="scanning" label="Scanning..." label-class="text-grey-8" />
-        <div class="row q-mb-md items-center q-gutter-sm">
-          <q-select
-            v-model="selectedLibrary"
-            :options="libraries"
-            option-label="name"
-            option-value="id"
-            emit-value
-            map-options
-            label="Select Library"
-            outlined
-            dense
-            style="min-width: 200px"
-            class="m3-input"
-            @update:model-value="onLibraryChange"
-          />
-          <q-btn
-            unelevated
-            class="m3-btn m3-btn--filled"
-            label="Scan"
-            icon="folder_open"
-            @click="scanDir"
-            :disable="!selectedLibrary"
-            :loading="scanning"
-          />
-          <q-btn
-            v-if="!scraping"
-            unelevated
-            class="m3-btn m3-btn--filled-tonal"
-            label="Scrape All"
-            icon="auto_fix_high"
-            @click="startBatchScrape"
-            :disable="!hasPending"
-          />
-          <q-btn
-            v-else
-            unelevated
-            class="m3-btn m3-btn--filled-tonal"
-            :label="`${scrapeDone} / ${scrapeTotal}`"
-            @click="togglePause"
+          <div class="h-full w-full" />
+          <button
+            type="button"
+            class="hover:text-primary flex items-center gap-1 transition-colors select-none"
+            @click="toggleSort('name')"
           >
-            <q-tooltip>{{ scrapePaused ? 'Click to resume' : 'Click to pause' }}</q-tooltip>
-          </q-btn>
-          <q-btn
-            outline
-            class="m3-btn m3-btn--outlined"
-            label="Force Refresh"
-            icon="refresh"
-            @click="forceRefresh"
-            :disable="totalCount === 0"
-          />
-          <q-btn
-            unelevated
-            class="m3-btn m3-btn--filled"
-            label="Submit"
-            icon="check"
-            @click="submitAdopted"
-            :disable="adoptedCount === 0 && staleCount === 0"
-            :loading="submitting"
-          >
-            <q-badge v-if="adoptedCount > 0" color="white" text-color="positive" floating>{{
-              adoptedCount
-            }}</q-badge>
-          </q-btn>
-          <q-badge v-if="staleCount > 0" color="negative" class="text-body2">
-            {{ staleCount }} to delete
-          </q-badge>
-          <q-badge v-else-if="totalCount > 0" color="grey-7" class="text-body2">
-            {{ totalCount }} unscraped
-          </q-badge>
-          <q-space />
-          <q-input
-            v-model="searchKeyword"
-            dense
-            outlined
-            clearable
-            debounce="100"
-            placeholder="Search..."
-            style="min-width: 180px"
-            class="m3-input"
-          >
-            <template v-slot:prepend>
-              <q-icon name="search" color="primary" />
-            </template>
-          </q-input>
-          <q-btn
-            flat
-            round
-            :icon="compact ? 'view_stream' : 'view_list'"
-            :color="compact ? 'grey' : 'primary'"
-            @click="compact = !compact"
-          >
-            <q-tooltip>{{ compact ? 'Compact view (48px)' : 'Large view (260px)' }}</q-tooltip>
-          </q-btn>
-        </div>
-
-        <div
-          class="scan-header q-px-md"
-          :class="{ 'scan-header--compact': compact }"
-          style="background: var(--m3-surface); border-bottom: 1px solid var(--m3-outline-variant)"
-        >
-          <div class="scan-header__cover"></div>
-          <div class="scan-header__cell scan-header__cell--sortable" @click="toggleSort('name')">
             <span>Name</span>
-            <q-icon
-              v-if="sortBy === 'name'"
-              :name="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
-              size="14px"
-            />
-          </div>
-          <div class="scan-header__cell scan-header__cell--sortable" @click="toggleSort('status')">
+            <ChevronUp v-if="sortBy === 'name' && sortOrder === 'asc'" class="size-3.5" />
+            <ChevronDown v-if="sortBy === 'name' && sortOrder === 'desc'" class="size-3.5" />
+          </button>
+          <button
+            type="button"
+            class="hover:text-primary flex items-center gap-1 transition-colors select-none"
+            @click="toggleSort('status')"
+          >
             <span>Status</span>
-            <q-icon
-              v-if="sortBy === 'status'"
-              :name="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
-              size="14px"
-            />
-          </div>
-          <div class="scan-header__cell scan-header__cell--sortable" @click="toggleSort('action')">
+            <ChevronUp v-if="sortBy === 'status' && sortOrder === 'asc'" class="size-3.5" />
+            <ChevronDown v-if="sortBy === 'status' && sortOrder === 'desc'" class="size-3.5" />
+          </button>
+          <button
+            type="button"
+            class="hover:text-primary flex items-center gap-1 transition-colors select-none"
+            @click="toggleSort('action')"
+          >
             <span>Action</span>
-            <q-icon
-              v-if="sortBy === 'action'"
-              :name="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"
-              size="14px"
-            />
-          </div>
+            <ChevronUp v-if="sortBy === 'action' && sortOrder === 'asc'" class="size-3.5" />
+            <ChevronDown v-if="sortBy === 'action' && sortOrder === 'desc'" class="size-3.5" />
+          </button>
         </div>
 
-        <q-virtual-scroll
-          :items="sortedResults"
-          :virtual-scroll-item-size="rowHeight"
-          style="height: calc(100vh - 170px)"
-        >
-          <template v-slot="{ item: row }">
+        <VirtualList :items="sortedResults" :item-key="(r) => r.subPath" :item-height="rowHeight">
+          <template #default="{ item: row }">
             <div
-              :key="row.subPath"
-              class="scan-row q-px-md"
-              :class="{
-                'scan-row--stale': row.status === 'stale',
-                'scan-row--compact': compact,
-              }"
+              class="grid h-full items-center border-b pr-4 text-sm transition-colors hover:bg-accent/50"
+              :class="[
+                compact
+                  ? 'grid-cols-[40px_1fr_60px_180px] gap-x-2'
+                  : 'grid-cols-[180px_1fr_70px_200px] gap-x-3',
+                row.status === 'stale' ? 'bg-destructive/10' : '',
+              ]"
               :style="{ paddingLeft: `${24 + row.depth * 24}px` }"
             >
-              <div class="scan-row__cover">
-                <div v-if="row.searchResult?.coverUrl" class="scan-row__cover-wrap">
-                  <img
-                    :src="resolveCoverUrl(row.searchResult.coverUrl)"
-                    class="scan-row__cover-img"
-                    @error="
-                      (e) => {
-                        const img = e.target as HTMLImageElement;
-                        img.style.display = 'none';
-                        img.dataset.error = '1';
-                      }
-                    "
-                    @load="
-                      (e) => {
-                        const img = e.target as HTMLImageElement;
-                        if (img.dataset.error) {
-                          img.style.display = '';
-                          delete img.dataset.error;
-                        }
-                      }
-                    "
-                  />
-                  <q-icon
-                    name="image"
-                    size="16px"
-                    color="grey"
-                    class="scan-row__cover-placeholder"
-                  />
-                  <q-tooltip
-                    anchor="top left"
-                    self="top left"
-                    :offset="[8, 0]"
-                    transition-show="fade"
-                    transition-hide="fade"
-                    class="tooltip-cover-preview"
-                  >
-                    <img
-                      :src="resolveCoverUrl(row.searchResult.coverUrl)"
-                      style="
-                        width: 240px;
-                        max-height: 320px;
-                        object-fit: contain;
-                        border-radius: 4px;
-                        display: block;
-                      "
-                    />
-                  </q-tooltip>
+              <div>
+                <div v-if="row.searchResult?.coverUrl">
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <div
+                        class="bg-muted relative flex items-center justify-center overflow-hidden"
+                        :class="compact ? 'size-10 rounded' : 'h-[240px] w-[180px] rounded-md'"
+                      >
+                        <img
+                          :src="resolveCoverUrl(row.searchResult.coverUrl)"
+                          class="absolute inset-0 z-[1] h-full w-full object-cover"
+                          @error="
+                            (e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.style.display = 'none';
+                              img.dataset.error = '1';
+                            }
+                          "
+                          @load="
+                            (e) => {
+                              const img = e.target as HTMLImageElement;
+                              if (img.dataset.error) {
+                                img.style.display = '';
+                                delete img.dataset.error;
+                              }
+                            }
+                          "
+                        />
+                        <Image
+                          class="text-muted-foreground pointer-events-none z-0"
+                          :class="compact ? 'size-4' : 'size-12'"
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="right"
+                      align="start"
+                      :side-offset="8"
+                      class="border-none bg-transparent p-0 shadow-none [&>span]:hidden"
+                    >
+                      <img
+                        :src="resolveCoverUrl(row.searchResult.coverUrl)"
+                        class="block max-h-[320px] w-[240px] rounded object-contain"
+                      />
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-                <div v-else class="scan-row__cover-empty flex flex-center">
-                  <q-icon
-                    :name="row.isArchive ? 'archive' : 'folder'"
-                    :size="compact ? '16px' : '48px'"
-                    color="grey"
+                <div
+                  v-else
+                  class="bg-muted flex items-center justify-center"
+                  :class="compact ? 'size-10 rounded' : 'h-[240px] w-[180px] rounded-md'"
+                >
+                  <component
+                    :is="row.isArchive ? Archive : Folder"
+                    class="text-muted-foreground"
+                    :class="compact ? 'size-4' : 'size-12'"
                   />
                 </div>
               </div>
 
-              <div class="scan-row__info">
-                <div class="row items-center no-wrap">
-                  <q-btn
-                    v-if="row.hasChildren !== false && !row.isArchive"
-                    flat
-                    round
-                    dense
-                    size="xs"
-                    :icon="row.expanded ? 'expand_more' : 'chevron_right'"
-                    :loading="row.loading && row.children.length === 0"
-                    @click="expandRow(row)"
-                    class="q-mr-xs"
-                    style="flex-shrink: 0"
-                  >
-                    <q-tooltip>{{ row.expanded ? 'Collapse' : 'Expand scan' }}</q-tooltip>
-                  </q-btn>
-                  <span v-else style="width: 28px; flex-shrink: 0"></span>
-                  <span class="text-body2 ellipsis">
-                    {{ row.name }}
-                    <q-tooltip anchor="top left" self="bottom left">{{ row.subPath }}</q-tooltip>
-                  </span>
-                  <q-icon
-                    name="folder_open"
-                    size="xs"
-                    color="grey"
-                    class="q-ml-xs cursor-pointer"
-                    @click="openFolder(row)"
-                  >
-                    <q-tooltip>Open Folder</q-tooltip>
-                  </q-icon>
+              <div class="min-w-0 overflow-hidden">
+                <div class="flex items-center">
+                  <Tooltip v-if="row.hasChildren !== false && !row.isArchive">
+                    <TooltipTrigger as-child>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        class="mr-1 shrink-0"
+                        :disabled="row.loading && row.children.length === 0"
+                        @click="expandRow(row)"
+                      >
+                        <Loader2
+                          v-if="row.loading && row.children.length === 0"
+                          class="size-3 animate-spin"
+                        />
+                        <ChevronDown v-else-if="row.expanded" class="size-3" />
+                        <ChevronRight v-else class="size-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{{ row.expanded ? 'Collapse' : 'Expand scan' }}</TooltipContent>
+                  </Tooltip>
+                  <span v-else class="w-7 shrink-0" />
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <span class="min-w-0 truncate">{{ row.name }}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start">{{ row.subPath }}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        class="text-muted-foreground ml-1 shrink-0"
+                        @click="openFolder(row)"
+                      >
+                        <FolderOpen class="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Open Folder</TooltipContent>
+                  </Tooltip>
                 </div>
-                <div v-if="row.searchResult" class="row items-center no-wrap q-mt-xs">
-                  <q-badge
+                <div v-if="row.searchResult" class="mt-1 flex items-center">
+                  <span
                     v-if="row.source"
-                    :color="sourceColor(row.source)"
-                    class="q-mr-xs"
-                    label-style="font-size:10px"
-                    >{{ row.source }}</q-badge
+                    class="mr-1 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                    :class="sourceColor(row.source)"
+                    >{{ row.source }}</span
                   >
-                  <span class="text-caption ellipsis">{{ row.searchResult.name }}</span>
-                  <span class="text-caption text-grey q-ml-sm" style="flex-shrink: 0">{{
+                  <span class="truncate text-xs">{{ row.searchResult.name }}</span>
+                  <span class="text-muted-foreground ml-2 shrink-0 text-xs">{{
                     row.searchResult.id
                   }}</span>
                 </div>
               </div>
 
-              <div class="scan-row__status">
-                <q-badge v-if="row.status === 'adopted'" color="positive">Adopted</q-badge>
-                <q-badge v-else-if="row.status === 'searching'" color="warning"
-                  >Searching...</q-badge
+              <div class="flex items-center">
+                <span
+                  v-if="row.status === 'adopted'"
+                  class="bg-success/15 text-success rounded px-1.5 py-0.5 text-[11px] font-medium"
+                  >Adopted</span
                 >
-                <q-badge v-else-if="row.status === 'error'" color="negative">Failed</q-badge>
-                <q-badge v-else-if="row.status === 'searched'" color="blue">Searched</q-badge>
-                <q-badge v-else-if="row.status === 'stale'" color="negative">Stale</q-badge>
-                <q-badge v-else color="grey">Pending</q-badge>
+                <span
+                  v-else-if="row.status === 'searching'"
+                  class="bg-warning/15 text-warning rounded px-1.5 py-0.5 text-[11px] font-medium"
+                  >Searching...</span
+                >
+                <span
+                  v-else-if="row.status === 'error'"
+                  class="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-[11px] font-medium"
+                  >Failed</span
+                >
+                <span
+                  v-else-if="row.status === 'searched'"
+                  class="bg-info/15 text-info rounded px-1.5 py-0.5 text-[11px] font-medium"
+                  >Searched</span
+                >
+                <span
+                  v-else-if="row.status === 'stale'"
+                  class="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-[11px] font-medium"
+                  >Stale</span
+                >
+                <span
+                  v-else
+                  class="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[11px] font-medium"
+                  >Pending</span
+                >
               </div>
 
-              <div class="scan-row__actions">
+              <div class="flex items-center">
                 <template v-if="row.status === 'stale'">
-                  <span class="text-grey-5 text-italic text-caption">Directory not found</span>
+                  <span class="text-muted-foreground text-xs italic">Directory not found</span>
                 </template>
                 <template v-else>
-                  <q-btn
+                  <Button
+                    variant="ghost"
                     size="sm"
-                    color="primary"
-                    label="Reselect"
-                    flat
-                    :disable="row.status !== 'searched' && row.status !== 'adopted'"
+                    class="text-primary h-7 min-w-[56px] px-2 text-xs"
+                    :disabled="row.status !== 'searched' && row.status !== 'adopted'"
                     @click="openScrapeDialog(row)"
-                    style="min-width: 56px"
-                  />
-                  <q-btn
+                  >
+                    Reselect
+                  </Button>
+                  <Button
                     v-if="row.status === 'pending' || row.status === 'error'"
                     size="sm"
-                    color="primary"
-                    label="Scrape"
+                    class="ml-1 h-7 min-w-[64px] px-2 text-xs"
                     @click="openScrapeDialog(row)"
-                    class="q-ml-xs"
-                    style="min-width: 64px"
-                  />
-                  <q-btn
+                  >
+                    Scrape
+                  </Button>
+                  <Button
                     v-else-if="row.status === 'searched'"
                     size="sm"
-                    color="positive"
-                    label="Adopt"
-                    :loading="row.loading"
+                    class="bg-success/15 text-success hover:bg-success/25 ml-1 h-7 min-w-[64px] px-2 text-xs"
+                    :disabled="row.loading"
                     @click="quickAdopt(row)"
-                    class="q-ml-xs"
-                    style="min-width: 64px"
-                  />
-                  <q-btn
-                    v-else-if="row.status === 'adopted'"
-                    size="sm"
-                    color="negative"
-                    label="Cancel"
-                    @click="discardRow(row)"
-                    class="q-ml-xs"
-                    style="min-width: 64px"
-                  />
-                  <q-btn
-                    size="xs"
-                    color="grey-7"
-                    icon="block"
-                    flat
-                    round
-                    class="q-ml-xs"
-                    @click="blacklistRow = row"
                   >
-                    <q-tooltip>Add to blacklist</q-tooltip>
-                  </q-btn>
+                    <Loader2 v-if="row.loading" class="size-3 animate-spin" />
+                    Adopt
+                  </Button>
+                  <Button
+                    v-else-if="row.status === 'adopted'"
+                    variant="destructive"
+                    size="sm"
+                    class="ml-1 h-7 min-w-[64px] px-2 text-xs"
+                    @click="discardRow(row)"
+                  >
+                    Cancel
+                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        class="text-muted-foreground ml-1"
+                        @click="blacklistRow = row"
+                      >
+                        <Ban class="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Add to blacklist</TooltipContent>
+                  </Tooltip>
                 </template>
               </div>
             </div>
           </template>
-        </q-virtual-scroll>
-      </q-card-section>
-    </q-card>
+        </VirtualList>
+      </div>
+    </DialogContent>
 
     <ScrapeDialog
       v-model="showScrapeDialog"
@@ -361,66 +405,92 @@
       @searched="onSearched"
     />
 
-    <q-dialog v-model="showConflictDialog" persistent>
-      <q-card style="min-width: 500px; max-width: 80vw">
-        <q-card-section>
-          <div class="text-h6 text-warning">
-            <q-icon name="warning" class="q-mr-sm" />
+    <Dialog :open="showConflictDialog" @update:open="onConflictDialogOpen">
+      <DialogContent class="w-[500px] max-w-[80vw] sm:max-w-[500px]" @pointer-down-outside.prevent>
+        <DialogHeader>
+          <DialogTitle class="text-warning flex items-center gap-2 text-base">
+            <TriangleAlert class="size-5" />
             Source Conflict Detected
-          </div>
-          <div class="text-body2 q-mt-sm">
+          </DialogTitle>
+          <DialogDescription class="text-sm">
             The following sources are already used by other games. Submitting will share the source.
             Do you want to continue?
-          </div>
-        </q-card-section>
-        <q-card-section style="max-height: 50vh; overflow: auto">
-          <div v-for="(conflict, i) in conflictData" :key="i" class="q-mb-md">
-            <div class="text-body2 text-weight-medium">
-              <q-badge :color="sourceColor(conflict.sourceType as SourceType)" class="q-mr-xs">{{
-                conflict.sourceType
-              }}</q-badge>
+          </DialogDescription>
+        </DialogHeader>
+        <div class="max-h-[50vh] overflow-auto">
+          <div v-for="(conflict, i) in conflictData" :key="i" class="mb-4">
+            <div class="flex items-center gap-1.5 text-sm font-medium">
+              <span
+                class="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                :class="sourceColor(conflict.sourceType as SourceType)"
+                >{{ conflict.sourceType }}</span
+              >
               ID: {{ conflict.sourceId }}
             </div>
             <div
               v-for="game in conflict.games"
               :key="game.gameId"
-              class="text-caption q-ml-md q-mt-xs"
+              class="text-muted-foreground mt-1 ml-4 flex items-center gap-1.5 text-xs"
             >
-              <q-icon name="sports_esports" size="xs" class="q-mr-xs" />
+              <Gamepad2 class="size-3.5 shrink-0" />
               {{ game.name }} (ID: {{ game.gameId }})
             </div>
           </div>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Cancel" color="negative" @click="cancelConflictSubmit" />
-          <q-btn flat label="Confirm Submit" color="primary" @click="confirmConflictSubmit" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" class="text-destructive" @click="cancelConflictSubmit">
+            Cancel
+          </Button>
+          <Button size="sm" @click="confirmConflictSubmit">Confirm Submit</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-    <q-dialog v-model="showBlacklistDialog" persistent>
-      <q-card style="min-width: 400px">
-        <q-card-section>
-          <div class="text-h6 text-warning">
-            <q-icon name="warning" class="q-mr-sm" />
+    <Dialog :open="showBlacklistDialog" @update:open="showBlacklistDialog = $event">
+      <DialogContent class="w-[400px] max-w-[80vw] sm:max-w-[400px]" @pointer-down-outside.prevent>
+        <DialogHeader>
+          <DialogTitle class="text-warning flex items-center gap-2 text-base">
+            <TriangleAlert class="size-5" />
             Add to Blacklist
-          </div>
-          <div class="text-body2 q-mt-sm">
+          </DialogTitle>
+          <DialogDescription class="text-sm">
             Add <strong>{{ blacklistRow?.subPath }}</strong> to blacklist? This directory will be
             excluded from all scan results and game lists.
-          </div>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn flat label="Confirm" color="negative" @click="confirmBlacklist" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-  </q-dialog>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" @click="showBlacklistDialog = false">Cancel</Button>
+          <Button variant="destructive" size="sm" @click="confirmBlacklist">Confirm</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import {
+  Archive,
+  Ban,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Folder,
+  FolderOpen,
+  Gamepad2,
+  Image,
+  LayoutList,
+  Loader2,
+  Pause,
+  Play,
+  RefreshCw,
+  Rows3,
+  Search,
+  TriangleAlert,
+  Wand2,
+  X,
+} from '@lucide/vue';
 import api from '../composables/useApi';
 import { splitKeyword, segmentsCache, ARCHIVE_EXT_RE } from '../composables/useSplitKeyword';
 // Shared with the server (plain ESM, no node deps) so both sides decide matches the
@@ -428,6 +498,25 @@ import { splitKeyword, segmentsCache, ARCHIVE_EXT_RE } from '../composables/useS
 import { bestMatch } from '../../server/scraper/match.js';
 import { useExpressUrl } from '../composables/useExpressUrl';
 import ScrapeDialog from './ScrapeDialog.vue';
+import VirtualList from './VirtualList.vue';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
 
 const { resolveCoverUrl } = useExpressUrl();
@@ -512,13 +601,15 @@ const detailCache = new Map<string, DetailResult>();
 
 const cacheKey = (row: ScanRow) => `${row.source || 'auto'}:${row.searchKeyword}`;
 
+// The old Quasar color names are gone; each source keeps a distinct hue through token
+// tints, so it still reads as a tag instead of a status.
 const sourceColor = (source: SourceType) => {
-  if (source === 'dlsite') return 'deep-purple';
-  if (source === 'dmm') return 'pink';
-  if (source === 'bangumi') return 'orange';
-  if (source === 'vndb') return 'cyan';
-  if (source === 'steam') return 'blue-grey';
-  return 'grey';
+  if (source === 'dlsite') return 'bg-primary/15 text-primary';
+  if (source === 'dmm') return 'bg-destructive/15 text-destructive';
+  if (source === 'bangumi') return 'bg-warning/15 text-warning';
+  if (source === 'vndb') return 'bg-info/15 text-info';
+  if (source === 'steam') return 'bg-secondary text-secondary-foreground';
+  return 'bg-muted text-muted-foreground';
 };
 
 const getSourceUrl = (source: SourceType, sourceId: string): string => {
@@ -662,7 +753,7 @@ const fetchLibraries = async () => {
   const res = await api.get('/libraries');
   libraries.value = res.data;
   if (!selectedLibrary.value && libraries.value.length > 0) {
-    selectedLibrary.value = libraries.value[0]!.id;
+    selectedLibrary.value = libraries.value[0].id;
   }
 };
 
@@ -1392,7 +1483,7 @@ const doSubmit = async (games: SubmitGame[], staleRows: ScanRow[]) => {
   }
   const removeTree = (rows: ScanRow[]) => {
     for (let i = rows.length - 1; i >= 0; i--) {
-      const r = rows[i]!;
+      const r = rows[i];
       removeTree(r.children);
       if (r.status === 'stale') {
         rows.splice(i, 1);
@@ -1504,6 +1595,18 @@ const cancelConflictSubmit = () => {
   conflictData.value = [];
 };
 
+// The conflict dialog is persistent, but it can now also be dismissed with Escape or the
+// built-in close button (the old Quasar dialog had neither). Every close goes through the
+// same reset as "Cancel" so a dismissed dialog never leaves a half-pending submission
+// behind.
+const onConflictDialogOpen = (open: boolean) => {
+  if (open) {
+    showConflictDialog.value = true;
+    return;
+  }
+  cancelConflictSubmit();
+};
+
 const openFolder = (row: ScanRow) => {
   const lib = libraries.value.find((l) => l.id === selectedLibrary.value);
   if (!lib) return;
@@ -1541,7 +1644,7 @@ const confirmBlacklist = async () => {
   const targetId = blacklistRow.value.gameId;
   const removeFromTree = (rows: ScanRow[]) => {
     for (let i = rows.length - 1; i >= 0; i--) {
-      const r = rows[i]!;
+      const r = rows[i];
       removeFromTree(r.children);
       if (r.gameId === targetId) {
         rows.splice(i, 1);
@@ -1563,188 +1666,3 @@ watch(modelValue, (val) => {
   }
 });
 </script>
-
-<style scoped>
-.scanner-card {
-  background: var(--m3-surface, white);
-}
-
-.scanner-titlebar {
-  border-bottom: 1px solid var(--m3-outline-variant, #e7e0ec);
-}
-
-.m3-btn {
-  border-radius: 20px;
-  padding: 6px 20px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  font-size: 14px;
-  min-height: 36px;
-}
-
-.m3-btn--filled {
-  background: var(--m3-primary) !important;
-  color: var(--m3-on-primary) !important;
-}
-.m3-btn--filled:hover {
-  filter: brightness(1.08);
-}
-
-.m3-btn--filled-tonal {
-  background: var(--m3-primary-container) !important;
-  color: var(--m3-on-primary-container) !important;
-}
-.m3-btn--filled-tonal:hover {
-  filter: brightness(0.95);
-}
-
-.m3-btn--outlined {
-  color: var(--m3-primary) !important;
-  border-color: var(--m3-outline) !important;
-  border-width: 1px;
-}
-.m3-btn--outlined:hover {
-  background: var(--m3-primary-container) !important;
-}
-
-.m3-input :deep(.q-field__control) {
-  border-radius: 12px;
-}
-
-.m3-input :deep(.q-field--focused .q-field__control) {
-  border-color: var(--m3-primary);
-}
-.scan-header {
-  display: grid;
-  grid-template-columns: 180px 1fr 70px 200px;
-  gap: 0 12px;
-  align-items: center;
-  height: 36px;
-  padding: 0;
-  border-bottom: 1px solid var(--m3-outline-variant, #e7e0ec);
-  background: var(--m3-surface, #f5f5f5);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-.scan-header--compact {
-  grid-template-columns: 40px 1fr 60px 180px;
-  gap: 0 8px;
-}
-.scan-header__cover {
-  width: 100%;
-  height: 100%;
-}
-.scan-header__cell {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--m3-on-surface-variant, rgba(0, 0, 0, 0.54));
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.scan-header__cell--sortable {
-  cursor: pointer;
-  user-select: none;
-  transition: color 0.15s;
-}
-.scan-header__cell--sortable:hover {
-  color: var(--q-primary);
-}
-
-.scan-row {
-  display: grid;
-  grid-template-columns: 180px 1fr 70px 200px;
-  gap: 0 12px;
-  align-items: center;
-  height: 260px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--m3-outline-variant, rgba(0, 0, 0, 0.12));
-}
-.scan-row:hover {
-  background: var(--m3-primary-container, rgba(0, 0, 0, 0.04));
-}
-.scan-row__cover {
-  flex-shrink: 0;
-}
-.scan-row__cover-wrap {
-  position: relative;
-  width: 180px;
-  height: 240px;
-  border-radius: 6px;
-  background: #e0e0e0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.scan-row__cover-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 6px;
-  z-index: 1;
-}
-.scan-row__cover-empty {
-  width: 180px;
-  height: 240px;
-  border-radius: 6px;
-  background: #e0e0e0;
-}
-.scan-row--stale {
-  background: rgba(255, 0, 0, 0.08);
-}
-.scan-row__cover-placeholder {
-  pointer-events: none;
-  z-index: 0;
-}
-.scan-row__info {
-  min-width: 0;
-  overflow: hidden;
-}
-.scan-row__status,
-.scan-row__actions {
-  display: flex;
-  align-items: center;
-}
-.scan-row--compact {
-  grid-template-columns: 40px 1fr 60px 180px;
-  gap: 0 8px;
-  height: 48px;
-  padding: 0;
-}
-.scan-row--compact .scan-row__cover-wrap {
-  width: 40px;
-  height: 40px;
-  border-radius: 4px;
-}
-.scan-row--compact .scan-row__cover-img {
-  border-radius: 4px;
-}
-.scan-row--compact .scan-row__cover-empty {
-  width: 40px;
-  height: 40px;
-  border-radius: 4px;
-}
-</style>
-
-<style>
-.tooltip-cover-preview {
-  padding: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-}
-
-body.body--dark .scan-row__cover-wrap,
-body.body--dark .scan-row__cover-empty {
-  background: #2a2a2a;
-}
-body.body--dark .scan-row--stale {
-  background: rgba(255, 60, 60, 0.12);
-}
-</style>

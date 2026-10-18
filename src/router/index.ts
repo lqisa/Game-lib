@@ -1,43 +1,16 @@
-import { defineRouter } from '#q-app';
-import {
-  createMemoryHistory,
-  createRouter,
-  createWebHashHistory,
-  createWebHistory,
-} from 'vue-router';
-
+import { createRouter, createWebHashHistory } from 'vue-router';
 import routes from './routes';
 
-/*
- * If not building with SSR mode, you can
- * directly export the Router instantiation;
- *
- * The function below can be async too; either use
- * async/await or return a Promise which resolves
- * with the Router instance.
+/**
+ * Hash history on purpose: the SPA is served by the Express server in the
+ * packaged app, and a standalone deployment may sit behind any host/path/port
+ * (NAS, another PC). Hash routes need no server-side rewrite rules, so deep
+ * links work everywhere without configuration.
  */
-
-export default defineRouter((/* { store, ssrContext } */) => {
-  const createHistory = import.meta.env.QUASAR_SERVER
-    ? createMemoryHistory
-    : import.meta.env.QUASAR_VUE_ROUTER_MODE === 'history'
-      ? createWebHistory
-      : createWebHashHistory;
-
-  const Router = createRouter({
-    scrollBehavior: (to, from, savedPosition) => {
-      if (savedPosition) {
-        return savedPosition;
-      }
-      return { left: 0, top: 0 };
-    },
-    routes,
-
-    // Leave this as is and make changes in quasar.conf.js instead!
-    // quasar.conf.js -> build -> vueRouterMode
-    // quasar.conf.js -> build -> publicPath
-    history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE),
-  });
-
-  return Router;
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes,
+  scrollBehavior: (_to, _from, savedPosition) => savedPosition ?? { left: 0, top: 0 },
 });
+
+export default router;

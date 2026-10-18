@@ -1,223 +1,229 @@
 <template>
-  <q-dialog
-    v-model="show"
-    persistent
-    transition-show="fade"
-    transition-hide="fade"
-    @show="onDialogShow"
-    @keydown.esc="show = false"
-  >
-    <q-card class="scrape-dialog-card">
-      <q-bar class="bg-primary text-white">
-        <div class="text-subtitle1">Scrape: {{ gameName }}</div>
-        <q-btn
-          v-if="folderPath"
-          dense
-          flat
-          icon="folder_open"
-          size="sm"
-          class="q-ml-xs"
-          @click="onOpenFolder"
-        >
-          <q-tooltip>Open directory</q-tooltip>
-        </q-btn>
-        <q-space />
-        <q-btn dense flat icon="close" v-close-popup />
-      </q-bar>
+  <Dialog :open="show" @update:open="show = $event">
+    <DialogContent
+      class="flex h-[80vh] w-[88vw] max-w-[90vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1400px]"
+      @pointer-down-outside.prevent
+    >
+      <DialogHeader class="flex-row items-center gap-2 space-y-0 border-b px-4 py-2.5">
+        <DialogTitle class="text-sm font-semibold">Scrape: {{ gameName }}</DialogTitle>
+        <DialogDescription class="sr-only">
+          Search a metadata source, preview a result and adopt it.
+        </DialogDescription>
+        <Tooltip v-if="folderPath">
+          <TooltipTrigger as-child>
+            <Button variant="ghost" size="icon-sm" @click="onOpenFolder">
+              <FolderOpen class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Open directory</TooltipContent>
+        </Tooltip>
+      </DialogHeader>
 
-      <q-card-section class="q-pb-none">
-        <q-tabs v-model="activeSource" dense narrow-indicator align="left" class="q-mb-sm">
-          <q-tab name="dlsite" label="DLSite" />
-          <q-tab name="dmm" label="DMM" />
-          <q-tab name="bangumi" label="Bangumi" />
-          <q-tab name="vndb" label="VNDB" />
-          <q-tab name="steam" label="Steam" />
-        </q-tabs>
+      <div class="shrink-0 px-4 pt-3">
+        <Tabs v-model="activeSource">
+          <TabsList class="h-8">
+            <TabsTrigger
+              v-for="s in SOURCES"
+              :key="s.value"
+              :value="s.value"
+              class="h-6 px-2.5 text-xs"
+            >
+              {{ s.label }}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
-        <div class="row q-gutter-sm q-mb-sm">
-          <q-input
-            v-model="keyword"
-            label="Search keyword"
-            outlined
-            dense
-            class="col"
-            :disable="manualFetching"
-            @keyup.enter="doSearch"
-          >
-            <template v-slot:append>
-              <q-icon name="search" class="cursor-pointer" @click="doSearch" />
-            </template>
-          </q-input>
-          <q-input
+        <div class="mt-2 flex items-center gap-2">
+          <div class="relative flex-1">
+            <Search class="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2" />
+            <Input
+              v-model="keyword"
+              placeholder="Search keyword"
+              class="h-8 pl-8 text-[13px]"
+              :disabled="manualFetching"
+              @keyup.enter="doSearch"
+            />
+          </div>
+          <Input
             v-model="idInput"
-            :label="idInputLabel"
-            outlined
-            dense
-            style="min-width: 160px"
-            :disable="searching"
+            :placeholder="idInputLabel"
+            class="h-8 w-48 text-[13px]"
+            :disabled="searching"
             @keyup.enter="doSearchOrFetch"
           />
-          <q-btn
-            color="primary"
-            :label="isSearching ? 'Stop' : 'Search'"
+          <Button
+            size="sm"
+            class="h-8"
+            :disabled="!isSearching && !keyword.trim() && !idInput.trim()"
             @click="isSearching ? cancelSearch() : doSearchOrFetch()"
-            :disable="!isSearching && !keyword.trim() && !idInput.trim()"
-          />
+          >
+            {{ isSearching ? 'Stop' : 'Search' }}
+          </Button>
         </div>
 
-        <div v-if="segments.length > 0" class="q-mb-sm">
-          <q-chip
+        <div v-if="segments.length > 0" class="mt-2 flex flex-wrap gap-1">
+          <button
             v-for="seg in segments"
             :key="seg"
-            clickable
-            dense
-            :color="seg === gameName ? 'blue-grey-2' : 'grey-3'"
-            text-color="dark"
+            type="button"
+            class="bg-secondary text-secondary-foreground hover:bg-accent rounded-md px-2 py-0.5 text-xs transition-colors"
             @click="keyword = seg"
           >
             {{ seg }}
-          </q-chip>
+          </button>
         </div>
-      </q-card-section>
+      </div>
 
-      <q-card-section class="scrape-content">
-        <div class="row no-wrap scrape-content-row">
-          <div class="col-5 scrape-results-col">
-            <div v-if="results.length > 0">
+      <div class="flex min-h-0 flex-1 gap-3 px-4 py-3">
+        <div class="w-[42%] min-w-0 overflow-y-auto pr-1">
+          <button
+            v-for="(r, idx) in results"
+            :key="r.id"
+            type="button"
+            class="hover:bg-accent mb-1 flex w-full gap-2 rounded-lg border p-1 text-left transition-colors"
+            :class="selectedIdx === idx ? 'border-primary bg-primary/5' : 'border-transparent'"
+            @click="selectResult(idx)"
+          >
+            <div class="bg-muted h-[76px] w-[57px] shrink-0 overflow-hidden rounded-md">
+              <img
+                v-if="r.coverUrl && !failedCovers[r.coverUrl]"
+                :src="resolveCoverUrl(r.coverUrl)"
+                class="h-full w-full object-cover"
+                alt=""
+                @error="markCoverFailed(r.coverUrl)"
+              />
               <div
-                v-for="(r, idx) in results"
-                :key="r.id"
-                class="cursor-pointer q-mb-xs"
-                @click="selectResult(idx)"
+                v-else
+                class="text-muted-foreground flex h-full w-full items-center justify-center"
               >
-                <q-card :class="{ 'scrape-result--selected': selectedIdx === idx }" flat bordered>
-                  <div class="row no-wrap">
-                    <div class="scrape-cover-box">
-                      <q-img
-                        v-if="r.coverUrl"
-                        :src="resolveCoverUrl(r.coverUrl)"
-                        :ratio="3 / 4"
-                        class="rounded-borders-left"
-                      >
-                        <template v-slot:error>
-                          <div class="absolute-full flex flex-center scrape-cover-placeholder">
-                            <q-icon name="broken_image" size="18px" color="grey" />
-                          </div>
-                        </template>
-                      </q-img>
-                      <div
-                        v-else
-                        class="scrape-cover-placeholder flex flex-center scrape-cover-ratio"
-                      >
-                        <q-icon name="videogame_asset" size="18px" color="grey" />
-                      </div>
-                    </div>
-                    <div class="col q-pa-xs scrape-info-col">
-                      <div class="text-caption ellipsis-2-lines scrape-result-name">
-                        {{ r.name }}
-                      </div>
-                      <div class="text-caption text-grey ellipsis">{{ r.makerName }}</div>
-                      <div class="text-caption text-grey scrape-result-id">{{ r.id }}</div>
-                    </div>
-                  </div>
-                </q-card>
+                <ImageOff class="size-4" />
               </div>
             </div>
-
-            <div v-if="results.length === 0 && searched" class="text-center text-grey q-pa-md">
-              No results found. Try a different keyword or switch source.
+            <div class="min-w-0 flex-1 py-0.5">
+              <div class="line-clamp-2 text-[13px] leading-snug">{{ r.name }}</div>
+              <div class="text-muted-foreground mt-0.5 truncate text-xs">{{ r.makerName }}</div>
+              <div class="text-muted-foreground truncate text-[10px]">{{ r.id }}</div>
             </div>
+          </button>
 
-            <div v-if="searching" class="text-center q-pa-md">
-              <q-spinner-dots size="24px" color="primary" />
-            </div>
+          <div
+            v-if="results.length === 0 && searched"
+            class="text-muted-foreground p-6 text-center text-sm"
+          >
+            No results found. Try a different keyword or switch source.
           </div>
 
-          <q-separator vertical class="q-mx-sm" />
+          <div v-if="searching" class="flex justify-center p-4">
+            <Loader2 class="text-primary size-5 animate-spin" />
+          </div>
+        </div>
 
-          <div class="col scrape-preview-col">
-            <div v-if="selectedResult">
-              <div class="row q-col-gutter-md">
-                <div class="col-5">
-                  <q-img
-                    v-if="detailCoverUrl"
-                    :src="resolveCoverUrl(detailCoverUrl)"
-                    :ratio="3 / 4"
-                    class="rounded-borders"
-                  />
+        <div class="bg-border w-px shrink-0" />
+
+        <div class="min-w-0 flex-1 overflow-y-auto">
+          <div v-if="selectedResult">
+            <div class="flex gap-4">
+              <div
+                class="bg-muted aspect-[3/4] w-2/5 max-w-[220px] shrink-0 overflow-hidden rounded-lg"
+              >
+                <img
+                  v-if="detailCoverUrl"
+                  :src="resolveCoverUrl(detailCoverUrl)"
+                  class="h-full w-full object-cover"
+                  alt=""
+                />
+                <div v-else class="flex h-full items-center justify-center">
+                  <Gamepad2 class="text-muted-foreground size-6" />
                 </div>
-                <div class="col-7">
-                  <div class="text-subtitle2 ellipsis-2-lines">{{ selectedResult.name }}</div>
-                  <div class="text-caption text-grey q-mt-xs">
-                    <span class="text-grey-7">ID:</span> {{ selectedResult.id }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="line-clamp-2 text-sm font-medium">{{ selectedResult.name }}</div>
+                <div class="text-muted-foreground mt-2 space-y-0.5 text-xs">
+                  <div>
+                    <span class="text-foreground/70 font-medium">ID:</span> {{ selectedResult.id }}
                   </div>
-                  <div class="text-caption text-grey">
-                    <span class="text-grey-7">Maker:</span> {{ selectedResult.makerName }}
+                  <div>
+                    <span class="text-foreground/70 font-medium">Maker:</span>
+                    {{ selectedResult.makerName }}
                   </div>
-                  <div v-if="detailLoading" class="text-center q-pa-sm">
-                    <q-spinner-dots size="24px" />
+                </div>
+                <div v-if="detailLoading" class="mt-3">
+                  <Loader2 class="text-primary size-5 animate-spin" />
+                </div>
+                <div v-if="detail">
+                  <div v-if="detail.genres?.length" class="mt-2 flex flex-wrap gap-1">
+                    <span
+                      v-for="g in detail.genres"
+                      :key="g"
+                      class="bg-info/15 text-info rounded px-1.5 py-0.5 text-[11px]"
+                    >
+                      {{ g }}
+                    </span>
                   </div>
-                  <div v-if="detail">
-                    <div v-if="detail.genres?.length" class="q-mt-xs">
-                      <q-chip
-                        v-for="g in detail.genres"
-                        :key="g"
-                        dense
-                        size="sm"
-                        color="blue"
-                        text-color="white"
-                        >{{ g }}</q-chip
-                      >
-                    </div>
-                    <div v-if="detail.tags?.length" class="q-mt-xs">
-                      <q-chip
-                        v-for="t in detail.tags"
-                        :key="t"
-                        dense
-                        size="sm"
-                        color="teal"
-                        text-color="white"
-                        >{{ t }}</q-chip
-                      >
-                    </div>
-                    <div v-if="detail.description" class="text-caption q-mt-sm scrape-description">
-                      {{ detail.description }}
-                    </div>
+                  <div v-if="detail.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
+                    <span
+                      v-for="t in detail.tags"
+                      :key="t"
+                      class="bg-success/15 text-success rounded px-1.5 py-0.5 text-[11px]"
+                    >
+                      {{ t }}
+                    </span>
+                  </div>
+                  <div
+                    v-if="detail.description"
+                    class="text-muted-foreground mt-3 max-h-32 overflow-y-auto text-xs whitespace-pre-wrap"
+                  >
+                    {{ detail.description }}
                   </div>
                 </div>
               </div>
             </div>
-            <div v-else class="flex flex-center text-grey scrape-empty-state">
-              <div class="text-center">
-                <q-icon name="touch_app" size="48px" color="grey-4" />
-                <div class="q-mt-sm">Select a result to preview</div>
-              </div>
+          </div>
+          <div
+            v-else
+            class="text-muted-foreground flex h-full min-h-[200px] items-center justify-center"
+          >
+            <div class="text-center">
+              <MousePointerClick class="mx-auto mb-2 size-10 opacity-40" />
+              <p class="text-sm">Select a result to preview</p>
             </div>
           </div>
         </div>
-      </q-card-section>
-      <q-card-actions align="right" class="scrape-actions q-px-md q-py-sm">
-        <q-btn flat label="Cancel" color="grey-7" v-close-popup />
-        <q-btn
-          color="positive"
-          label="Adopt"
+      </div>
+
+      <div class="bg-muted/50 flex shrink-0 items-center justify-end gap-2 border-t px-4 py-2.5">
+        <Button variant="ghost" size="sm" @click="show = false">Cancel</Button>
+        <Button
+          size="sm"
+          :disabled="!selectedResult || detailLoading || manualFetching"
           @click="adopt"
-          :disable="!selectedResult || detailLoading || manualFetching"
-        />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+        >
+          Adopt
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
-import { useQuasar } from 'quasar';
+import { FolderOpen, Gamepad2, ImageOff, Loader2, MousePointerClick, Search } from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import api from '../composables/useApi';
-import { getCleanedName } from '../composables/useSplitKeyword';
 import { useExpressUrl } from '../composables/useExpressUrl';
+import { getCleanedName } from '../composables/useSplitKeyword';
 import type { SourceType, SearchResult, DetailResult, AdoptData } from '../types/scrape';
-
-const { resolveCoverUrl } = useExpressUrl();
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -241,6 +247,16 @@ const show = computed({
   set: (val) => emit('update:modelValue', val),
 });
 
+const { resolveCoverUrl } = useExpressUrl();
+
+const SOURCES: { value: SourceType; label: string }[] = [
+  { value: 'dlsite', label: 'DLSite' },
+  { value: 'dmm', label: 'DMM' },
+  { value: 'bangumi', label: 'Bangumi' },
+  { value: 'vndb', label: 'VNDB' },
+  { value: 'steam', label: 'Steam' },
+];
+
 const activeSource = ref<SourceType>('dlsite');
 const keyword = ref('');
 const idInput = ref('');
@@ -252,7 +268,12 @@ const detail = ref<DetailResult | null>(null);
 const detailLoading = ref(false);
 const manualFetching = ref(false);
 
-const $q = useQuasar();
+// Covers that failed to load (dead URL, hotlink protection) fall back to the
+// placeholder icon. Keyed by URL because result rows are recycled by v-for.
+const failedCovers = ref<Record<string, true>>({});
+const markCoverFailed = (url: string) => {
+  failedCovers.value = { ...failedCovers.value, [url]: true };
+};
 
 // Scrape failures used to be swallowed (there is no global axios error interceptor), so a
 // source that was blocked or unreachable looked exactly like "no results". Surface them.
@@ -267,12 +288,12 @@ const reportScrapeError = (err: unknown, action: string) => {
   const data = e?.response?.data;
   const isRegion = data?.code === 'DMM_REGION_BLOCKED';
   const isSelector = data?.code === 'DMM_SELECTOR_MISSING';
-  $q.notify({
-    type: isRegion || isSelector ? 'warning' : 'negative',
-    message: data?.error || `Scrape ${action} failed`,
-    timeout: isRegion || isSelector ? 12000 : 6000,
-    multiLine: true,
-  });
+  const message = data?.error || `Scrape ${action} failed`;
+  if (isRegion || isSelector) {
+    toast.warning(message, { duration: 12000 });
+  } else {
+    toast.error(message);
+  }
 };
 
 /**
@@ -284,7 +305,7 @@ const reportRegionNotice = (
   region: { isJapan?: boolean | null; message?: string } | null | undefined,
 ) => {
   if (!region || region.isJapan !== false || !region.message) return;
-  $q.notify({ type: 'warning', message: region.message, timeout: 12000, multiLine: true });
+  toast.warning(region.message, { duration: 12000 });
 };
 const searchAbort = ref<AbortController | null>(null);
 const fetchAbort = ref<AbortController | null>(null);
@@ -505,8 +526,12 @@ const resolveAutoSource = (name: string): SourceType => {
   return 'bangumi';
 };
 
+// Old behaviour: @show prepared the dialog and started the first search; closing
+// aborted every in-flight request.
 watch(show, (val) => {
-  if (!val) {
+  if (val) {
+    void onDialogShow();
+  } else {
     searchAbort.value?.abort();
     fetchAbort.value?.abort();
     manualFetchAbort.value?.abort();
@@ -519,6 +544,7 @@ const onDialogShow = async () => {
   detail.value = null;
   searched.value = false;
   idInput.value = '';
+  failedCovers.value = {};
 
   const searchName = props.gameName;
   const rawKeyword = props.defaultKeyword || searchName.match(/RJ\d+/)?.[0] || searchName;
@@ -541,75 +567,10 @@ const onDialogShow = async () => {
     void doSearch();
   }
 };
+
+// The old q-dialog fired @show only when mounted through v-model; a mounted-but-open
+// dialog (e.g. restored state) needs the same preparation.
+if (props.modelValue) {
+  void onDialogShow();
+}
 </script>
-
-<style scoped>
-.scrape-dialog-card {
-  min-width: 88vw;
-  min-height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-.scrape-content {
-  flex: 1 1 0%;
-  overflow: hidden;
-  padding-top: 0;
-  display: flex;
-}
-.scrape-content-row {
-  flex: 1 1 0%;
-}
-.scrape-results-col {
-  overflow-y: auto;
-}
-.scrape-preview-col {
-  overflow-y: auto;
-  max-height: inherit;
-}
-.scrape-cover-box {
-  width: 60px;
-  flex-shrink: 0;
-}
-.scrape-cover-ratio {
-  aspect-ratio: 3 / 4;
-}
-.scrape-info-col {
-  min-width: 0;
-}
-.scrape-result-name {
-  line-height: 1.3;
-}
-.scrape-result-id {
-  font-size: 10px;
-}
-.scrape-description {
-  white-space: pre-wrap;
-  max-height: 120px;
-  overflow-y: auto;
-}
-.scrape-empty-state {
-  height: 100%;
-  min-height: 200px;
-}
-.scrape-result--selected {
-  background: #e3f2fd;
-}
-.scrape-actions {
-  background: #f5f5f5;
-}
-.scrape-cover-placeholder {
-  background: #e0e0e0;
-}
-</style>
-
-<style>
-body.body--dark .scrape-result--selected {
-  background: rgba(25, 118, 210, 0.2);
-}
-body.body--dark .scrape-actions {
-  background: #1d1d1d;
-}
-body.body--dark .scrape-cover-placeholder {
-  background: #2a2a2a;
-}
-</style>

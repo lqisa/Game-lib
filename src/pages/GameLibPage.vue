@@ -1,163 +1,170 @@
 <template>
-  <q-page style="overflow: hidden; display: flex; flex-direction: column">
-    <div
-      class="row items-center q-gutter-sm q-px-md q-py-sm"
-      style="border-bottom: 1px solid var(--m3-outline-variant)"
-    >
-      <q-input
-        v-model="keyword"
-        label="Search"
-        outlined
-        dense
-        clearable
-        class="m3-input"
-        style="max-width: 300px"
-        @clear="onSearchClear"
-      >
-        <template v-slot:prepend>
-          <q-icon name="search" color="primary" />
-        </template>
-      </q-input>
-      <q-btn
-        flat
-        icon="filter_list"
-        label="Filter"
-        class="m3-btn--tonal"
-        @click="showFilter = true"
-      >
-        <q-badge v-if="activeFilterCount > 0" color="primary" floating>{{
-          activeFilterCount
-        }}</q-badge>
-      </q-btn>
-      <q-select
-        v-model="sortBy"
-        :options="sortOptions"
-        dense
-        outlined
-        emit-value
-        map-options
-        class="m3-input"
-        style="min-width: 140px"
-      />
-      <q-btn
-        flat
-        round
-        :icon="sortOrder === 'desc' ? 'arrow_downward' : 'arrow_upward'"
-        style="color: var(--m3-on-surface-variant)"
-        @click="toggleSortOrder"
-      />
+  <div class="flex h-full flex-col overflow-hidden">
+    <div class="flex shrink-0 items-center gap-2 border-b px-4 py-2">
+      <div class="relative w-[300px]">
+        <Search
+          class="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+        />
+        <Input v-model="keyword" placeholder="Search" class="h-8 pl-8 text-[13px]" />
+        <button
+          v-if="keyword"
+          type="button"
+          class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+          @click="onSearchClear"
+        >
+          <X class="size-4" />
+        </button>
+      </div>
 
-      <q-space />
+      <Button variant="secondary" size="sm" class="relative h-8" @click="showFilter = true">
+        <ListFilter class="size-4" />
+        Filter
+        <span
+          v-if="activeFilterCount > 0"
+          class="bg-primary text-primary-foreground absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium"
+        >
+          {{ activeFilterCount }}
+        </span>
+      </Button>
 
-      <q-btn
+      <Select v-model="sortBy">
+        <SelectTrigger class="h-8 w-[150px] text-[13px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="opt in sortOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button variant="ghost" size="icon-sm" @click="toggleSortOrder">
+            <ArrowDown v-if="sortOrder === 'desc'" class="size-4" />
+            <ArrowUp v-else class="size-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ sortOrder === 'desc' ? 'Descending' : 'Ascending' }}</TooltipContent>
+      </Tooltip>
+
+      <div class="flex-1" />
+
+      <Button
         v-if="!favoritesMode && !archivedMode"
-        unelevated
-        class="m3-btn--filled"
-        label="Scan &amp; Scrape"
-        icon="search"
+        size="sm"
+        class="h-8"
         @click="showScanner = true"
-      />
-      <q-btn
-        v-if="!selectMode"
-        flat
-        icon="checklist"
-        label="Select"
-        class="m3-btn--outlined"
-        @click="enterSelectMode"
-      />
+      >
+        <Search class="size-4" />
+        Scan &amp; Scrape
+      </Button>
+      <Button v-if="!selectMode" variant="outline" size="sm" class="h-8" @click="enterSelectMode">
+        <ClipboardCheck class="size-4" />
+        Select
+      </Button>
       <template v-else>
-        <q-btn flat label="Cancel" class="m3-btn--text" @click="exitSelectMode" />
+        <Button variant="ghost" size="sm" class="h-8" @click="exitSelectMode">Cancel</Button>
         <template v-if="archivedMode">
-          <q-btn
-            unelevated
-            class="m3-btn--tonal"
-            icon="unarchive"
-            :label="`Unarchive (${selectedIds.size})`"
-            :disable="selectedIds.size === 0"
-            @click="confirmUnarchiveDialog = true"
-          />
-          <q-btn
-            unelevated
-            style="
-              background: var(--m3-error-container) !important;
-              color: var(--m3-on-error-container) !important;
-            "
-            icon="delete"
-            :label="`Delete (${selectedIds.size})`"
-            :disable="selectedIds.size === 0"
-            @click="confirmDeleteDialog = true"
-          />
+          <Button
+            variant="secondary"
+            size="sm"
+            class="h-8"
+            :disabled="selectedIds.size === 0"
+            @click="onBatchUnarchive"
+          >
+            <ArchiveRestore class="size-4" />
+            Unarchive ({{ selectedIds.size }})
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            class="h-8"
+            :disabled="selectedIds.size === 0"
+            @click="onBatchDelete"
+          >
+            <Trash2 class="size-4" />
+            Delete ({{ selectedIds.size }})
+          </Button>
         </template>
         <template v-else-if="favoritesMode">
-          <q-btn
-            unelevated
-            class="m3-btn--tonal"
-            icon="heart_broken"
-            :label="`Unfavorite (${selectedIds.size})`"
-            :disable="selectedIds.size === 0"
-            @click="confirmUnfavoriteDialog = true"
-          />
-          <q-btn
-            unelevated
-            class="m3-btn--tonal"
-            icon="archive"
-            :label="`Archive (${selectedIds.size})`"
-            :disable="selectedIds.size === 0"
-            @click="confirmArchiveDialog = true"
-          />
+          <Button
+            variant="secondary"
+            size="sm"
+            class="h-8"
+            :disabled="selectedIds.size === 0"
+            @click="onBatchUnfavorite"
+          >
+            <HeartCrack class="size-4" />
+            Unfavorite ({{ selectedIds.size }})
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            class="h-8"
+            :disabled="selectedIds.size === 0"
+            @click="onBatchArchive"
+          >
+            <Archive class="size-4" />
+            Archive ({{ selectedIds.size }})
+          </Button>
         </template>
         <template v-else>
-          <q-btn
-            unelevated
-            class="m3-btn--tonal"
-            icon="archive"
-            :label="`Archive (${selectedIds.size})`"
-            :disable="selectedIds.size === 0"
-            @click="confirmArchiveDialog = true"
-          />
-          <q-btn
-            unelevated
-            style="
-              background: var(--m3-error-container) !important;
-              color: var(--m3-on-error-container) !important;
-            "
-            icon="delete"
-            :label="`Delete (${selectedIds.size})`"
-            :disable="selectedIds.size === 0"
-            @click="confirmDeleteDialog = true"
-          />
+          <Button
+            variant="secondary"
+            size="sm"
+            class="h-8"
+            :disabled="selectedIds.size === 0"
+            @click="onBatchArchive"
+          >
+            <Archive class="size-4" />
+            Archive ({{ selectedIds.size }})
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            class="h-8"
+            :disabled="selectedIds.size === 0"
+            @click="onBatchDelete"
+          >
+            <Trash2 class="size-4" />
+            Delete ({{ selectedIds.size }})
+          </Button>
         </template>
-        <span class="text-caption" style="color: var(--m3-on-surface-variant)"
-          >{{ selectedIds.size }} selected</span
-        >
+        <span class="text-muted-foreground text-xs">{{ selectedIds.size }} selected</span>
       </template>
 
-      <q-separator vertical inset class="q-mx-xs" />
-      <q-btn
-        flat
-        round
-        icon="casino"
-        style="color: var(--m3-primary)"
-        :disable="games.length === 0"
-        @click="openRandomGame"
-      >
-        <q-tooltip>Open a random game</q-tooltip>
-      </q-btn>
+      <div class="bg-border mx-1 h-6 w-px" />
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            :disabled="games.length === 0"
+            @click="openRandomGame"
+          >
+            <Dices class="text-primary size-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Open a random game</TooltipContent>
+      </Tooltip>
     </div>
 
     <div
       ref="gridContainer"
-      class="q-pa-md"
-      style="flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column"
+      class="relative flex min-h-0 flex-1 flex-col p-4"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent="onDragOver"
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDrop"
     >
-      <div v-if="dragOver && !favoritesMode && !archivedMode" class="drop-overlay flex flex-center">
+      <div
+        v-if="dragOver && !favoritesMode && !archivedMode"
+        class="drop-overlay flex items-center justify-center"
+      >
         <div class="text-center">
-          <q-icon name="cloud_upload" size="64px" color="primary" />
-          <div class="text-h6 text-primary q-mt-sm">Drop folder to search</div>
+          <CloudUpload class="text-primary mx-auto size-16" />
+          <div class="text-primary mt-3 text-lg font-medium">Drop folder to search</div>
         </div>
       </div>
 
@@ -177,19 +184,26 @@
         @mouseup="onGridMouseUp"
       >
         <template #default="{ item: game }">
-          <div
-            :data-game-id="game.id"
-            :data-select-mode="selectMode ? '1' : '0'"
-            @contextmenu.prevent="onContextMenu(game, $event)"
-          >
-            <GameCard
+          <div :data-game-id="game.id" :data-select-mode="selectMode ? '1' : '0'">
+            <GameContextMenu
               :game="game"
-              :selectable="selectMode"
-              :selected="selectMode && selectedIds.has(game.id)"
-              :duplicate="duplicateGameIds.has(game.id)"
-              @click="goDetail(game.id)"
-              @select="toggleSelect(game.id, $event)"
-            />
+              :favorites-mode="favoritesMode"
+              :archived-mode="archivedMode"
+              @delete-game="handleDeleteGame"
+              @toggle-favorite="handleToggleFavorite"
+              @unfavorite="handleUnfavorite"
+              @archive="handleArchive"
+              @unarchive="handleUnarchive"
+            >
+              <GameCard
+                :game="game"
+                :selectable="selectMode"
+                :selected="selectMode && selectedIds.has(game.id)"
+                :duplicate="duplicateGameIds.has(game.id)"
+                @click="goDetail(game.id)"
+                @select="toggleSelect(game.id, $event)"
+              />
+            </GameContextMenu>
           </div>
         </template>
       </VirtualGrid>
@@ -198,140 +212,50 @@
 
       <div
         v-if="games.length === 0 && !loading"
-        class="text-center q-mt-xl"
-        style="color: var(--m3-on-surface-variant)"
+        class="text-muted-foreground flex flex-1 flex-col items-center justify-center text-center"
       >
-        <q-icon name="videogame_asset" size="64px" />
-        <div class="text-h6 q-mt-sm" style="color: var(--m3-on-surface)">
+        <Gamepad2 class="size-16 opacity-40" />
+        <div class="text-foreground mt-3 text-lg font-medium">
           {{ archivedMode ? 'No archived games' : 'No games found' }}
         </div>
-        <div class="text-body2">Add a game library in Settings, then scan for games.</div>
+        <div class="mt-1 text-sm">Add a game library in Settings, then scan for games.</div>
       </div>
 
-      <div v-if="loading && games.length > 0" class="flex flex-center q-pa-md">
-        <q-spinner-dots size="32px" color="primary" />
+      <div v-if="loading && games.length > 0" class="flex justify-center p-4">
+        <Loader2 class="text-primary size-6 animate-spin" />
       </div>
     </div>
 
     <ScannerDialog v-model="showScanner" @done="loadGames" />
     <FilterDialog v-model="showFilter" :filter="currentFilter" @apply="onApplyFilter" />
 
-    <q-dialog v-model="confirmDeleteDialog" persistent>
-      <q-card>
-        <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface)">Delete {{ selectedIds.size }} game(s)?</span>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn
-            unelevated
-            style="background: var(--m3-error) !important; color: var(--m3-on-error) !important"
-            label="Delete"
-            @click="doBatchDelete"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <q-dialog v-model="confirmUnfavoriteDialog" persistent>
-      <q-card>
-        <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface)"
-            >Remove {{ selectedIds.size }} game(s) from favorites?</span
-          >
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn unelevated class="m3-btn--tonal" label="Unfavorite" @click="doBatchUnfavorite" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <q-dialog v-model="confirmArchiveDialog" persistent>
-      <q-card>
-        <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface)"
-            >Archive {{ selectedIds.size }} game(s)? Archived games only appear in the Archive
-            view.</span
-          >
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn unelevated class="m3-btn--tonal" label="Archive" @click="doBatchArchive" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <q-dialog v-model="confirmUnarchiveDialog" persistent>
-      <q-card>
-        <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface)"
-            >Restore {{ selectedIds.size }} game(s) from the archive?</span
-          >
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn unelevated class="m3-btn--tonal" label="Unarchive" @click="doBatchUnarchive" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <q-dialog v-model="showSingleDeleteDialog" persistent>
-      <q-card>
-        <q-card-section class="row items-center">
-          <q-icon name="warning" style="color: var(--m3-error)" size="lg" class="q-mr-sm" />
-          <span style="color: var(--m3-on-surface)"
-            >Delete this game? This action cannot be undone.</span
-          >
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn
-            flat
-            class="m3-btn--text"
-            label="Cancel"
-            v-close-popup
-            @click="
-              confirmSingleDeleteId = null;
-              showSingleDeleteDialog = false;
-            "
-          />
-          <q-btn
-            unelevated
-            style="background: var(--m3-error) !important; color: var(--m3-on-error) !important"
-            label="Delete"
-            @click="doSingleDelete"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
     <ScrapeDialog v-model="showDropScrape" :game-name="dropFolderName" @adopted="onDropAdopt" />
-
-    <ContextMenu
-      v-if="contextMenuGame"
-      :game="contextMenuGame"
-      :favorites-mode="favoritesMode"
-      :archived-mode="archivedMode"
-      @close="contextMenuGame = null"
-      @delete-game="handleDeleteGame"
-      @toggle-favorite="handleToggleFavorite"
-      @unfavorite="handleUnfavorite"
-      @archive="handleArchive"
-      @unarchive="handleUnarchive"
-    />
-  </q-page>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
+  ClipboardCheck,
+  CloudUpload,
+  Dices,
+  Gamepad2,
+  HeartCrack,
+  ListFilter,
+  Loader2,
+  Search,
+  Trash2,
+  X,
+} from '@lucide/vue';
 
 import api from '../composables/useApi';
+import { confirm } from '../composables/useConfirm';
 import { getGridCols, useViewportWidth } from '../composables/useGridLayout';
 import { useGameListStore } from '../stores/gameListStore';
 import type { GameListMode } from '../stores/gameListStore';
@@ -341,7 +265,17 @@ import type { VirtualGridExposed } from '../components/VirtualGrid.types';
 import ScannerDialog from '../components/ScannerDialog.vue';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
 import FilterDialog from '../components/FilterDialog.vue';
-import ContextMenu from '../components/ContextMenu.vue';
+import GameContextMenu from '../components/GameContextMenu.vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface GameItem {
   id: number;
@@ -492,15 +426,6 @@ const onApplyFilter = (filter: FilterState) => {
 const selectMode = ref(false);
 const selectedIds = ref<Set<number>>(new Set());
 const lastSelectedId = ref<number | null>(null);
-const confirmDeleteDialog = ref(false);
-const confirmUnfavoriteDialog = ref(false);
-const confirmArchiveDialog = ref(false);
-const confirmUnarchiveDialog = ref(false);
-
-const contextMenuGame = ref<GameItem | null>(null);
-const contextMenuPos = ref({ x: 0, y: 0 });
-const confirmSingleDeleteId = ref<number | null>(null);
-const showSingleDeleteDialog = ref(false);
 
 const gridContainer = ref<HTMLElement | null>(null);
 const virtualGrid = ref<VirtualGridExposed<GameItem> | null>(null);
@@ -566,7 +491,7 @@ const toggleSelect = (id: number, event?: MouseEvent) => {
     if (fromIdx >= 0 && toIdx >= 0) {
       const [lo, hi] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
       for (let i = lo; i <= hi; i++) {
-        newSet.add(ids[i]!);
+        newSet.add(ids[i]);
       }
     }
   } else if (event?.ctrlKey || event?.metaKey) {
@@ -636,46 +561,61 @@ const onGridMouseUp = () => {
   selectedIds.value = newSet;
 };
 
-const doBatchDelete = async () => {
+// Batch actions confirm first (one summary dialog for the whole selection) so a
+// mis-click on "Delete (23)" cannot destroy a third of the library in one go.
+const onBatchDelete = async () => {
   const ids = [...selectedIds.value];
   if (ids.length === 0) return;
+  const ok = await confirm({
+    title: `Delete ${ids.length} game(s)?`,
+    message: 'This action cannot be undone.',
+    okLabel: 'Delete',
+    destructive: true,
+  });
+  if (!ok) return;
   await api.post('/games/batch-delete', { ids });
-  confirmDeleteDialog.value = false;
   exitSelectMode();
   await loadGames();
 };
 
-const doBatchUnfavorite = async () => {
+const onBatchUnfavorite = async () => {
   const ids = [...selectedIds.value];
   if (ids.length === 0) return;
+  const ok = await confirm({
+    title: `Remove ${ids.length} game(s) from favorites?`,
+    okLabel: 'Unfavorite',
+  });
+  if (!ok) return;
   await api.post('/games/batch-unfavorite', { ids });
-  confirmUnfavoriteDialog.value = false;
   exitSelectMode();
   await loadGames();
 };
 
-const doBatchArchive = async () => {
+const onBatchArchive = async () => {
   const ids = [...selectedIds.value];
   if (ids.length === 0) return;
+  const ok = await confirm({
+    title: `Archive ${ids.length} game(s)?`,
+    message: 'Archived games only appear in the Archive view.',
+    okLabel: 'Archive',
+  });
+  if (!ok) return;
   await api.post('/games/batch-archive', { ids });
-  confirmArchiveDialog.value = false;
   exitSelectMode();
   await loadGames();
 };
 
-const doBatchUnarchive = async () => {
+const onBatchUnarchive = async () => {
   const ids = [...selectedIds.value];
   if (ids.length === 0) return;
+  const ok = await confirm({
+    title: `Restore ${ids.length} game(s) from the archive?`,
+    okLabel: 'Unarchive',
+  });
+  if (!ok) return;
   await api.post('/games/batch-unarchive', { ids });
-  confirmUnarchiveDialog.value = false;
   exitSelectMode();
   await loadGames();
-};
-
-const onContextMenu = (game: GameItem, e: MouseEvent) => {
-  e.preventDefault();
-  contextMenuGame.value = game;
-  contextMenuPos.value = { x: e.clientX, y: e.clientY };
 };
 
 const handleToggleFavorite = async (id: number) => {
@@ -711,19 +651,17 @@ const handleUnarchive = async (id: number) => {
   gameListStore.filteredCount = games.value.length;
 };
 
-const handleDeleteGame = (id: number) => {
-  confirmSingleDeleteId.value = id;
-  showSingleDeleteDialog.value = true;
-};
-
-const doSingleDelete = async () => {
-  const id = confirmSingleDeleteId.value;
-  if (id === null) return;
+const handleDeleteGame = async (id: number) => {
+  const ok = await confirm({
+    title: 'Delete this game?',
+    message: 'This action cannot be undone.',
+    okLabel: 'Delete',
+    destructive: true,
+  });
+  if (!ok) return;
   await api.delete(`/games/${id}`);
   games.value = games.value.filter((g) => g.id !== id);
   gameListStore.filteredCount = games.value.length;
-  confirmSingleDeleteId.value = null;
-  showSingleDeleteDialog.value = false;
 };
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -1194,24 +1132,18 @@ onBeforeUnmount(() => {
 }
 .drag-select-rect {
   position: absolute;
-  border: 2px dashed var(--m3-primary);
-  background: rgba(103, 80, 164, 0.1);
+  border: 2px dashed var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
   pointer-events: none;
   z-index: 1000;
 }
 .drop-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in oklab, var(--background) 92%, transparent);
   z-index: 1001;
-  border: 3px dashed var(--m3-primary);
-  border-radius: var(--m3-shape-corner-md);
+  border: 3px dashed var(--primary);
+  border-radius: var(--radius);
   pointer-events: none;
-}
-</style>
-
-<style>
-body.body--dark .drop-overlay {
-  background: rgba(28, 27, 31, 0.92);
 }
 </style>

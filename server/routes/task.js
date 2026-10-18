@@ -6,15 +6,20 @@ import { startBackgroundWorkers } from '../background-manager.js';
 
 const router = express.Router();
 
-// SSE token validation middleware
+// SSE token validation middleware. The token keeps other local apps and stray
+// browser tabs out of the live task stream - it is not an authentication layer
+// (the rest of the API has none). When no token is configured at all
+// (self-hosted standalone deployments, see server/standalone.js) the stream is
+// left open so browser clients on the LAN can connect, matching the trust level
+// of the rest of the API.
 const validateSseToken = (req, res, next) => {
-  const token = req.query.token;
   const expectedToken = getSseToken();
-  if (!expectedToken || token !== expectedToken) {
-    console.warn(`[SSE] Token mismatch: received "${token}", expected "${expectedToken}"`);
+  if (!expectedToken) return next();
+  const token = req.query.token;
+  if (token !== expectedToken) {
+    console.warn(`[SSE] Token mismatch: received "${token}"`);
     return res.status(401).send({ error: 'Invalid SSE token' });
   }
-  console.log('[SSE] Token validation passed, proceeding to handler');
   next();
 };
 
@@ -71,7 +76,10 @@ router.get('/events', validateSseToken, (req, res) => {
   const unsubscribe = onTaskChange(onChange);
 
   const heartbeat = setInterval(() => {
-    res.write(': heartbeat\n\n');
+    // A real message (not an SSE comment): the browser can observe it, which is what
+    // lets taskStore detect silently dead streams (dev proxies swallow upstream
+    // closes) and reconnect instead of waiting forever.
+    res.write(`data: ${JSON.stringify({ type: 'ping' })}\n\n`);
   }, 15000);
 
   req.on('close', () => {

@@ -1,352 +1,343 @@
 <template>
-  <q-page style="overflow: hidden; display: flex; flex-direction: column">
-    <div v-if="game" class="q-pa-md" style="display: flex; flex-direction: column; height: 100%">
-      <div>
-        <q-btn
-          flat
-          round
-          icon="arrow_back"
-          style="color: var(--m3-on-surface-variant)"
-          class="q-mb-md"
-          @click="$router.push('/')"
-        />
-        <q-btn
-          flat
-          round
-          icon="refresh"
-          style="color: var(--m3-primary)"
-          class="q-mb-md"
-          @click="showScrapeDialog = true"
+  <div class="h-full overflow-y-auto">
+    <div v-if="game" class="mx-auto max-w-5xl p-6">
+      <div class="mb-4 flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          class="text-muted-foreground"
+          aria-label="Back"
+          @click="router.push('/')"
         >
-          <q-tooltip>Re-scrape</q-tooltip>
-        </q-btn>
-        <q-btn
-          flat
-          round
-          :icon="game.is_archived ? 'unarchive' : 'archive'"
-          style="color: var(--m3-on-surface-variant)"
-          class="q-mb-md"
-          @click="toggleArchive"
-        >
-          <q-tooltip>{{ game.is_archived ? 'Unarchive' : 'Archive' }}</q-tooltip>
-        </q-btn>
-        <q-btn
-          flat
-          round
-          icon="delete"
-          style="color: var(--m3-error)"
-          class="q-mb-md"
-          @click="confirmDelete = true"
-        >
-          <q-tooltip>Delete</q-tooltip>
-        </q-btn>
+          <ArrowLeft class="size-4" />
+        </Button>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="text-primary"
+              aria-label="Re-scrape"
+              @click="showScrapeDialog = true"
+            >
+              <RefreshCw class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Re-scrape</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="text-muted-foreground"
+              :aria-label="game.is_archived ? 'Unarchive' : 'Archive'"
+              @click="toggleArchive"
+            >
+              <ArchiveRestore v-if="game.is_archived" class="size-4" />
+              <Archive v-else class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{{ game.is_archived ? 'Unarchive' : 'Archive' }}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="text-destructive"
+              aria-label="Delete"
+              @click="doDelete"
+            >
+              <Trash2 class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Delete</TooltipContent>
+        </Tooltip>
       </div>
 
-      <div style="flex: 1; min-height: 0; overflow: hidden">
-        <div style="display: flex; gap: 16px; height: 100%">
+      <div class="flex flex-col gap-6 md:flex-row">
+        <aside class="w-full shrink-0 md:w-[300px]">
           <div
-            style="
-              flex-shrink: 0;
-              max-width: 300px;
-              display: flex;
-              flex-direction: column;
-              min-height: 0;
-            "
+            class="relative w-full max-w-[300px]"
+            @dragenter.prevent="onCoverDragEnter"
+            @dragover.prevent="onCoverDragOver"
+            @dragleave.prevent="onCoverDragLeave"
+            @drop.prevent="onCoverDrop"
           >
-            <div
-              style="min-height: 0; flex-shrink: 1; overflow: hidden; position: relative"
-              @dragenter.prevent="onCoverDragEnter"
-              @dragover.prevent="onCoverDragOver"
-              @dragleave.prevent="onCoverDragLeave"
-              @drop.prevent="onCoverDrop"
-            >
-              <q-img
-                v-if="game.cover_path"
+            <div class="bg-muted aspect-[3/4] overflow-hidden rounded-lg">
+              <!-- A cover can be missing for two different reasons - never scraped, or the
+                   file is not a decodable image - and both fall back to a placeholder
+                   instead of leaving the pane blank. -->
+              <img
+                v-if="game.cover_path && !coverFailed"
                 :src="coverUrl"
-                :ratio="3 / 4"
-                class="rounded-borders"
-                style="max-height: 100%"
+                class="h-full w-full object-cover"
+                draggable="false"
+                alt=""
+                @error="coverFailed = true"
               />
               <div
                 v-else
-                class="bg-grey-4 rounded-borders"
-                style="
-                  aspect-ratio: 3/4;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  max-height: 100%;
-                "
+                class="text-muted-foreground flex h-full w-full items-center justify-center"
               >
-                <q-icon name="videogame_asset" size="64px" color="grey-6" />
-              </div>
-              <div
-                v-if="coverDragOver"
-                class="absolute-full rounded-borders flex flex-center"
-                style="
-                  background: rgba(0, 0, 0, 0.5);
-                  border: 2px dashed var(--m3-primary);
-                  z-index: 10;
-                "
-              >
-                <div class="text-center text-white">
-                  <q-icon name="image" size="48px" />
-                  <div class="text-subtitle2 q-mt-sm">Drop image to set cover</div>
-                </div>
+                <ImageOff v-if="coverFailed" class="size-16 opacity-60" />
+                <Gamepad2 v-else class="size-16 opacity-60" />
               </div>
             </div>
-
-            <div v-if="!editingPath" class="text-caption text-grey q-mt-sm">
-              Path: {{ game.library ? game.library.path + '\\' + game.sub_path : game.sub_path }}
-              <q-btn
-                v-if="hasElectronAPI"
-                flat
-                round
-                dense
-                size="sm"
-                icon="folder_open"
-                color="grey-7"
-                @click="openDir"
-              >
-                <q-tooltip>Open Directory</q-tooltip>
-              </q-btn>
-              <q-btn
-                flat
-                round
-                dense
-                size="sm"
-                icon="edit"
-                color="grey-7"
-                :disable="gameBusy"
-                @click="startEditPath"
-              >
-                <q-tooltip>{{
-                  gameBusy ? 'A task is still running for this game' : 'Edit Path'
-                }}</q-tooltip>
-              </q-btn>
-            </div>
-            <div v-else class="q-mt-sm row items-center q-gutter-xs">
-              <q-input
-                v-model="editPathValue"
-                dense
-                outlined
-                style="flex: 1; min-width: 0"
-                @keyup.enter="submitEditPath"
-                @keyup.escape="cancelEditPath"
-              />
-              <q-btn
-                v-if="hasElectronAPI"
-                flat
-                round
-                dense
-                size="sm"
-                icon="folder_open"
-                color="grey-7"
-                @click="browseForRelocate"
-              >
-                <q-tooltip>Browse</q-tooltip>
-              </q-btn>
-              <q-btn
-                flat
-                round
-                dense
-                size="sm"
-                icon="check"
-                color="positive"
-                @click="submitEditPath"
-              >
-                <q-tooltip>Save</q-tooltip>
-              </q-btn>
-              <q-btn flat round dense size="sm" icon="close" color="grey-7" @click="cancelEditPath">
-                <q-tooltip>Cancel</q-tooltip>
-              </q-btn>
-            </div>
-
-            <div v-if="game.sources?.length" class="text-caption text-grey q-mt-xs">
-              <span v-for="s in game.sources" :key="s.id" class="q-mr-md">
-                {{ s.source_type }}: {{ s.source_id }}
-                <a
-                  v-if="s.source_url"
-                  :href="s.source_url"
-                  class="text-blue"
-                  @click.prevent="openExternal(s.source_url)"
-                  >Link</a
-                >
-              </span>
-            </div>
-
-            <div v-if="game.duplicateSources?.length" class="q-mt-sm">
-              <q-banner dense class="bg-orange-1 text-orange-9 rounded-borders">
-                <template v-slot:avatar>
-                  <q-icon name="content_copy" color="warning" />
-                </template>
-                <div class="text-caption text-weight-medium">Shared Source</div>
-                <div v-for="(dup, i) in game.duplicateSources" :key="i" class="q-mt-xs">
-                  <q-badge :color="sourceColor(dup.sourceType)" class="q-mr-xs">{{
-                    dup.sourceType
-                  }}</q-badge>
-                  <span class="text-caption text-grey">{{ dup.sourceId }}</span>
-                  <div v-for="g in dup.games" :key="g.gameId" class="q-ml-md">
-                    <router-link :to="`/game/${g.gameId}`" class="text-blue text-caption">{{
-                      g.name
-                    }}</router-link>
-                    <span class="text-caption text-grey q-ml-xs">(ID: {{ g.gameId }})</span>
-                  </div>
-                </div>
-              </q-banner>
-            </div>
-            <div v-if="game.similarGames?.length" class="q-mt-sm">
-              <q-banner dense class="bg-orange-1 text-orange-9 rounded-borders">
-                <template v-slot:avatar>
-                  <q-icon name="merge_type" color="warning" />
-                </template>
-                <div class="text-caption text-weight-medium q-mb-xs">Suspected duplicate</div>
-                <div
-                  v-for="s in game.similarGames"
-                  :key="s.gameId"
-                  class="row items-center q-mt-xs q-gutter-x-xs"
-                >
-                  <router-link
-                    v-if="!s.isSelf"
-                    :to="`/game/${s.gameId}`"
-                    class="text-blue text-caption col"
-                    >{{ s.name }}</router-link
-                  >
-                  <span v-else class="text-caption text-weight-medium col">{{ s.name }}</span>
-                  <q-badge :color="s.isArchive ? 'grey' : 'teal'" class="text-caption">{{
-                    s.isArchive ? 'archive' : 'folder'
-                  }}</q-badge>
-                  <span class="text-caption text-grey-7">{{ formatDate(s.dirCreatedAt) }}</span>
-                </div>
-              </q-banner>
+            <div
+              v-if="coverDragOver"
+              class="border-primary absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed bg-black/50"
+            >
+              <div class="text-center text-white">
+                <Image class="mx-auto size-10" />
+                <div class="mt-1 text-sm font-medium">Drop image to set cover</div>
+              </div>
             </div>
           </div>
 
+          <div v-if="!editingPath" class="text-muted-foreground mt-2 text-xs">
+            <span class="break-all"
+              >Path:
+              {{ game.library ? game.library.path + '\\' + game.sub_path : game.sub_path }}</span
+            >
+            <Tooltip v-if="hasElectronAPI">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-muted-foreground ml-1 align-middle"
+                  aria-label="Open Directory"
+                  @click="openDir"
+                >
+                  <FolderOpen class="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open Directory</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-muted-foreground ml-1 align-middle"
+                  aria-label="Edit Path"
+                  :disabled="gameBusy"
+                  @click="startEditPath"
+                >
+                  <Pencil class="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{
+                gameBusy ? 'A task is still running for this game' : 'Edit Path'
+              }}</TooltipContent>
+            </Tooltip>
+          </div>
+          <div v-else class="mt-2 flex items-center gap-1">
+            <Input
+              v-model="editPathValue"
+              class="h-8 min-w-0 flex-1 text-[13px]"
+              @keyup.enter="submitEditPath"
+              @keyup.escape="cancelEditPath"
+            />
+            <Tooltip v-if="hasElectronAPI">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-muted-foreground"
+                  aria-label="Browse"
+                  @click="browseForRelocate"
+                >
+                  <FolderOpen class="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Browse</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-success"
+                  aria-label="Save"
+                  @click="submitEditPath"
+                >
+                  <Check class="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Save</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-muted-foreground"
+                  aria-label="Cancel"
+                  @click="cancelEditPath"
+                >
+                  <X class="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Cancel</TooltipContent>
+            </Tooltip>
+          </div>
+
           <div
-            style="flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden"
+            v-if="game.sources?.length"
+            class="text-muted-foreground mt-1 flex flex-wrap gap-x-3 text-xs"
           >
-            <div>
-              <div class="text-h5 q-mb-sm" style="color: var(--m3-on-surface)">
-                {{ displayName }}
-              </div>
-              <div
-                v-if="displayName !== game.name"
-                class="text-caption"
-                style="color: var(--m3-on-surface-variant)"
+            <span v-for="s in game.sources" :key="s.id">
+              {{ s.source_type }}: {{ s.source_id }}
+              <a
+                v-if="s.source_url"
+                :href="s.source_url"
+                class="text-primary ml-1 hover:underline"
+                @click.prevent="openExternal(s.source_url)"
+                >Link</a
               >
-                <q-icon name="folder" size="xs" class="q-mr-xs" />
-                {{ game.name }}
-              </div>
+            </span>
+          </div>
 
-              <div class="row items-center q-gutter-x-sm q-mb-sm">
-                <span class="text-caption" style="color: var(--m3-on-surface-variant)">R18:</span>
-                <q-btn-toggle
-                  :model-value="game.r18 === 1 ? 1 : 0"
-                  dense
-                  flat
-                  no-caps
-                  size="sm"
-                  :options="r18Options"
-                  :toggle-color="game.r18 === 1 ? 'negative' : 'positive'"
-                  @update:model-value="setR18"
-                />
-                <span v-if="game.r18_source" class="text-caption text-grey-5"
-                  >({{ game.r18_source }})</span
+          <div
+            v-if="game.duplicateSources?.length"
+            class="border-warning/40 bg-warning/10 mt-3 rounded-lg border p-2.5"
+          >
+            <div class="flex items-center gap-1.5 text-xs font-medium">
+              <Copy class="text-warning size-4" />
+              Shared Source
+            </div>
+            <div v-for="(dup, i) in game.duplicateSources" :key="i" class="mt-1">
+              <span
+                :class="
+                  cn('rounded px-1.5 py-0.5 text-[11px] font-medium', sourceClass(dup.sourceType))
+                "
+                >{{ dup.sourceType }}</span
+              >
+              <span class="text-muted-foreground ml-1 text-xs">{{ dup.sourceId }}</span>
+              <div v-for="g in dup.games" :key="g.gameId" class="ml-3">
+                <router-link
+                  :to="`/game/${g.gameId}`"
+                  class="text-primary text-xs hover:underline"
+                  >{{ g.name }}</router-link
                 >
-              </div>
-
-              <div v-if="game.makers?.length" class="q-mb-sm">
-                <span style="color: var(--m3-on-surface-variant)">Makers: </span>
-                <q-chip
-                  v-for="m in game.makers"
-                  :key="m.id"
-                  dense
-                  size="sm"
-                  style="
-                    background: var(--m3-tertiary-container);
-                    color: var(--m3-on-tertiary-container);
-                  "
-                >
-                  {{ m.name }}
-                </q-chip>
-              </div>
-
-              <div v-if="game.genres?.length" class="q-mb-sm">
-                <span style="color: var(--m3-on-surface-variant)">Genres: </span>
-                <q-chip
-                  v-for="g in game.genres"
-                  :key="g.id"
-                  dense
-                  size="sm"
-                  style="
-                    background: var(--m3-primary-container);
-                    color: var(--m3-on-primary-container);
-                  "
-                >
-                  {{ g.name }}
-                </q-chip>
-              </div>
-
-              <div v-if="game.tags?.length" class="q-mb-sm">
-                <span style="color: var(--m3-on-surface-variant)">Tags: </span>
-                <q-chip
-                  v-for="t in game.tags"
-                  :key="t.id"
-                  dense
-                  size="sm"
-                  style="
-                    background: var(--m3-secondary-container);
-                    color: var(--m3-on-secondary-container);
-                  "
-                >
-                  {{ t.name }}
-                </q-chip>
+                <span class="text-muted-foreground ml-1 text-xs">(ID: {{ g.gameId }})</span>
               </div>
             </div>
-
-            <div v-if="game.description" style="flex: 1; min-height: 0; overflow-y: auto">
-              <span style="color: var(--m3-on-surface-variant)">Description: </span>
-              <div
-                class="text-body2 q-mt-xs"
-                style="white-space: pre-wrap; color: var(--m3-on-surface)"
+          </div>
+          <div
+            v-if="game.similarGames?.length"
+            class="border-warning/40 bg-warning/10 mt-3 rounded-lg border p-2.5"
+          >
+            <div class="flex items-center gap-1.5 text-xs font-medium">
+              <Merge class="text-warning size-4" />
+              Suspected duplicate
+            </div>
+            <div
+              v-for="s in game.similarGames"
+              :key="s.gameId"
+              class="mt-1 flex items-center gap-2"
+            >
+              <router-link
+                v-if="!s.isSelf"
+                :to="`/game/${s.gameId}`"
+                class="text-primary min-w-0 flex-1 truncate text-xs hover:underline"
+                >{{ s.name }}</router-link
               >
-                {{ game.description }}
+              <span v-else class="min-w-0 flex-1 truncate text-xs font-medium">{{ s.name }}</span>
+              <span
+                :class="
+                  cn(
+                    'shrink-0 rounded px-1.5 py-0.5 text-[11px]',
+                    s.isArchive ? 'bg-muted text-muted-foreground' : 'bg-success/15 text-success',
+                  )
+                "
+                >{{ s.isArchive ? 'archive' : 'folder' }}</span
+              >
+              <span class="text-muted-foreground shrink-0 text-xs">{{
+                formatDate(s.dirCreatedAt)
+              }}</span>
+            </div>
+          </div>
+        </aside>
+
+        <div class="min-w-0 flex-1">
+          <div>
+            <div class="text-xl font-semibold">{{ displayName }}</div>
+            <div
+              v-if="displayName !== game.name"
+              class="text-muted-foreground mt-1 flex items-center gap-1 text-xs"
+            >
+              <Folder class="size-3.5" />
+              {{ game.name }}
+            </div>
+
+            <div class="mt-2 mb-2 flex items-center gap-2">
+              <span class="text-muted-foreground text-xs">R18:</span>
+              <div class="bg-muted inline-flex items-center gap-0.5 rounded-md p-0.5">
+                <button
+                  v-for="opt in r18Options"
+                  :key="opt.value"
+                  type="button"
+                  :class="r18OptionClass(opt.value)"
+                  @click="setR18(opt.value)"
+                >
+                  {{ opt.label }}
+                </button>
               </div>
+              <span v-if="game.r18_source" class="text-muted-foreground/70 text-xs"
+                >({{ game.r18_source }})</span
+              >
+            </div>
+
+            <div v-if="game.makers?.length" class="mb-2">
+              <span class="text-muted-foreground text-sm">Makers: </span>
+              <span
+                v-for="m in game.makers"
+                :key="m.id"
+                class="bg-secondary text-secondary-foreground mr-1 rounded px-1.5 py-0.5 text-xs"
+              >
+                {{ m.name }}
+              </span>
+            </div>
+
+            <div v-if="game.genres?.length" class="mb-2">
+              <span class="text-muted-foreground text-sm">Genres: </span>
+              <span
+                v-for="g in game.genres"
+                :key="g.id"
+                class="bg-info/15 text-info mr-1 rounded px-1.5 py-0.5 text-xs"
+              >
+                {{ g.name }}
+              </span>
+            </div>
+
+            <div v-if="game.tags?.length" class="mb-2">
+              <span class="text-muted-foreground text-sm">Tags: </span>
+              <span
+                v-for="t in game.tags"
+                :key="t.id"
+                class="bg-success/15 text-success mr-1 rounded px-1.5 py-0.5 text-xs"
+              >
+                {{ t.name }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="game.description" class="mt-4">
+            <span class="text-muted-foreground text-sm">Description: </span>
+            <div class="mt-1 text-sm whitespace-pre-wrap">
+              {{ game.description }}
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-else class="text-center text-grey q-mt-xl">
-      <q-spinner-dots size="40px" />
+    <div v-else class="text-muted-foreground flex h-full items-center justify-center">
+      <Loader2 class="text-primary size-10 animate-spin" />
     </div>
-
-    <q-dialog v-model="confirmDelete" persistent>
-      <q-card>
-        <q-card-section class="text-h6" style="color: var(--m3-on-surface)"
-          >Confirm Delete</q-card-section
-        >
-        <q-card-section>
-          <span style="color: var(--m3-on-surface)"
-            >Are you sure you want to delete "{{ displayName }}"?</span
-          >
-          <div class="text-caption q-mt-xs" style="color: var(--m3-on-surface-variant)">
-            This will also remove all associated sources, makers, genres, and tags.
-          </div>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn
-            unelevated
-            style="background: var(--m3-error) !important; color: var(--m3-on-error) !important"
-            label="Delete"
-            @click="doDelete"
-            :loading="deleting"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
 
     <ScrapeDialog
       v-model="showScrapeDialog"
@@ -358,104 +349,127 @@
       @adopted="onReScrape"
     />
 
-    <q-dialog v-model="confirmRelocate" persistent>
-      <q-card>
-        <q-card-section class="text-h6" style="color: var(--m3-on-surface)"
-          >Confirm Path Change</q-card-section
+    <!-- Richer than a yes/no: the target/source paths, the move/compress switches and the
+         outcome preview all decide what the server does, so this stays a real dialog. -->
+    <Dialog :open="confirmRelocate" @update:open="confirmRelocate = $event">
+      <DialogContent class="sm:max-w-lg" @pointer-down-outside.prevent>
+        <DialogHeader>
+          <DialogTitle>Confirm Path Change</DialogTitle>
+        </DialogHeader>
+
+        <div class="space-y-3 text-sm">
+          <div>
+            <span class="text-muted-foreground">From: </span
+            ><span class="break-all">{{ relocateInfo?.source }}</span>
+          </div>
+          <div>
+            <span class="text-muted-foreground">To: </span
+            ><span class="break-all">{{ relocateInfo?.target }}</span>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <Switch v-model="relocateMoveFiles" :disabled="relocateInfo?.moveDisabled" />
+            <span class="text-sm">Move files to new location</span>
+          </div>
+          <div v-if="!relocateInfo?.compressDisabled" class="flex items-center gap-2">
+            <Switch v-model="relocateCompressFiles" :disabled="!relocateMoveFiles" />
+            <span class="text-sm">Compress to .rar (archive folder)</span>
+          </div>
+        </div>
+
+        <div
+          v-if="relocateMoveFiles && relocateCompressFiles"
+          class="border-primary/40 bg-primary/10 text-primary flex items-start gap-2 rounded-lg border p-2.5 text-xs"
         >
-        <q-card-section>
-          <div class="q-mb-sm">
-            <span style="color: var(--m3-on-surface-variant)">From: </span
-            ><span style="color: var(--m3-on-surface)">{{ relocateInfo?.source }}</span>
-          </div>
-          <div class="q-mb-md">
-            <span style="color: var(--m3-on-surface-variant)">To: </span
-            ><span style="color: var(--m3-on-surface)">{{ relocateInfo?.target }}</span>
-          </div>
-          <q-toggle
-            v-model="relocateMoveFiles"
-            label="Move files to new location"
-            color="primary"
-            :disable="relocateInfo?.moveDisabled"
-          />
-          <q-toggle
-            v-if="!relocateInfo?.compressDisabled"
-            v-model="relocateCompressFiles"
-            label="Compress to .rar (archive folder)"
-            color="primary"
-            :disable="!relocateMoveFiles"
-          />
-          <q-banner
-            v-if="relocateMoveFiles && relocateCompressFiles"
-            dense
-            class="bg-purple-1 text-purple-9 rounded-borders q-mt-sm"
-          >
-            <template v-slot:avatar>
-              <q-icon name="archive" color="purple" />
-            </template>
-            Will compress folder to .rar and move archive to new location
-          </q-banner>
-          <q-banner
-            v-else-if="relocateInfo?.sourceIsArchive && relocateInfo?.targetIsArchive"
-            dense
-            class="bg-blue-1 text-blue-9 rounded-borders q-mt-sm"
-          >
-            <template v-slot:avatar>
-              <q-icon name="drive_file_move" color="blue" />
-            </template>
-            Will move the archive file to the new location (no extraction)
-          </q-banner>
-          <q-banner
-            v-else-if="relocateInfo?.sourceIsArchive"
-            dense
-            class="bg-orange-1 text-orange-9 rounded-borders q-mt-sm"
-          >
-            <template v-slot:avatar>
-              <q-icon name="archive" color="orange" />
-            </template>
-            Will extract the archive into a folder at the new location
-          </q-banner>
-          <q-banner
-            v-else-if="relocateMoveFiles"
-            dense
-            class="bg-blue-1 text-blue-9 rounded-borders q-mt-sm"
-          >
-            <template v-slot:avatar>
-              <q-icon name="drive_file_move" color="blue" />
-            </template>
-            Will move folder to new location
-          </q-banner>
-          <q-banner v-else dense class="bg-orange-1 text-orange-9 rounded-borders q-mt-sm">
-            <template v-slot:avatar>
-              <q-icon name="edit_note" color="orange" />
-            </template>
-            Will only update path record (file will not be moved)
-          </q-banner>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat class="m3-btn--text" label="Cancel" v-close-popup />
-          <q-btn
-            unelevated
-            class="m3-btn--filled"
-            label="Confirm"
-            @click="doRelocate"
-            :loading="relocating"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-  </q-page>
+          <Archive class="mt-0.5 size-4 shrink-0" />
+          <span>Will compress folder to .rar and move archive to new location</span>
+        </div>
+        <div
+          v-else-if="relocateInfo?.sourceIsArchive && relocateInfo?.targetIsArchive"
+          class="border-info/40 bg-info/10 text-info flex items-start gap-2 rounded-lg border p-2.5 text-xs"
+        >
+          <ArrowRightLeft class="mt-0.5 size-4 shrink-0" />
+          <span>Will move the archive file to the new location (no extraction)</span>
+        </div>
+        <div
+          v-else-if="relocateInfo?.sourceIsArchive"
+          class="border-warning/40 bg-warning/10 text-warning flex items-start gap-2 rounded-lg border p-2.5 text-xs"
+        >
+          <Archive class="mt-0.5 size-4 shrink-0" />
+          <span>Will extract the archive into a folder at the new location</span>
+        </div>
+        <div
+          v-else-if="relocateMoveFiles"
+          class="border-info/40 bg-info/10 text-info flex items-start gap-2 rounded-lg border p-2.5 text-xs"
+        >
+          <FolderOutput class="mt-0.5 size-4 shrink-0" />
+          <span>Will move folder to new location</span>
+        </div>
+        <div
+          v-else
+          class="border-warning/40 bg-warning/10 text-warning flex items-start gap-2 rounded-lg border p-2.5 text-xs"
+        >
+          <PencilLine class="mt-0.5 size-4 shrink-0" />
+          <span>Will only update path record (file will not be moved)</span>
+        </div>
+
+        <DialogFooter class="gap-2">
+          <Button variant="ghost" size="sm" @click="confirmRelocate = false">Cancel</Button>
+          <Button size="sm" :disabled="relocating" @click="doRelocate">
+            <Loader2 v-if="relocating" class="size-4 animate-spin" />
+            Confirm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  ArrowRightLeft,
+  Check,
+  Copy,
+  Folder,
+  FolderOpen,
+  FolderOutput,
+  Gamepad2,
+  Image,
+  ImageOff,
+  Loader2,
+  Merge,
+  Pencil,
+  PencilLine,
+  RefreshCw,
+  Trash2,
+  X,
+} from '@lucide/vue';
+import { toast } from 'vue-sonner';
+import { cn } from 'cn';
 import api from '../composables/useApi';
+import { confirm } from '@/composables/useConfirm';
 import ScrapeDialog from '../components/ScrapeDialog.vue';
 import { splitKeyword } from '../composables/useSplitKeyword';
 import { useExpressUrl } from '../composables/useExpressUrl';
 import { useTaskStore } from '../stores/taskStore';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const formatDate = (value: unknown): string => {
   if (!value) return 'unknown';
@@ -517,6 +531,14 @@ const coverUrl = computed(() => {
   return '';
 });
 
+// Set when a cover file exists but is not a decodable image, so the pane falls back to the
+// ImageOff placeholder rather than a broken <img>. Cleared whenever the URL changes, since a
+// re-scrape or a manual drop can land on the very same file name.
+const coverFailed = ref(false);
+watch(coverUrl, () => {
+  coverFailed.value = false;
+});
+
 const coverDragOver = ref(false);
 let coverDragCounter = 0;
 
@@ -545,23 +567,20 @@ const onCoverDrop = async (e: DragEvent) => {
 
   const file = e.dataTransfer?.files[0];
   if (!file || !file.type.startsWith('image/')) {
-    $q.notify({ type: 'warning', message: 'Please drop an image file to set the cover' });
+    toast.warning('Please drop an image file to set the cover');
     return;
   }
 
   // Without Electron there is no way to give the server a real filesystem path, so say so
   // instead of appearing to do nothing.
   if (!window.electronAPI) {
-    $q.notify({
-      type: 'warning',
-      message: 'Setting a cover by drag and drop is only available in the desktop app',
-    });
+    toast.warning('Setting a cover by drag and drop is only available in the desktop app');
     return;
   }
 
   const localImagePath = window.electronAPI.getFilePath(file);
   if (!localImagePath) {
-    $q.notify({ type: 'warning', message: 'Could not read the dropped file' });
+    toast.warning('Could not read the dropped file');
     return;
   }
 
@@ -570,15 +589,15 @@ const onCoverDrop = async (e: DragEvent) => {
       imagePath: localImagePath,
     });
     game.value = res.data;
-    $q.notify({ type: 'positive', message: 'Cover updated successfully' });
+    // A re-upload usually lands on the very same file name, so the URL watcher above would not
+    // fire - clear the failed flag here or the repaired cover stays hidden behind the fallback.
+    coverFailed.value = false;
+    toast.success('Cover updated successfully');
   } catch (err) {
     // Surface the server's reason (unsupported format, missing file) - a bare "failed"
     // leaves the user with no idea which of their files was rejected or why.
     const detail = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-    $q.notify({
-      type: 'negative',
-      message: detail ? `Failed to update cover: ${detail}` : 'Failed to update cover',
-    });
+    toast.error(detail ? `Failed to update cover: ${detail}` : 'Failed to update cover');
   }
 };
 
@@ -589,17 +608,26 @@ const scrapeDefaultSource = computed<SourceType | undefined>(() => {
   const type = game.value?.sources?.[0]?.source_type;
   return SOURCE_TYPES.includes(type as SourceType) ? (type as SourceType) : undefined;
 });
-const confirmDelete = ref(false);
-const deleting = ref(false);
 const editingPath = ref(false);
 const editPathValue = ref('');
 const relocating = ref(false);
-const $q = useQuasar();
 
 const r18Options = [
   { label: 'Safe', value: 0 },
   { label: '18+', value: 1 },
 ];
+
+// The old q-btn-toggle tinted the selected option by meaning: Safe reads positive, 18+
+// negative.
+const r18OptionClass = (value: number) =>
+  cn(
+    'rounded px-2 py-0.5 text-xs font-medium transition-colors',
+    (game.value?.r18 === 1 ? 1 : 0) !== value
+      ? 'text-muted-foreground hover:text-foreground'
+      : value === 1
+        ? 'bg-destructive/15 text-destructive'
+        : 'bg-success/15 text-success',
+  );
 
 const setR18 = async (value: number) => {
   if (!game.value) return;
@@ -607,7 +635,7 @@ const setR18 = async (value: number) => {
     const res = await api.put(`/games/${game.value.id}/r18`, { r18: value });
     game.value = res.data;
   } catch {
-    $q.notify({ type: 'negative', message: 'Failed to update R18 status' });
+    toast.error('Failed to update R18 status');
   }
 };
 const confirmRelocate = ref(false);
@@ -649,9 +677,9 @@ watch(gameBusy, (busy, wasBusy) => {
   const task = taskStore.tasks.get(taskId);
   if (!task) return;
   if (task.status === 'completed') {
-    $q.notify({ type: 'positive', message: TASK_DONE_LABEL[task.type] || 'Task completed' });
+    toast.success(TASK_DONE_LABEL[task.type] || 'Task completed');
   } else if (task.status === 'failed') {
-    $q.notify({ type: 'negative', message: task.error || 'Task failed' });
+    toast.error(task.error || 'Task failed');
   }
 });
 
@@ -662,13 +690,14 @@ const displayName = computed(() => {
   return source?.name || game.value?.name || '';
 });
 
-const sourceColor = (source: string) => {
-  if (source === 'dlsite') return 'deep-purple';
-  if (source === 'dmm') return 'pink';
-  if (source === 'bangumi') return 'orange';
-  if (source === 'vndb') return 'cyan';
-  if (source === 'steam') return 'blue-grey';
-  return 'grey';
+// Vendor identity tint for the source rows; the vendor name itself is the only label there.
+const sourceClass = (source: string) => {
+  if (source === 'dlsite') return 'bg-primary/15 text-primary';
+  if (source === 'dmm') return 'bg-destructive/15 text-destructive';
+  if (source === 'bangumi') return 'bg-warning/15 text-warning';
+  if (source === 'vndb') return 'bg-info/15 text-info';
+  if (source === 'steam') return 'bg-success/15 text-success';
+  return 'bg-muted text-muted-foreground';
 };
 
 const openExternal = (url: string) => {
@@ -719,7 +748,7 @@ const startEditPath = () => {
   // One relocate per game: the button is disabled while a task runs, and this keeps the
   // keyboard/other entry points honest too.
   if (gameBusy.value) {
-    $q.notify({ type: 'info', message: 'A task is still running for this game' });
+    toast.info('A task is still running for this game');
     return;
   }
   editPathValue.value = currentFullPath.value;
@@ -776,7 +805,7 @@ const browseForRelocate = async () => {
   }
 };
 
-const submitEditPath = () => {
+const submitEditPath = async () => {
   const newPath = editPathValue.value.trim();
   if (!newPath || newPath === currentFullPath.value) {
     editingPath.value = false;
@@ -789,14 +818,14 @@ const submitEditPath = () => {
   // warned on every archive → archive relocation.
   const comparablePath = stripArchiveExtension(newPath);
   if (baseName && !comparablePath.endsWith(baseName)) {
-    $q.dialog({
+    const ok = await confirm({
       title: 'Path Warning',
       message: `The new path does not contain the game name "${baseName}". Apply anyway?`,
-      cancel: true,
-      persistent: true,
-    }).onOk(() => {
-      showRelocateConfirm(newPath);
+      okLabel: 'Apply',
+      cancelLabel: 'Cancel',
     });
+    if (!ok) return;
+    showRelocateConfirm(newPath);
     return;
   }
 
@@ -829,7 +858,7 @@ const doRelocate = async () => {
   if (!game.value || !editPathValue.value.trim()) return;
   if (gameBusy.value) {
     confirmRelocate.value = false;
-    $q.notify({ type: 'info', message: 'A task is still running for this game' });
+    toast.info('A task is still running for this game');
     return;
   }
   const isArchiveRelocate = relocateInfo.value?.moveDisabled;
@@ -858,37 +887,29 @@ const doRelocate = async () => {
         } catch {
           /* clipboard may not be available */
         }
-        $q.dialog({
+        const ok = await confirm({
           title: 'Archive Relocated',
           message: 'Target path copied to clipboard. Open the archive for extraction?',
-          cancel: true,
-          persistent: false,
-        }).onOk(() => {
-          if (sourcePath) {
-            void window.electronAPI?.openPath(sourcePath);
-          }
+          okLabel: 'Open',
+          cancelLabel: 'Cancel',
         });
+        if (ok && sourcePath) {
+          void window.electronAPI?.openPath(sourcePath);
+        }
       }
       if (isCompressRelocate && res.data.compressSkipped) {
-        $q.notify({
-          type: 'warning',
-          message: `Compression skipped: ${res.data.reason}`,
-        });
+        toast.warning(`Compression skipped: ${res.data.reason}`);
       }
       return;
     }
 
-    $q.notify({
-      type: 'info',
-      message:
-        operation === 'move'
-          ? 'File move started in background'
-          : operation === 'extract'
-            ? 'Extraction started in background'
-            : 'Compression started in background',
-      icon:
-        operation === 'move' ? 'drive_file_move' : operation === 'extract' ? 'archive' : 'compress',
-    });
+    toast.info(
+      operation === 'move'
+        ? 'File move started in background'
+        : operation === 'extract'
+          ? 'Extraction started in background'
+          : 'Compression started in background',
+    );
 
     // The busy watcher above reloads the path and reports the outcome once this settles.
     pendingRelocate.value = taskId;
@@ -898,14 +919,17 @@ const doRelocate = async () => {
       response?: { status?: number; data?: { conflict?: string; destExists?: boolean } };
     };
     if (e.response?.status === 409 && e.response.data?.conflict) {
-      $q.dialog({
+      const ok = await confirm({
         title: 'Target Conflict',
         message: 'Target path already exists and is not empty. Continue anyway?',
-        cancel: true,
-        persistent: true,
-      }).onOk(() => {
-        void doRelocateWithForce(targetPath);
+        okLabel: 'Continue',
+        cancelLabel: 'Cancel',
+        // Continuing force-overwrites whatever already sits at the target.
+        destructive: true,
       });
+      if (ok) {
+        await doRelocateWithForce(targetPath);
+      }
     }
   }
 };
@@ -929,15 +953,13 @@ const doRelocateWithForce = async (targetPath: string) => {
       return;
     }
 
-    $q.notify({
-      type: 'info',
-      message:
-        operation === 'move'
-          ? 'File move started in background'
-          : operation === 'extract'
-            ? 'Extraction started in background'
-            : 'Compression started in background',
-    });
+    toast.info(
+      operation === 'move'
+        ? 'File move started in background'
+        : operation === 'extract'
+          ? 'Extraction started in background'
+          : 'Compression started in background',
+    );
 
     // The busy watcher above reloads the path and reports the outcome once this settles.
     pendingRelocate.value = taskId;
@@ -985,17 +1007,23 @@ const onReScrape = async (data: AdoptData) => {
   await loadGame();
 };
 
+// A plain yes/no confirmation (the second line only spells out the cascade), so it goes
+// through the shared imperative confirm instead of a local dialog.
 const doDelete = async () => {
   if (!game.value) return;
-  deleting.value = true;
+  const ok = await confirm({
+    title: 'Confirm Delete',
+    message: `Are you sure you want to delete "${displayName.value}"? This will also remove all associated sources, makers, genres, and tags.`,
+    okLabel: 'Delete',
+    cancelLabel: 'Cancel',
+    destructive: true,
+  });
+  if (!ok) return;
   try {
     await api.delete(`/games/${game.value.id}`);
-    confirmDelete.value = false;
     void router.replace('/');
   } catch {
     // handled by error interceptor
-  } finally {
-    deleting.value = false;
   }
 };
 

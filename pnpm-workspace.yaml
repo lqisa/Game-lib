@@ -1,12 +1,18 @@
 # https://pnpm.io/settings
 
+# Native/binary packages whose install scripts must run. pnpm 12 fails the
+# install when it finds a blocked build script, so every package that needs one
+# has to be listed here.
 allowBuilds:
   '@parcel/watcher': true
+  '@tailwindcss/oxide': true
   '@tensorflow/tfjs-node': true
   core-js: true
+  electron: true
   electron-winstaller: true
   esbuild: true
   lightningcss: true
   rolldown: true
+  sharp: true
   sqlite3: true
   unrs-resolver: true

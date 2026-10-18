@@ -1,18 +1,10 @@
+/// <reference types="vite/client" />
+
 /**
- * Add types (that are not auto-magically added by Quasar CLI already)
- * for your custom variables to avoid TypeScript errors, like dynamic
- * process.env variables or definitions in dotenv files configured ONLY
- * for the /quasar.config file itself.
- *
- * https://quasar.dev/quasar-cli-vite/handling-import-meta-env#type-inference
- *
- * @example
- * interface ImportMetaEnv {
- *   readonly MY_VAR: string;
- *   readonly MY_OTHER_VAR: string;
- * }
+ * Vite env typing. The frontend deliberately has no custom VITE_* variables:
+ * every backend url is same-origin (src/composables/useExpressUrl.ts), so there
+ * is nothing to configure per deployment. This interface exists as the
+ * augmentation target for future use.
  */
-// Declared empty on purpose: this is the augmentation target for Vite/Quasar's env vars,
-// so it is meant to be merged into rather than to carry members itself.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface ImportMetaEnv {}

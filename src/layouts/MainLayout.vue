@@ -1,155 +1,208 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
-    <q-header>
-      <q-toolbar>
-        <q-btn
-          flat
-          dense
-          round
-          icon="menu"
-          @click="drawer = !drawer"
-          style="color: var(--m3-on-surface-variant)"
-        />
-        <q-toolbar-title>
-          Game Lib<template v-if="$route.path === '/' && gameListStore.favoritesMode"
-            >- Favorites</template
-          >
-          <template v-else-if="$route.path === '/' && gameListStore.archivedMode"
-            >- Archived</template
-          >
-          <span v-if="showGameCount" class="q-ml-sm" style="color: var(--m3-on-surface-variant)"
-            >({{ filteredCount }})</span
-          >
-        </q-toolbar-title>
-      </q-toolbar>
-    </q-header>
+  <div class="flex h-full">
+    <!-- Navigation rail: the same information architecture as before (Games /
+         Favorites / Archive / Recently / Settings), restyled on tokens. -->
+    <aside
+      class="bg-sidebar flex h-full w-20 shrink-0 flex-col items-center justify-between border-r py-3"
+    >
+      <nav class="flex flex-col items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :class="navItemClass(gameListStore.mode === 'games' && route.path === '/')"
+              @click="navigateTo('/', 'games')"
+            >
+              <Gamepad2 class="size-5" />
+              <span class="nav-label">Games</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Game Lib</TooltipContent>
+        </Tooltip>
 
-    <q-drawer v-model="drawer" show-if-above :width="80" :breakpoint="0" class="m3-nav-rail">
-      <div class="column full-height items-center m3-nav-rail-inner">
-        <div class="col column items-center">
-          <div
-            class="m3-nav-item"
-            :class="{
-              'm3-nav-item--active': gameListStore.mode === 'games' && $route.path === '/',
-            }"
-            @click="navigateTo('/', 'games')"
-          >
-            <q-icon name="videogame_asset" class="m3-nav-icon" />
-            <span class="m3-nav-label">Games</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
-              >Game Lib</q-tooltip
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :class="navItemClass(gameListStore.mode === 'favorites' && route.path === '/')"
+              @click="navigateTo('/', 'favorites')"
             >
-          </div>
-          <div
-            class="m3-nav-item"
-            :class="{
-              'm3-nav-item--active': gameListStore.mode === 'favorites' && $route.path === '/',
-            }"
-            @click="navigateTo('/', 'favorites')"
-          >
-            <q-icon name="star" class="m3-nav-icon" />
-            <span class="m3-nav-label">Favorites</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
-              >Favorites</q-tooltip
+              <Star class="size-5" />
+              <span class="nav-label">Favorites</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Favorites</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :class="navItemClass(gameListStore.mode === 'archived' && route.path === '/')"
+              @click="navigateTo('/', 'archived')"
             >
-          </div>
-          <div
-            class="m3-nav-item"
-            :class="{
-              'm3-nav-item--active': gameListStore.mode === 'archived' && $route.path === '/',
-            }"
-            @click="navigateTo('/', 'archived')"
-          >
-            <q-icon name="archive" class="m3-nav-icon" />
-            <span class="m3-nav-label">Archive</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
-              >Archived Games</q-tooltip
+              <Archive class="size-5" />
+              <span class="nav-label">Archive</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Archived Games</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :class="navItemClass(route.path === '/recently')"
+              @click="void router.push('/recently')"
             >
-          </div>
-          <div
-            class="m3-nav-item"
-            :class="{ 'm3-nav-item--active': $route.path === '/recently' }"
-            @click="void router.push('/recently')"
-          >
-            <q-icon name="history" class="m3-nav-icon" />
-            <span class="m3-nav-label">Recently</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
-              >Recently Opened</q-tooltip
+              <History class="size-5" />
+              <span class="nav-label">Recently</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Recently Opened</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :class="navItemClass(route.path === '/settings')"
+              @click="void router.push('/settings')"
             >
-          </div>
-          <div
-            class="m3-nav-item"
-            :class="{ 'm3-nav-item--active': $route.path === '/settings' }"
-            @click="void router.push('/settings')"
-          >
-            <q-icon name="settings" class="m3-nav-icon" />
-            <span class="m3-nav-label">Settings</span>
-            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
-              >Settings</q-tooltip
-            >
-          </div>
-        </div>
-        <div class="m3-nav-item" @click="dark = !dark">
-          <q-icon :name="dark ? 'dark_mode' : 'light_mode'" class="m3-nav-icon" />
-          <span class="m3-nav-label">{{ dark ? 'Dark' : 'Light' }}</span>
-          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{
-            dark ? 'Switch to Light' : 'Switch to Dark'
-          }}</q-tooltip>
-        </div>
-        <div class="m3-nav-item" @click="setHideR18(!hideR18)">
-          <q-icon :name="hideR18 ? 'visibility_off' : 'visibility'" class="m3-nav-icon" />
-          <span class="m3-nav-label">{{ hideR18 ? 'R18 off' : 'R18 on' }}</span>
-          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{
-            hideR18 ? 'Show R18 covers' : 'Hide R18 covers'
-          }}</q-tooltip>
-        </div>
-        <div v-if="hasElectronAPI" class="m3-nav-item" @click="enterLightweightMode">
-          <q-icon name="power_settings_new" class="m3-nav-icon" />
-          <span class="m3-nav-label">Exit</span>
-          <q-tooltip anchor="center right" self="center left" :offset="[8, 0]"
-            >Enter Lightweight Mode</q-tooltip
-          >
-        </div>
+              <SettingsIcon class="size-5" />
+              <span class="nav-label">Settings</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Settings</TooltipContent>
+        </Tooltip>
+      </nav>
+
+      <div class="flex flex-col items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button type="button" :class="navItemClass(false)" @click="toggle()">
+              <Moon v-if="isDark" class="size-5" />
+              <Sun v-else class="size-5" />
+              <span class="nav-label">{{ isDark ? 'Dark' : 'Light' }}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {{ isDark ? 'Switch to Light' : 'Switch to Dark' }}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button type="button" :class="navItemClass(false)" @click="setHideR18(!hideR18)">
+              <EyeOff v-if="hideR18" class="size-5" />
+              <Eye v-else class="size-5" />
+              <span class="nav-label">{{ hideR18 ? 'R18 off' : 'R18 on' }}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {{ hideR18 ? 'Show R18 covers' : 'Hide R18 covers' }}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip v-if="hasElectronAPI">
+          <TooltipTrigger as-child>
+            <button type="button" :class="navItemClass(false)" @click="enterLightweightMode">
+              <Power class="size-5" />
+              <span class="nav-label">Exit</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Enter Lightweight Mode</TooltipContent>
+        </Tooltip>
       </div>
-    </q-drawer>
+    </aside>
 
-    <q-page-container>
-      <router-view />
-    </q-page-container>
+    <div class="flex min-w-0 flex-1 flex-col">
+      <header class="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <h1 class="text-[15px] font-semibold">
+          Game Lib<template v-if="route.path === '/' && gameListStore.favoritesMode">
+            - Favorites</template
+          ><template v-else-if="route.path === '/' && gameListStore.archivedMode">
+            - Archived</template
+          >
+        </h1>
+        <span v-if="showGameCount" class="text-muted-foreground text-sm"
+          >({{ filteredCount }})</span
+        >
+      </header>
 
-    <q-page-sticky position="bottom-right" :offset="[16, 16]">
-      <q-btn fab icon="assignment" color="primary" @click="showTaskPanel = true">
-        <q-badge v-if="taskStore.runningCount > 0" color="red" floating>{{
-          taskStore.runningCount
-        }}</q-badge>
-        <q-tooltip>Tasks</q-tooltip>
-      </q-btn>
-    </q-page-sticky>
+      <main class="min-h-0 flex-1">
+        <router-view />
+      </main>
+    </div>
+
+    <!-- Floating task button -->
+    <Tooltip>
+      <TooltipTrigger as-child>
+        <Button
+          size="icon"
+          class="fixed right-4 bottom-4 z-40 size-12 rounded-full shadow-lg"
+          @click="showTaskPanel = true"
+        >
+          <ListTodo class="size-5" />
+          <span
+            v-if="taskStore.runningCount > 0"
+            class="bg-destructive text-destructive-foreground absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium"
+          >
+            {{ taskStore.runningCount }}
+          </span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Tasks</TooltipContent>
+    </Tooltip>
 
     <TaskPanel v-model="showTaskPanel" />
-  </q-layout>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useQuasar } from 'quasar';
-import { useGameListStore } from '../stores/gameListStore';
-import type { GameListMode } from '../stores/gameListStore';
-import { useTaskStore } from '../stores/taskStore';
-import { useR18Toggle } from '../composables/useR18Toggle';
-import TaskPanel from '../components/TaskPanel.vue';
+import {
+  Archive,
+  Eye,
+  EyeOff,
+  Gamepad2,
+  History,
+  ListTodo,
+  Moon,
+  Power,
+  Settings as SettingsIcon,
+  Star,
+  Sun,
+} from '@lucide/vue';
+import { toast } from 'vue-sonner';
+import { cn } from 'cn';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useGameListStore } from '@/stores/gameListStore';
+import type { GameListMode } from '@/stores/gameListStore';
+import { useTaskStore } from '@/stores/taskStore';
+import { useR18Toggle } from '@/composables/useR18Toggle';
+import { useTheme } from '@/composables/useTheme';
+import { confirm } from '@/composables/useConfirm';
+import TaskPanel from '@/components/TaskPanel.vue';
 
-const $q = useQuasar();
 const { hideR18, setHideR18 } = useR18Toggle();
+const { isDark, toggle } = useTheme();
 const router = useRouter();
 const route = useRoute();
-const drawer = ref(true);
 
 const gameListStore = useGameListStore();
 const taskStore = useTaskStore();
 const showTaskPanel = ref(false);
 const filteredCount = computed(() => gameListStore.filteredCount);
+
+const navItemClass = (active: boolean) =>
+  cn(
+    'flex w-14 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl py-2 select-none',
+    'text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+    active && 'bg-secondary text-secondary-foreground',
+  );
 
 // Backup results are announced wherever the user happens to be - the TaskPanel row alone was
 // too easy to miss, so a failed backup looked like nothing happened. Only tasks seen active
@@ -169,12 +222,9 @@ watch(
       } else if (seenActiveBackups.has(task.id)) {
         seenActiveBackups.delete(task.id);
         if (task.status === 'completed') {
-          $q.notify({ type: 'positive', message: task.detail || 'Backup completed' });
+          toast.success(task.detail || 'Backup completed');
         } else if (task.status === 'failed') {
-          $q.notify({
-            type: 'negative',
-            message: `Backup failed: ${(task.error || 'unknown error').slice(0, 160)}`,
-          });
+          toast.error(`Backup failed: ${(task.error || 'unknown error').slice(0, 160)}`);
         }
         // cancelled: the user cancelled it themselves, no announcement needed
       }
@@ -197,21 +247,6 @@ const navigateTo = (path: string, listMode: GameListMode) => {
   void router.push(path);
 };
 
-const stored = localStorage.getItem('dark');
-if (stored !== null) {
-  $q.dark.set(stored === 'true');
-  document.documentElement.classList.toggle('body--dark', stored === 'true');
-}
-
-const dark = computed({
-  get: () => $q.dark.isActive,
-  set: (val: boolean) => {
-    $q.dark.set(val);
-    document.documentElement.classList.toggle('body--dark', val);
-    localStorage.setItem('dark', String(val));
-  },
-});
-
 const enterLightweightMode = async () => {
   if (!window.electronAPI) return;
   await window.electronAPI.enterLightweightMode();
@@ -222,14 +257,15 @@ onMounted(() => {
 
   if (window.electronAPI) {
     window.electronAPI.onMoveInProgress?.(() => {
-      $q.dialog({
+      void confirm({
         title: 'Task In Progress',
         message:
           'A file task (move / extract / compress) is still running. Closing now may leave it half-finished. Force quit?',
-        cancel: true,
-        persistent: true,
-      }).onOk(() => {
-        void window.electronAPI?.forceQuit?.();
+        okLabel: 'Force Quit',
+        cancelLabel: 'Stay',
+        destructive: true,
+      }).then((ok) => {
+        if (ok) void window.electronAPI?.forceQuit?.();
       });
     });
   }
@@ -245,60 +281,13 @@ onMounted(() => {
 });
 </script>
 
-<style>
-.m3-nav-rail {
-  overflow-x: hidden !important;
-  background: var(--m3-surface) !important;
-  border-right: 1px solid var(--m3-outline-variant) !important;
-  box-shadow: none !important;
-}
-.m3-nav-rail .q-drawer__content {
-  overflow-x: hidden !important;
-}
-
-.m3-nav-rail-inner {
-  padding: 8px 0;
-  gap: 4px;
-}
-
-.m3-nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  padding: 4px 0;
-  border-radius: var(--m3-shape-corner-lg);
-  cursor: pointer;
-  color: var(--m3-on-surface-variant);
-  transition:
-    background 0.2s cubic-bezier(0.2, 0, 0, 1),
-    color 0.2s cubic-bezier(0.2, 0, 0, 1);
-  user-select: none;
-}
-
-.m3-nav-item:hover {
-  background: rgba(103, 80, 164, 0.08);
-}
-
-.m3-nav-item.m3-nav-item--active {
-  color: var(--m3-on-secondary-container);
-  background: var(--m3-secondary-container);
-}
-
-.m3-nav-icon {
-  font-size: 24px;
-  width: 24px;
-  height: 24px;
-}
-
-.m3-nav-label {
-  font-size: 12px;
+<style scoped>
+/* Rail label styling that is easier to keep in one place than repeated on
+   every rail button. */
+.nav-label {
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.5px;
-  text-align: center;
   line-height: 1.2;
   white-space: nowrap;
-  margin-top: 4px;
 }
 </style>

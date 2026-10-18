@@ -7,9 +7,15 @@
 
 node_modules/
 dist/
+out/
+release/
+.packaging/
 .kilo/
 .quasar/
 graphify-out/
+# shadcn-vue components are upstream-authored; reformatting them makes every
+# future `shadcn-vue add/update` a noisy diff.
+src/components/ui/
 test-results/
 test-data/
 test_out/
@@ -27,4 +33,3 @@ quasar.config.*.temporary.compiled*
 
 # Lockfiles are generated; reformatting them creates noise in every dependency bump.
 pnpm-lock.yaml
-src-electron/package-lock.json

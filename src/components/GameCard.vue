@@ -1,12 +1,15 @@
 <template>
-  <q-card
-    class="game-card cursor-pointer"
-    :class="{ 'game-card--selected': selected }"
+  <div
+    class="game-card bg-card relative h-full cursor-pointer overflow-hidden rounded-lg border transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md"
+    :class="selected ? 'ring-primary ring-2' : ''"
     @click="handleClick"
   >
     <!-- The cover doubles as its own backdrop (see .game-cover::before), exposed as a
          custom property because the URL only exists at runtime. -->
-    <div class="game-cover" :style="{ '--cover-url': coverFill }">
+    <div
+      class="game-cover relative aspect-[2.8/4] overflow-hidden"
+      :style="{ '--cover-url': coverFill }"
+    >
       <!-- A cover can be missing for two different reasons: the game was never scraped
            (or its source has no cover art), or cover_path is set but the file is not a
            decodable image. Both fall back to the same placeholder instead of leaving the
@@ -27,50 +30,62 @@
       />
       <img
         v-else
-        src="placeholder-cover.jpg"
+        src="/placeholder-cover.jpg"
         class="game-cover__img game-cover__placeholder"
         draggable="false"
         alt=""
       />
       <div v-if="r18Hidden" class="game-cover__r18-label">18+</div>
+
       <div
         v-if="!hideR18 && game.r18 === 1 && !(selectable && selected)"
-        class="absolute-top-left q-pa-xs"
-        style="z-index: 3"
+        class="absolute top-1 left-1 z-[3]"
       >
-        <q-badge color="deep-orange" label="18+" />
+        <Badge variant="destructive" class="h-4 rounded-sm px-1 text-[10px]">18+</Badge>
       </div>
-      <div v-if="selectable && selected" class="absolute-top-left q-pa-xs" style="z-index: 2">
-        <q-icon name="check_circle" color="primary" size="24px" />
+      <div v-if="selectable && selected" class="absolute top-1 left-1 z-[2]">
+        <CheckCircle2 class="text-primary size-6 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
       </div>
       <div
         v-if="duplicate || game.similarCount"
-        class="absolute-top-right q-pa-xs"
-        style="z-index: 2"
+        class="absolute top-1 right-1 z-[2] flex flex-col items-end gap-1"
       >
-        <q-icon v-if="duplicate" name="content_copy" color="warning" size="18px">
-          <q-tooltip>Shares a source with another game</q-tooltip>
-        </q-icon>
-        <q-icon v-if="game.similarCount" name="merge_type" color="warning" size="18px">
-          <q-tooltip>Suspected duplicate: a similar name exists under another vendor</q-tooltip>
-        </q-icon>
+        <Tooltip v-if="duplicate">
+          <TooltipTrigger as-child>
+            <Copy class="text-warning size-4 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+          </TooltipTrigger>
+          <TooltipContent>Shares a source with another game</TooltipContent>
+        </Tooltip>
+        <Tooltip v-if="game.similarCount">
+          <TooltipTrigger as-child>
+            <Merge class="text-warning size-4 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+          </TooltipTrigger>
+          <TooltipContent
+            >Suspected duplicate: a similar name exists under another vendor</TooltipContent
+          >
+        </Tooltip>
       </div>
+
       <div class="game-cover__title">
-        <div class="text-subtitle2 ellipsis game-cover__name">
-          {{ game.sourceName || game.name }}
-          <q-tooltip v-if="game.sourceName" anchor="bottom middle" self="top middle">
-            {{ game.name }}
-          </q-tooltip>
-        </div>
+        <Tooltip v-if="game.sourceName">
+          <TooltipTrigger as-child>
+            <div class="truncate text-[13px] font-medium">{{ game.sourceName }}</div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" class="max-w-80">{{ game.name }}</TooltipContent>
+        </Tooltip>
+        <div v-else class="truncate text-[13px] font-medium">{{ game.name }}</div>
       </div>
     </div>
-  </q-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useExpressUrl } from '../composables/useExpressUrl';
-import { useR18Toggle } from '../composables/useR18Toggle';
+import { CheckCircle2, Copy, Merge } from '@lucide/vue';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useExpressUrl } from '@/composables/useExpressUrl';
+import { useR18Toggle } from '@/composables/useR18Toggle';
 
 interface Game {
   id: number;
@@ -143,24 +158,6 @@ const handleClick = (e: MouseEvent) => {
 </script>
 
 <style scoped>
-.game-card {
-  position: relative;
-  user-select: none;
-  transition:
-    transform 0.2s cubic-bezier(0.2, 0, 0, 1),
-    box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1);
-  height: 100%;
-  border-radius: var(--m3-shape-corner-sm);
-}
-.game-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--m3-elevation-1);
-}
-
-.game-card--selected {
-  box-shadow: 0 0 0 2px var(--m3-primary) !important;
-}
-
 /* Frosted-glass base for the letterbox bars a non-portrait cover leaves: the cover itself,
    blurred and lifted, so the tile reads as one pane of glass tinted by the artwork.
    The blur is a `filter` on this layer rather than `backdrop-filter` on the artwork. Both
@@ -169,15 +166,8 @@ const handleClick = (e: MouseEvent) => {
    `inset` + `scale` overshoot the tile so the blur's soft edge falls outside the visible
    area instead of showing as a halo. */
 .game-cover {
-  position: relative;
-  aspect-ratio: 2.8 / 4;
-  background-color: var(--m3-surface-container-highest);
-  background-image: linear-gradient(
-    165deg,
-    var(--m3-surface-container) 0%,
-    var(--m3-surface-dim) 100%
-  );
-  overflow: hidden;
+  background-color: var(--muted);
+  background-image: linear-gradient(165deg, var(--muted) 0%, var(--background) 100%);
 }
 
 .game-cover::before {
@@ -204,10 +194,7 @@ const handleClick = (e: MouseEvent) => {
 /* `cover` rather than `contain`: the placeholder is decorative, so filling the tile looks
    better than letterboxing it against the backdrop. */
 .game-cover__placeholder {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
-  background: var(--m3-surface-container-highest);
 }
 
 .game-cover__r18-blur {
@@ -229,11 +216,6 @@ const handleClick = (e: MouseEvent) => {
   user-select: none;
 }
 
-.game-cover__name {
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-}
-
 .game-cover__title {
   position: absolute;
   z-index: 2;
@@ -242,14 +224,10 @@ const handleClick = (e: MouseEvent) => {
   right: 0;
   padding: 4px 8px;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: #fff;
 }
-</style>
 
-<style>
-body.body--dark .game-cover {
-  background: var(--m3-surface-container-highest);
-}
-body.body--dark .game-cover__placeholder {
-  background: var(--m3-surface-container-highest) !important;
+.game-cover__title :deep(*) {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 </style>

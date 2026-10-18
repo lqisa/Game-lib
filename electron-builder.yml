@@ -1,0 +1,57 @@
+# Packaging config for the desktop app (electron-builder).
+#
+# Layout contract, unchanged from the previous Quasar packager build:
+#   - the built app (main, preload, renderer) lives inside app.asar;
+#   - the Express backend + its node_modules live OUTSIDE the asar in
+#     resources/server, where electron-main.ts resolves them at runtime
+#     (process.resourcesPath/server).
+#
+# `pnpm build` runs scripts/prepare-packaged-server.mjs first, which produces
+# .packaging/server - that is what extraResources below copies.
+appId: game-lib
+productName: Game Lib
+
+directories:
+  output: release
+
+# Be explicit: the default is "everything", which would drag the dev
+# node_modules and the whole repo into the package. Development dependencies
+# are never copied by electron-builder, but the whole node_modules of
+# production deps is not shipped inside the asar either - the backend's copy
+# travels via extraResources above.
+files:
+  - out/**/*
+  - package.json
+  - from: src-electron/electron-assets
+    to: electron-assets
+
+extraResources:
+  - from: .packaging/server
+    to: server
+
+asar: true
+
+win:
+  icon: src-electron/electron-assets/icons/icon.ico
+mac:
+  icon: src-electron/electron-assets/icons/icon.icns
+linux:
+  icon: src-electron/electron-assets/icons/icon.png
+  category: Utility
+
+# The app ships an English and a Chinese UI; every other locale pak is dead
+# weight (the old build pruned them in an afterCopy hook).
+electronLanguages:
+  - en-US
+  - zh-CN
+
+# @electron/get keys its cache by download URL; naming the same mirror the
+# npm-level install uses (.npmrc) prevents a re-download of ~140MB.
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+
+# sqlite3/sharp are installed for the backend payload by
+# scripts/prepare-packaged-server.mjs (pnpm, Node ABI, exactly like the dev
+# build). The Electron ABI rebuild would produce binaries that nothing loads -
+# they are also not shipped inside the asar.
+npmRebuild: false

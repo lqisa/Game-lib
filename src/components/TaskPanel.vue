@@ -1,109 +1,75 @@
 <template>
-  <q-dialog v-model="show" position="bottom" seamless>
-    <q-card style="min-width: 400px; max-width: 600px; max-height: 400px" class="q-pa-sm">
-      <div class="row items-center q-mb-sm">
-        <div class="text-subtitle2" style="color: var(--m3-on-surface)">Background Tasks</div>
-        <q-space />
-        <q-btn
-          flat
-          round
-          dense
-          size="sm"
-          icon="close"
-          style="color: var(--m3-on-surface-variant)"
-          @click="show = false"
-        />
+  <Sheet :open="show" @update:open="show = $event">
+    <SheetContent side="bottom" class="mx-auto w-full max-w-2xl gap-0 rounded-t-xl p-0">
+      <SheetHeader class="border-b px-4 py-3">
+        <SheetTitle class="text-sm font-semibold">Background Tasks</SheetTitle>
+      </SheetHeader>
+
+      <div class="max-h-[45vh] overflow-y-auto px-2 py-1">
+        <div
+          v-for="task in sortedTasks"
+          :key="task.id"
+          class="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-accent/50"
+        >
+          <component :is="taskIcon(task)" :class="['mt-0.5 size-4 shrink-0', statusColor(task)]" />
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm">{{ task.label }}</div>
+            <Progress
+              v-if="task.status === 'running' || task.status === 'pending'"
+              :model-value="task.progress"
+              class="mt-1 h-1"
+            />
+            <div class="text-muted-foreground truncate text-xs">
+              {{ task.detail }}
+              <span v-if="task.status === 'running'"> ({{ task.progress }}%)</span>
+            </div>
+            <div v-if="task.error" class="text-destructive truncate text-xs">{{ task.error }}</div>
+          </div>
+          <div class="flex shrink-0 items-center">
+            <Tooltip v-if="task.status === 'running' && canCancel(task)">
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="icon-sm" @click="cancelTask(task.id)">
+                  <X class="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Cancel</TooltipContent>
+            </Tooltip>
+            <Tooltip v-if="isTerminalStatus(task.status)">
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="icon-sm" @click="removeTask(task.id)">
+                  <Trash2 class="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Remove</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+        <div v-if="sortedTasks.length === 0" class="text-muted-foreground py-8 text-center text-sm">
+          No tasks
+        </div>
       </div>
-      <q-scroll-area style="height: 300px">
-        <q-list dense>
-          <q-item v-for="task in sortedTasks" :key="task.id" class="q-pa-xs">
-            <q-item-section avatar>
-              <q-icon
-                :name="
-                  task.type === 'move'
-                    ? 'drive_file_move'
-                    : task.type === 'similar-scan'
-                      ? 'content_copy'
-                      : task.type === 'nsfw-scan'
-                        ? 'visibility'
-                        : task.type === 'backup'
-                          ? 'settings_backup_restore'
-                          : task.type === 'compress'
-                            ? 'archive'
-                            : 'archive'
-                "
-                :color="statusColor(task)"
-                size="sm"
-              />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label caption style="color: var(--m3-on-surface)">{{
-                task.label
-              }}</q-item-label>
-              <q-linear-progress
-                v-if="task.status === 'running' || task.status === 'pending'"
-                :value="task.progress / 100"
-                color="primary"
-                size="4px"
-                class="q-mt-xs"
-              />
-              <div class="text-caption" style="color: var(--m3-on-surface-variant)">
-                {{ task.detail }}
-                <span v-if="task.status === 'running'"> ({{ task.progress }}%)</span>
-              </div>
-              <div v-if="task.error" class="text-caption text-negative">{{ task.error }}</div>
-            </q-item-section>
-            <q-item-section side>
-              <q-btn
-                v-if="
-                  task.status === 'running' &&
-                  (task.type === 'extract' || task.type === 'compress' || task.type === 'backup')
-                "
-                flat
-                round
-                dense
-                size="sm"
-                icon="close"
-                color="grey-7"
-                @click="cancelTask(task.id)"
-              >
-                <q-tooltip>Cancel</q-tooltip>
-              </q-btn>
-              <q-btn
-                v-if="
-                  task.status === 'completed' ||
-                  task.status === 'failed' ||
-                  task.status === 'cancelled'
-                "
-                flat
-                round
-                dense
-                size="sm"
-                icon="delete"
-                color="grey-7"
-                @click="removeTask(task.id)"
-              >
-                <q-tooltip>Remove</q-tooltip>
-              </q-btn>
-            </q-item-section>
-          </q-item>
-          <q-item v-if="sortedTasks.length === 0">
-            <q-item-section>
-              <q-item-label caption class="text-center" style="color: var(--m3-on-surface-variant)"
-                >No tasks</q-item-label
-              >
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-scroll-area>
-    </q-card>
-  </q-dialog>
+    </SheetContent>
+  </Sheet>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import api from '../composables/useApi';
-import { useTaskStore, type Task } from '../stores/taskStore';
+import {
+  Archive,
+  ArchiveRestore,
+  Copy,
+  DatabaseBackup,
+  Eye,
+  FolderOutput,
+  Trash2,
+  X,
+} from '@lucide/vue';
+import api from '@/composables/useApi';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { isTerminalStatus, useTaskStore, type Task } from '@/stores/taskStore';
 
 const taskStore = useTaskStore();
 
@@ -115,11 +81,25 @@ const sortedTasks = computed(() =>
   ),
 );
 
+const TASK_ICONS = {
+  move: FolderOutput,
+  'similar-scan': Copy,
+  'nsfw-scan': Eye,
+  backup: DatabaseBackup,
+  compress: Archive,
+  extract: ArchiveRestore,
+} as const;
+
+const taskIcon = (task: Task) => TASK_ICONS[task.type] ?? Archive;
+
+const canCancel = (task: Task) =>
+  task.type === 'extract' || task.type === 'compress' || task.type === 'backup';
+
 const statusColor = (task: Task) => {
-  if (task.status === 'completed') return 'positive';
-  if (task.status === 'failed') return 'negative';
-  if (task.status === 'cancelled') return 'grey';
-  return 'primary';
+  if (task.status === 'completed') return 'text-success';
+  if (task.status === 'failed') return 'text-destructive';
+  if (task.status === 'cancelled') return 'text-muted-foreground';
+  return 'text-primary';
 };
 
 const cancelTask = async (id: string) => {

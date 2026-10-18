@@ -2,11 +2,12 @@ import { createApp } from './app.js';
 import { initDatabase } from './database/init.js';
 import { initProxy } from './scraper/axios.js';
 import { seed } from './__tests__/seed.js';
-import { API_PORTS } from './ports.js';
+import { API_PORTS, resolveApiPort, resolveListenHost } from './ports.js';
 import { getDataDir, isTestEnv } from './config.js';
 import { startBackgroundWorkers } from './background-manager.js';
 
-const PORT = isTestEnv() ? API_PORTS.test : API_PORTS.dev;
+const PORT = isTestEnv() ? API_PORTS.test : resolveApiPort(API_PORTS.dev);
+const HOST = resolveListenHost('127.0.0.1');
 
 await initDatabase();
 await initProxy();
@@ -27,6 +28,6 @@ if (!isTestEnv()) {
 }
 
 const app = createApp(null);
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`* Server running at http://127.0.0.1:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`* Server running at http://${HOST}:${PORT}`);
 });

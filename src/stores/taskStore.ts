@@ -35,6 +35,12 @@ export const useTaskStore = defineStore('task', () => {
   const tasks = ref<Map<string, Task>>(new Map());
   let eventSource: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let zombieTimer: ReturnType<typeof setInterval> | null = null;
+  let lastSseActivity = 0;
+
+  // No message (not even a ping) for this long means the stream is dead even if
+  // EventSource still reports OPEN - see the watchdog in connectSSE.
+  const SSE_PING_TIMEOUT_MS = 40000;
 
   const runningCount = computed(
     () =>
@@ -86,7 +92,24 @@ export const useTaskStore = defineStore('task', () => {
     const { getApiUrl } = useExpressUrl();
     const token = await window.electronAPI?.getSseToken();
     const url = token ? `${getApiUrl('/tasks/events')}?token=${token}` : getApiUrl('/tasks/events');
+    lastSseActivity = Date.now();
     eventSource = new EventSource(url);
+
+    // A stream can be silently dead while EventSource still reports OPEN (the dev
+    // proxy eating the upstream close never fires onerror). The server pings every
+    // 15s; if nothing arrives for SSE_PING_TIMEOUT_MS, force a fresh connection.
+    if (!zombieTimer) {
+      zombieTimer = setInterval(() => {
+        if (
+          eventSource &&
+          eventSource.readyState === EventSource.OPEN &&
+          Date.now() - lastSseActivity > SSE_PING_TIMEOUT_MS
+        ) {
+          disconnectSSE();
+          void connectSSE();
+        }
+      }, 10000);
+    }
 
     let batchMap: Map<string, Task> | null = null;
 
@@ -100,6 +123,7 @@ export const useTaskStore = defineStore('task', () => {
     };
 
     eventSource.onmessage = (event) => {
+      lastSseActivity = Date.now();
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'snapshot') {
@@ -119,6 +143,7 @@ export const useTaskStore = defineStore('task', () => {
           }
           batchMap.set(data.task.id, data.task);
         }
+        // 'ping' (and anything else) only refreshes lastSseActivity above.
       } catch {
         /* ignore SSE parse errors */
       }
@@ -140,6 +165,10 @@ export const useTaskStore = defineStore('task', () => {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+    if (zombieTimer) {
+      clearInterval(zombieTimer);
+      zombieTimer = null;
     }
   };
 

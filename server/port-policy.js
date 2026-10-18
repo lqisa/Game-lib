@@ -4,10 +4,11 @@
  * This lives here (plain JS, no Electron imports) so the decision can be unit tested
  * without booting Electron - see server/__tests__/port-policy.test.js.
  *
- * Why dev must not move ports: in dev the renderer is served by Vite and its API base
- * url is baked from VITE_API_PORT at dev-server start (src/composables/useExpressUrl.ts),
- * so it cannot follow the server to a different port. In production the renderer is served
- * by this same Express server, so its urls are same-origin and port-agnostic.
+ * Why dev must not move ports: in dev the renderer is served by the Vite dev server,
+ * whose /api and /covers proxy target is fixed at dev-server start (VITE_API_PORT),
+ * so the page cannot follow this server to a different port. In production the
+ * renderer is served by this same Express server, so its urls are same-origin and
+ * port-agnostic.
  */
 
 /**
