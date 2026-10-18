@@ -151,8 +151,19 @@ await db('game').where(...)  // TypeError: db is not a function
 ## 构建 / 打包约定
 
 - `pnpm build` = `electron-vite build` → `scripts/prepare-packaged-server.mjs` → `electron-builder --dir`
-- 产物布局: 应用 (main/preload/renderer) 在 `app.asar` 内；Express 后端 + 其 node_modules
-  在 asar 外的 `resources/server`（由 `.packaging/server` 复制，依赖扁平化 + 去掉无用文件 + 混淆）
+- 产物布局: 应用 (main/preload/renderer) 在 `app.asar` 内（~2MB，**不含** node_modules）；
+  Express 后端 + 其 node_modules 在 asar 外的 `resources/server`（由 `.packaging/server`
+  复制，依赖扁平化 + 去掉无用文件 + 混淆）
+- **node_modules 的搬运是显式的**（两个 electron-builder 钩子，缺一不可）：
+  - `scripts/before-build.js`（`beforeBuild` 返回 `false`）= node_modules 由外部处理 →
+    跳过原生依赖重建，且不把生产 node_modules 打进 `app.asar`（app bundle 由 electron-vite
+    完整打包，运行时一个 npm 依赖都不需要）
+  - `scripts/after-pack.js`（`afterPack`）把 `.packaging/server/node_modules` 直接拷进
+    `resources/server/node_modules`——extraResources 的拷贝会**无条件丢弃拷贝源的根级
+    `node_modules`**（`app-builder-lib/out/util/filter.js` 的 "filter the root
+    node_modules"），走 extraResources 会静默丢失后端依赖
+- 验证打包版必须**拷到仓库外**运行（如 `E:\work\prodcopy`）：Node 会沿父目录向上找
+  node_modules，留在仓库内启动会"借用" dev 仓库的依赖，掩盖打包缺失
 - 主进程运行时通过 `process.resourcesPath/server` 加载后端；开发时用仓库内 `server/`
 - 所有前端 API URL 同源（`useExpressUrl.ts`）：dev 由 Vite 代理，生产由 Express 直接服务 SPA
 - 路由使用 hash history，任何部署路径/端口都能直接工作

@@ -157,3 +157,19 @@ icacls "E:\work\game-lib" /setintegritylevel "(OI)(CI)M"
 - 命令：`pnpm dev`（= `electron-vite dev --watch`）/ `pnpm dev:server` / `pnpm dev:frontend` / `pnpm standalone` / `pnpm lint` / `pnpm lint:check` / `pnpm typecheck` / `pnpm test` / `pnpm build`。
 - Windows 坑：禁用 Linux 命令（head/grep/sed/curl…）；junction 删除用 `cmd /c rmdir`，不要 `Remove-Item -Recurse`。
 - Electron 重装注意：清空 node_modules 后需从 `%LOCALAPPDATA%\electron\Cache` 解压 `electron-v42.11.15-win32-x64.zip` + 写 `path.txt` = `electron.exe`。
+
+---
+
+## 9. 后续修复：打包版其实缺少后端依赖（2026-10-18，已修复）
+
+构建生产版供长期使用时发现：**"PROD 验收通过"有盲区**——应用能跑只是因为在这台机器上 Node 沿父目录向上找到了 dev 仓库的 `E:\work\game-lib\node_modules`。打包产物实际有两个问题：
+
+1. **`resources/server` 里没有 node_modules**：electron-builder 的拷贝过滤器无条件丢弃任何拷贝源的根级 `node_modules`（`app-builder-lib/out/util/filter.js`："filter the root node_modules"），extraResources 静默丢掉了后端依赖 → 换机器/删除仓库必崩（旧版 @electron/packager 管线也是因此才需要自定义 hook）。
+2. **`app.asar` 膨胀到 394MB**：electron-builder 默认把根 package.json 的生产依赖打进 asar；而 app bundle 由 electron-vite 完整打包，运行时一个 npm 依赖都不需要（纯死重）。
+
+修复（两个 electron-builder 钩子）：
+
+- `scripts/before-build.js`：`beforeBuild` 返回 `false`（node_modules 由外部处理）→ 跳过原生依赖重建 + 不把生产 node_modules 打进 asar。
+- `scripts/after-pack.js`：`afterPack` 把 `.packaging/server/node_modules` 直接拷进 `resources/server/node_modules`。
+
+验证（这次是真正的自包含测试）：把 `release\win-unpacked` 拷到**仓库外**（`E:\work\prodcopy`，向上查找摸不到 dev 依赖）启动 → 窗口 / 19770 / SPA 200 / `/api/*` 200、后端全量启动日志正常。修复后：asar 394MB → 2.33MB，`resources/server/node_modules` 9239 文件 / 52.9MB，整包 728MB → 365MB。教训已写入 AGENTS.md：**验证打包版必须拷到仓库外运行**。

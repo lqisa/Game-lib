@@ -7,7 +7,10 @@
 #     (process.resourcesPath/server).
 #
 # `pnpm build` runs scripts/prepare-packaged-server.mjs first, which produces
-# .packaging/server - that is what extraResources below copies.
+# .packaging/server. The extraResources entry below copies it, except that
+# electron-builder's copy filter always drops a root-level node_modules
+# (app-builder-lib/out/util/filter.js) - scripts/after-pack.js copies that
+# directory into resources/server/node_modules directly.
 appId: game-lib
 productName: Game Lib
 
@@ -50,8 +53,13 @@ electronLanguages:
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 
-# sqlite3/sharp are installed for the backend payload by
-# scripts/prepare-packaged-server.mjs (pnpm, Node ABI, exactly like the dev
-# build). The Electron ABI rebuild would produce binaries that nothing loads -
-# they are also not shipped inside the asar.
-npmRebuild: false
+# node_modules are handled outside electron-builder entirely (the hook returns
+# false): no native dependency rebuild (sqlite3/sharp come from
+# scripts/prepare-packaged-server.mjs with the Node ABI the backend uses) and
+# no production node_modules packed into app.asar (the app bundle needs none of
+# them; the backend's copy is added by scripts/after-pack.js).
+beforeBuild: ./scripts/before-build.js
+
+# Copies .packaging/server/node_modules into resources/server/node_modules
+# (extraResources cannot carry a root-level node_modules - see the note above).
+afterPack: ./scripts/after-pack.js
