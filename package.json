@@ -6,7 +6,7 @@
   "author": "Game Lib",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@12.14.0",
+  "packageManager": "pnpm@12.16.1",
   "main": "out/main/index.mjs",
   "scripts": {
     "dev": "electron-vite dev --watch",
