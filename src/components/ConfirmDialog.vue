@@ -27,6 +27,7 @@
 </template>
 
 <script setup lang="ts">
+import { nextTick } from 'vue';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,10 +40,19 @@ import {
 } from '@/components/ui/alert-dialog';
 import { answerConfirm, confirmState } from '@/composables/useConfirm';
 
-// Reka's AlertDialog does not close on outside click / ESC, so a dismissal can
-// only arrive through the buttons; a report of open=false is still handled to
-// never leave a caller's promise hanging.
+// Both reka buttons close the dialog through an internal handler that runs
+// *before* our own @click handler (the internal one sits ahead in the merged
+// listener array), so resolving here directly would always pre-empt the button's
+// answer - every OK came out as "cancelled". Defer a tick instead: the button
+// handlers have run by then, and this only fires for a close that nobody
+// answered, so a caller's promise can never hang.
+//
+// (Reka's AlertDialog does not close on outside click / ESC; a dismissal can
+// practically only arrive through the buttons.)
 const onOpenChange = (open: boolean) => {
-  if (!open) answerConfirm(false);
+  if (open) return;
+  void nextTick(() => {
+    if (confirmState.resolve) answerConfirm(false);
+  });
 };
 </script>

@@ -847,11 +847,13 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let suppressNextKeywordWatch = false;
 
 watch(keyword, () => {
-  if (restoringFilter.value) return;
+  // Consume the one-shot suppression before the restore guard: the flag must
+  // never survive a watcher run, or the next real keystroke would be ignored.
   if (suppressNextKeywordWatch) {
     suppressNextKeywordWatch = false;
     return;
   }
+  if (restoringFilter.value) return;
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     saveFilterState();
@@ -859,9 +861,14 @@ watch(keyword, () => {
   }, 300);
 });
 
+// The Quasar input cleared its own model and then emitted @clear; a plain button
+// does not, so clearing the keyword is on us (and the one-shot suppression keeps
+// the watcher from firing a second, debounced search right after).
 const onSearchClear = () => {
   suppressNextKeywordWatch = true;
   if (searchTimer) clearTimeout(searchTimer);
+  keyword.value = '';
+  saveFilterState();
   searchGames();
 };
 
